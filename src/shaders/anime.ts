@@ -7,7 +7,7 @@
  * - Warm color grading with saturation boost
  */
 
-import type { ShaderConfig } from "./types.ts";
+import { createShaderConfig } from "./types.ts";
 
 /**
  * Default Anime effect parameters
@@ -167,20 +167,6 @@ void main() {
 /**
  * Create Anime shader configuration
  */
-export function createAnimeConfig(params: Partial<typeof ANIME_DEFAULTS> = {}): ShaderConfig {
-  const p = { ...ANIME_DEFAULTS, ...params };
-  
-  return {
-    fragmentShader: ANIME_FRAGMENT_SHADER,
-    uniforms: {
-      outlineThickness: () => p.outlineThickness,
-      outlineThreshold: () => p.outlineThreshold,
-      colorLevels: () => p.colorLevels,
-      saturation: () => p.saturation,
-      warmth: () => p.warmth,
-      brightness: () => p.brightness,
-      contrast: () => p.contrast,
-    },
-    parameters: p,
-  };
+export function createAnimeConfig(params: Partial<typeof ANIME_DEFAULTS> = {}) {
+  return createShaderConfig(ANIME_FRAGMENT_SHADER, ANIME_DEFAULTS, params);
 }

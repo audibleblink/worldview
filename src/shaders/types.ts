@@ -30,6 +30,25 @@ export interface ShaderConfig {
 }
 
 /**
+ * Create a ShaderConfig from a fragment shader and parameters.
+ * Automatically generates uniform getters from the parameters object.
+ */
+export function createShaderConfig<T extends Record<string, number>>(
+  fragmentShader: string,
+  defaults: T,
+  params: Partial<T> = {}
+): ShaderConfig {
+  const merged = { ...defaults, ...params };
+  const uniforms: Record<string, () => number> = {};
+  
+  for (const key in merged) {
+    uniforms[key] = () => merged[key];
+  }
+  
+  return { fragmentShader, uniforms, parameters: merged };
+}
+
+/**
  * Interface for the ShaderManager
  */
 export interface ShaderManagerInterface {

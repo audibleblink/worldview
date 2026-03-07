@@ -6,11 +6,6 @@
 import type { ShaderConfig } from "./types.ts";
 
 /**
- * Normal mode has no parameters
- */
-export const NORMAL_DEFAULTS = {};
-
-/**
  * Create Normal (pass-through) shader configuration
  * Returns null to indicate all stages should be removed
  */

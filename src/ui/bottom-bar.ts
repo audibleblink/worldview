@@ -11,8 +11,6 @@ import { shaderManager, type ViewMode } from "../shaders/index.ts";
 
 export type { ViewMode } from "../shaders/index.ts";
 
-let currentMode: ViewMode = "CRT";
-
 // City abbreviations for tabs
 const CITY_ABBREVS = ["ATX", "SFO", "NYC", "TYO", "LDN", "PAR", "DXB", "DCA"];
 
@@ -87,6 +85,7 @@ function createModeSwitcher(): HTMLElement {
   container.className = "mode-switcher";
 
   const modes: ViewMode[] = ["NORMAL", "CRT", "NVG", "FLIR", "ANIME", "NAVI"];
+  const currentMode = shaderManager.getMode();
 
   modes.forEach((mode) => {
     const button = document.createElement("button");
@@ -119,7 +118,8 @@ function wireUpModeButtons(): void {
  * Set the active view mode
  */
 export function setMode(mode: ViewMode): void {
-  currentMode = mode;
+  // Apply shader effect (this is the source of truth)
+  shaderManager.setMode(mode);
 
   // Update button states
   document.querySelectorAll(".mode-btn").forEach((btn) => {
@@ -133,9 +133,6 @@ export function setMode(mode: ViewMode): void {
     modeIndicator.textContent = mode;
   }
 
-  // Apply shader effect
-  shaderManager.setMode(mode);
-
   console.log(`Mode changed to: ${mode}`);
 }
 
@@ -143,7 +140,7 @@ export function setMode(mode: ViewMode): void {
  * Get the current view mode
  */
 export function getMode(): ViewMode {
-  return currentMode;
+  return shaderManager.getMode();
 }
 
 /**

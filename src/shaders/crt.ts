@@ -4,7 +4,7 @@
  * barrel distortion, phosphor bloom, and flicker
  */
 
-import type { ShaderConfig } from "./types.ts";
+import { createShaderConfig } from "./types.ts";
 
 /**
  * Default CRT effect parameters
@@ -127,24 +127,6 @@ void main() {
 /**
  * Create CRT shader configuration
  */
-export function createCRTConfig(params: Partial<typeof CRT_DEFAULTS> = {}): ShaderConfig {
-  const p = { ...CRT_DEFAULTS, ...params };
-  
-  return {
-    fragmentShader: CRT_FRAGMENT_SHADER,
-    uniforms: {
-      scanlineIntensity: () => p.scanlineIntensity,
-      scanlinePeriod: () => p.scanlinePeriod,
-      chromaticAberration: () => p.chromaticAberration,
-      barrelDistortion: () => p.barrelDistortion,
-      bloomIntensity: () => p.bloomIntensity,
-      bloomRadius: () => p.bloomRadius,
-      flickerIntensity: () => p.flickerIntensity,
-      flickerSpeed: () => p.flickerSpeed,
-      vignetteIntensity: () => p.vignetteIntensity,
-      brightness: () => p.brightness,
-      contrast: () => p.contrast,
-    },
-    parameters: p,
-  };
+export function createCRTConfig(params: Partial<typeof CRT_DEFAULTS> = {}) {
+  return createShaderConfig(CRT_FRAGMENT_SHADER, CRT_DEFAULTS, params);
 }

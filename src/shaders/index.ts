@@ -32,6 +32,27 @@ const TRANSITION_DURATION = 300;
 /** localStorage key for persisting shader state */
 const STORAGE_KEY = "worldview-shader-state";
 
+/** Default parameters for each shader mode */
+const MODE_DEFAULTS: Record<ViewMode, Record<string, number>> = {
+  CRT: CRT_DEFAULTS,
+  NVG: NVG_DEFAULTS,
+  FLIR: FLIR_DEFAULTS,
+  ANIME: ANIME_DEFAULTS,
+  NORMAL: {},
+  NAVI: {},
+};
+
+/** Shader config factory for each mode */
+type ShaderConfigFactory = (params: Record<string, number>) => ShaderConfig | null;
+const SHADER_FACTORIES: Record<ViewMode, ShaderConfigFactory> = {
+  CRT: createCRTConfig,
+  NVG: createNVGConfig,
+  FLIR: createFLIRConfig,
+  ANIME: createAnimeConfig,
+  NORMAL: createNormalConfig,
+  NAVI: createNormalConfig,
+};
+
 /**
  * Interface for persisted shader state
  */
@@ -39,23 +60,6 @@ interface ShaderState {
   mode: ViewMode;
   parameters: Record<ViewMode, Record<string, number>>;
 }
-
-/**
- * Transition shader that blends two textures based on u_blend factor
- */
-const TRANSITION_FRAGMENT_SHADER = `
-uniform sampler2D colorTexture;
-uniform float u_blend;
-
-in vec2 v_textureCoordinates;
-
-void main() {
-  vec4 color = texture(colorTexture, v_textureCoordinates);
-  // Blend factor controls opacity - we use this to fade between shaders
-  // When u_blend = 0, full original; when u_blend = 1, full effect
-  out_FragColor = color;
-}
-`;
 
 /**
  * Interface for tracking active transitions
@@ -67,7 +71,6 @@ interface TransitionState {
   rafId: number;
   fromStage: PostProcessStage | null;
   toStage: PostProcessStage | null;
-  blendStage: PostProcessStage;
 }
 
 /**
@@ -94,12 +97,9 @@ class ShaderManager implements ShaderManagerInterface {
    * Initialize default parameters for all modes
    */
   private initializeDefaults(): void {
-    this.modeParameters.set("CRT", { ...CRT_DEFAULTS });
-    this.modeParameters.set("NVG", { ...NVG_DEFAULTS });
-    this.modeParameters.set("FLIR", { ...FLIR_DEFAULTS });
-    this.modeParameters.set("ANIME", { ...ANIME_DEFAULTS });
-    this.modeParameters.set("NORMAL", {});
-    this.modeParameters.set("NAVI", {});
+    for (const mode of Object.keys(MODE_DEFAULTS) as ViewMode[]) {
+      this.modeParameters.set(mode, { ...MODE_DEFAULTS[mode] });
+    }
   }
 
   /**
@@ -134,15 +134,14 @@ class ShaderManager implements ShaderManagerInterface {
       
       const state: ShaderState = JSON.parse(stored);
       
-      // Validate mode
-      const validModes: ViewMode[] = ["NORMAL", "CRT", "NVG", "FLIR", "ANIME", "NAVI"];
-      if (!state.mode || !validModes.includes(state.mode)) {
+      // Validate mode against known modes
+      if (!state.mode || !(state.mode in MODE_DEFAULTS)) {
         return false;
       }
       
       // Restore parameters (merge with defaults to handle new parameters)
       if (state.parameters && typeof state.parameters === "object") {
-        for (const mode of validModes) {
+        for (const mode of Object.keys(MODE_DEFAULTS) as ViewMode[]) {
           const storedParams = state.parameters[mode];
           if (storedParams && typeof storedParams === "object") {
             const defaults = this.modeParameters.get(mode) || {};
@@ -267,14 +266,6 @@ class ShaderManager implements ShaderManagerInterface {
     // Remove the old current stage
     this.removeCurrentStage();
 
-    // Create blend stage (simple passthrough, the fading is done in individual shaders)
-    const blendStage = new Cesium.PostProcessStage({
-      fragmentShader: TRANSITION_FRAGMENT_SHADER,
-      uniforms: {
-        u_blend: () => blendFactor,
-      },
-    });
-
     // Animation loop
     const animate = () => {
       const elapsed = performance.now() - startTime;
@@ -302,7 +293,6 @@ class ShaderManager implements ShaderManagerInterface {
       rafId: requestAnimationFrame(animate),
       fromStage,
       toStage,
-      blendStage,
     };
 
     // Update current mode immediately for getMode()
@@ -382,7 +372,7 @@ class ShaderManager implements ShaderManagerInterface {
   private cancelTransition(): void {
     if (!this.transition || !this.viewer) return;
 
-    const { rafId, fromStage, toStage, blendStage } = this.transition;
+    const { rafId, fromStage, toStage } = this.transition;
 
     // Cancel animation
     cancelAnimationFrame(rafId);
@@ -510,24 +500,7 @@ class ShaderManager implements ShaderManagerInterface {
    */
   private getShaderConfig(mode: ViewMode): ShaderConfig | null {
     const params = this.modeParameters.get(mode) || {};
-    
-    switch (mode) {
-      case "CRT":
-        return createCRTConfig(params);
-      case "NVG":
-        return createNVGConfig(params);
-      case "FLIR":
-        return createFLIRConfig(params);
-      case "ANIME":
-        return createAnimeConfig(params);
-      case "NORMAL":
-        return createNormalConfig();
-      // Placeholder for future modes
-      case "NAVI":
-        return createNormalConfig();
-      default:
-        return createNormalConfig();
-    }
+    return SHADER_FACTORIES[mode](params);
   }
 }
 

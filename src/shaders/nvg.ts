@@ -4,7 +4,7 @@
  * film grain noise, circular vignette, and bloom on bright areas
  */
 
-import type { ShaderConfig } from "./types.ts";
+import { createShaderConfig } from "./types.ts";
 
 /**
  * Default NVG effect parameters
@@ -134,20 +134,6 @@ void main() {
 /**
  * Create NVG shader configuration
  */
-export function createNVGConfig(params: Partial<typeof NVG_DEFAULTS> = {}): ShaderConfig {
-  const p = { ...NVG_DEFAULTS, ...params };
-  
-  return {
-    fragmentShader: NVG_FRAGMENT_SHADER,
-    uniforms: {
-      greenIntensity: () => p.greenIntensity,
-      noiseAmount: () => p.noiseAmount,
-      vignette: () => p.vignette,
-      bloom: () => p.bloom,
-      brightness: () => p.brightness,
-      contrast: () => p.contrast,
-      scanlines: () => p.scanlines,
-    },
-    parameters: p,
-  };
+export function createNVGConfig(params: Partial<typeof NVG_DEFAULTS> = {}) {
+  return createShaderConfig(NVG_FRAGMENT_SHADER, NVG_DEFAULTS, params);
 }

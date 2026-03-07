@@ -4,7 +4,7 @@
  * edge enhancement, and optional targeting reticle
  */
 
-import type { ShaderConfig } from "./types.ts";
+import { createShaderConfig } from "./types.ts";
 
 /**
  * Palette types for thermal visualization
@@ -254,20 +254,6 @@ void main() {
 /**
  * Create FLIR shader configuration
  */
-export function createFLIRConfig(params: Partial<typeof FLIR_DEFAULTS> = {}): ShaderConfig {
-  const p = { ...FLIR_DEFAULTS, ...params };
-  
-  return {
-    fragmentShader: FLIR_FRAGMENT_SHADER,
-    uniforms: {
-      contrast: () => p.contrast,
-      edgeEnhancement: () => p.edgeEnhancement,
-      palette: () => p.palette,
-      reticle: () => p.reticle,
-      brightness: () => p.brightness,
-      hotspotThreshold: () => p.hotspotThreshold,
-      coldspotThreshold: () => p.coldspotThreshold,
-    },
-    parameters: p,
-  };
+export function createFLIRConfig(params: Partial<typeof FLIR_DEFAULTS> = {}) {
+  return createShaderConfig(FLIR_FRAGMENT_SHADER, FLIR_DEFAULTS, params);
 }
