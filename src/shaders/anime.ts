@@ -28,7 +28,6 @@ export const ANIME_DEFAULTS = {
 const ANIME_FRAGMENT_SHADER = `
 uniform sampler2D colorTexture;
 uniform vec2 colorTextureDimensions;
-uniform float czm_frameNumber;
 
 // Effect parameters
 uniform float outlineThickness;
