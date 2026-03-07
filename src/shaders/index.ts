@@ -7,15 +7,17 @@
 // Use global Cesium from script tag
 declare const Cesium: typeof import("cesium");
 
-import type { ViewMode, ShaderConfig, ShaderManagerInterface } from "./types.ts";
-import { createCRTConfig } from "./crt.ts";
+import type { ViewMode, ShaderConfig, ShaderManagerInterface, ParameterMapping } from "./types.ts";
+import { PARAMETER_MAPPINGS } from "./types.ts";
+import { createCRTConfig, CRT_DEFAULTS } from "./crt.ts";
 import { createNormalConfig } from "./normal.ts";
-import { createNVGConfig } from "./nvg.ts";
-import { createFLIRConfig } from "./flir.ts";
-import { createAnimeConfig } from "./anime.ts";
+import { createNVGConfig, NVG_DEFAULTS } from "./nvg.ts";
+import { createFLIRConfig, FLIR_DEFAULTS } from "./flir.ts";
+import { createAnimeConfig, ANIME_DEFAULTS } from "./anime.ts";
 
 // Re-export types
-export type { ViewMode, ShaderConfig, ShaderManagerInterface } from "./types.ts";
+export type { ViewMode, ShaderConfig, ShaderManagerInterface, ParameterMapping } from "./types.ts";
+export { PARAMETER_MAPPINGS } from "./types.ts";
 export { CRT_DEFAULTS, createCRTConfig } from "./crt.ts";
 export { NVG_DEFAULTS, createNVGConfig } from "./nvg.ts";
 export { FLIR_DEFAULTS, createFLIRConfig } from "./flir.ts";
@@ -65,6 +67,22 @@ class ShaderManager implements ShaderManagerInterface {
   private currentMode: ViewMode = "NORMAL";
   private currentStage: PostProcessStage | null = null;
   private transition: TransitionState | null = null;
+  
+  /** Store parameter values per mode */
+  private modeParameters: Map<ViewMode, Record<string, number>> = new Map();
+  
+  /** Mode change listeners */
+  private modeChangeListeners: Set<(mode: ViewMode) => void> = new Set();
+  
+  constructor() {
+    // Initialize default parameters for each mode
+    this.modeParameters.set("CRT", { ...CRT_DEFAULTS });
+    this.modeParameters.set("NVG", { ...NVG_DEFAULTS });
+    this.modeParameters.set("FLIR", { ...FLIR_DEFAULTS });
+    this.modeParameters.set("ANIME", { ...ANIME_DEFAULTS });
+    this.modeParameters.set("NORMAL", {});
+    this.modeParameters.set("NAVI", {});
+  }
 
   /**
    * Initialize the shader manager with a Cesium viewer
@@ -262,6 +280,9 @@ class ShaderManager implements ShaderManagerInterface {
 
     console.log(`Shader mode set to: ${toMode}`);
     this.transition = null;
+    
+    // Notify listeners after transition completes
+    this.notifyModeChange();
   }
 
   /**
@@ -292,6 +313,73 @@ class ShaderManager implements ShaderManagerInterface {
    */
   getMode(): ViewMode {
     return this.currentMode;
+  }
+
+  /**
+   * Set a parameter value for the current mode
+   * Updates the shader uniform in real-time
+   */
+  setParameter(param: string, value: number): void {
+    const params = this.modeParameters.get(this.currentMode);
+    if (!params) return;
+    
+    // Update stored value
+    params[param] = value;
+    
+    // Update the current stage's uniform if we have one
+    if (this.currentStage) {
+      const uniforms = (this.currentStage as any).uniforms;
+      if (uniforms && param in uniforms) {
+        // The uniform getter will now return the updated value
+        // Since we're storing references, we need to update the stage
+        this.recreateCurrentStage();
+      }
+    }
+  }
+
+  /**
+   * Get parameters for the current mode
+   */
+  getParameters(): Record<string, number> {
+    return this.modeParameters.get(this.currentMode) || {};
+  }
+
+  /**
+   * Subscribe to mode change events
+   * Returns unsubscribe function
+   */
+  onModeChange(callback: (mode: ViewMode) => void): () => void {
+    this.modeChangeListeners.add(callback);
+    return () => this.modeChangeListeners.delete(callback);
+  }
+
+  /**
+   * Notify listeners of mode change
+   */
+  private notifyModeChange(): void {
+    this.modeChangeListeners.forEach(cb => cb(this.currentMode));
+  }
+
+  /**
+   * Recreate the current stage with updated parameters
+   */
+  private recreateCurrentStage(): void {
+    if (!this.viewer || this.currentMode === "NORMAL") return;
+    
+    // Remove old stage
+    if (this.currentStage) {
+      this.viewer.scene.postProcessStages.remove(this.currentStage);
+    }
+    
+    // Create new stage with current parameters
+    const config = this.getShaderConfig(this.currentMode);
+    if (config) {
+      this.currentStage = new Cesium.PostProcessStage({
+        fragmentShader: config.fragmentShader,
+        uniforms: config.uniforms,
+      });
+      this.viewer.scene.postProcessStages.add(this.currentStage);
+    }
   }
 
   /**
@@ -326,17 +414,20 @@ class ShaderManager implements ShaderManagerInterface {
 
   /**
    * Get shader configuration for a given mode
+   * Uses stored parameters for the mode
    */
   private getShaderConfig(mode: ViewMode): ShaderConfig | null {
+    const params = this.modeParameters.get(mode) || {};
+    
     switch (mode) {
       case "CRT":
-        return createCRTConfig();
+        return createCRTConfig(params);
       case "NVG":
-        return createNVGConfig();
+        return createNVGConfig(params);
       case "FLIR":
-        return createFLIRConfig();
+        return createFLIRConfig(params);
       case "ANIME":
-        return createAnimeConfig();
+        return createAnimeConfig(params);
       case "NORMAL":
         return createNormalConfig();
       // Placeholder for future modes

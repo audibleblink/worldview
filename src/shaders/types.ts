@@ -43,4 +43,47 @@ export interface ShaderManagerInterface {
   dispose(): void;
   /** Get the current PostProcessStage if any */
   getCurrentStage(): PostProcessStage | null;
+  /** Set a parameter value for the current mode */
+  setParameter(param: string, value: number): void;
+  /** Get parameters for the current mode */
+  getParameters(): Record<string, number>;
+  /** Subscribe to mode change events */
+  onModeChange(callback: (mode: ViewMode) => void): () => void;
 }
+
+/**
+ * Parameter mapping for generic sliders to mode-specific uniforms
+ * Maps: PIXELATION, DISTORTION, INSTABILITY to shader uniforms
+ */
+export interface ParameterMapping {
+  /** Slider name -> { uniform name, min value, max value, default value } */
+  PIXELATION: { uniform: string; min: number; max: number; default: number };
+  DISTORTION: { uniform: string; min: number; max: number; default: number };
+  INSTABILITY: { uniform: string; min: number; max: number; default: number };
+}
+
+/**
+ * Parameter mappings for each shader mode
+ */
+export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "NAVI">, ParameterMapping> = {
+  CRT: {
+    PIXELATION: { uniform: "scanlineIntensity", min: 0, max: 0.5, default: 0.15 },
+    DISTORTION: { uniform: "barrelDistortion", min: 0, max: 0.2, default: 0.05 },
+    INSTABILITY: { uniform: "flickerIntensity", min: 0, max: 0.15, default: 0.03 },
+  },
+  NVG: {
+    PIXELATION: { uniform: "greenIntensity", min: 0.5, max: 1.5, default: 1.0 },
+    DISTORTION: { uniform: "vignette", min: 0.3, max: 1.5, default: 0.8 },
+    INSTABILITY: { uniform: "noiseAmount", min: 0, max: 0.25, default: 0.08 },
+  },
+  FLIR: {
+    PIXELATION: { uniform: "brightness", min: 0.5, max: 1.5, default: 1.0 },
+    DISTORTION: { uniform: "edgeEnhancement", min: 0, max: 1.0, default: 0.3 },
+    INSTABILITY: { uniform: "contrast", min: 0.8, max: 2.0, default: 1.3 },
+  },
+  ANIME: {
+    PIXELATION: { uniform: "saturation", min: 0.5, max: 2.0, default: 1.3 },
+    DISTORTION: { uniform: "outlineThickness", min: 0.5, max: 3.0, default: 1.0 },
+    INSTABILITY: { uniform: "colorLevels", min: 3, max: 10, default: 5 },
+  },
+};
