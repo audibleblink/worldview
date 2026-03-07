@@ -1,145 +1,133 @@
 # WorldView
 
-A spy satellite simulator and geospatial intelligence visualization tool built with CesiumJS and Google Photorealistic 3D Tiles.
+A browser-based spy satellite simulator — Google Earth meets Palantir, built as a toy using public data and open-source intelligence feeds.
 
-## Features
+Photorealistic 3D globe. Live satellite tracking. Military and commercial flight data. Street traffic particles. Real CCTV feeds projected onto 3D city geometry. All of it skinned to look like a classified intelligence terminal.
 
-- Interactive 3D globe with Google Photorealistic 3D Tiles
-- Retro CRT-inspired UI aesthetic
-- Pre-configured points of interest across 8 major cities
-- Keyboard shortcuts for rapid POI navigation
-- Live camera telemetry readouts (GSD, NIIRS, altitude)
-- Multiple view mode presets (CRT, NVG, FLIR, etc.)
+> Inspired by [Bilawal Sidhu's WorldView project](https://www.spatialintelligence.ai/p/i-built-a-spy-satellite-simulator).
+
+Basically just told Claude to look at `./notes.txt` while enabling playright and yt-dlp. The said "make it"
+
+
+---
+
+## Stack
+
+- **Runtime:** Bun
+- **3D Renderer:** CesiumJS + Google Photorealistic 3D Tiles
+- **Language:** TypeScript
+- **Styling:** Vanilla CSS
+- **Proxy:** Bun HTTP server (keeps Google API key server-side)
+
+---
 
 ## Setup
 
-### Prerequisites
+### 1. Prerequisites
 
-- [Bun](https://bun.sh) runtime (v1.0+)
-- Google Cloud account with Map Tiles API enabled
+- [Bun](https://bun.sh) installed (`curl -fsSL https://bun.sh/install | bash`)
+- A Google Maps Tile API key (see below)
 
-### Installation
+### 2. Google Maps Tile API Key
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project
+3. Enable the **Map Tiles API**
+4. Go to **Credentials** → **Create API Key**
+5. Restrict the key to the Map Tiles API
+6. Add to `.env` at the project root:
+
+```
+GOOGLE_MAPS_TILE_API_KEY=your_key_here
+```
+
+`.env` is already in `.gitignore` — do not commit it.
+
+### 3. Install & Run
 
 ```bash
 bun install
-```
-
-### API Key Configuration
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the **Map Tiles API** under APIs & Services
-4. Create an API key under Credentials
-5. Create a `.env` file in the project root:
-
-```env
-GOOGLE_MAPS_TILE_API_KEY=your_api_key_here
-```
-
-**Note:** The Map Tiles API provides access to Google's Photorealistic 3D Tiles. Standard usage is billed; see [Google's pricing](https://developers.google.com/maps/documentation/tile/usage-and-billing) for details.
-
-## Development
-
-Start both the dev server and tile proxy:
-
-```bash
 bun run dev
 ```
 
-This runs two servers:
-- **Dev server** (port 3000): Serves the application with hot reload
-- **Tile proxy** (port 3001): Proxies Google 3D Tiles requests with API key injection
+This starts:
+- Frontend dev server on `http://localhost:3000`
+- Tile proxy server on `http://localhost:3001`
 
-### Individual Commands
+Open `http://localhost:3000` in Chrome or Firefox.
+
+### 4. Build
 
 ```bash
-# Start only the proxy server
-bun run proxy
-
-# Run TypeScript type checking
-bun run typecheck
-
-# Build for production
 bun run build
 ```
 
-## Controls
+---
 
-### Keyboard Shortcuts
+## Navigation
 
-| Key | Action |
-|-----|--------|
-| Q | Jump to POI 1 |
-| W | Jump to POI 2 |
-| E | Jump to POI 3 |
-| R | Jump to POI 4 |
-| T | Jump to POI 5 |
+| Input | Action |
+|---|---|
+| Mouse drag | Orbit / pan the globe |
+| Scroll wheel | Zoom in / out |
+| City dropdown | Fly to that city's first POI |
+| `Q W E R T` | Jump to POIs 1–5 of the current city |
+| PREV / NEXT buttons | Cycle POIs within current city |
+| City tabs (bottom) | Quick-jump to any of the 8 cities |
 
-### Mouse Controls
+### Cities & POIs
 
-- **Left-click + drag**: Rotate the camera
-- **Right-click + drag**: Zoom in/out
-- **Middle-click + drag**: Pan the camera
-- **Scroll wheel**: Zoom in/out
-
-## Architecture
-
-```
-src/
-├── main.ts          # Application entry point, keyboard handlers
-├── globe.ts         # CesiumJS viewer and 3D tiles setup
-├── pois.ts          # Points of interest data and navigation
-├── server.ts        # Development server (Bun.serve)
-├── proxy.ts         # Google 3D Tiles proxy server
-└── ui/
-    ├── shell.ts     # Main UI container and top bar
-    ├── left-panel.ts    # City selector, POI navigation, calibration
-    ├── right-panel.ts   # Parameters, live camera readouts
-    └── bottom-bar.ts    # Mode switcher, city tabs, location display
-```
-
-### Key Modules
-
-- **globe.ts**: Initializes CesiumJS viewer with optimized settings for Google 3D Tiles. Handles error states for missing API keys or network issues.
-
-- **pois.ts**: Contains POI data for 8 cities (Austin, San Francisco, NYC, Tokyo, London, Paris, Dubai, Washington DC) with 4 landmarks each. Manages camera fly-to animations.
-
-- **proxy.ts**: CORS proxy that injects the Google Maps API key into tile requests. Required because the API key cannot be exposed in browser code.
-
-## Cities & Points of Interest
-
-| City | Landmarks |
-|------|-----------|
+| City | POIs |
+|---|---|
 | Austin, TX | Texas State Capitol, Congress Ave Bridge, UT Tower, Sixth Street |
 | San Francisco, CA | Golden Gate Bridge, Salesforce Tower, Alcatraz, Bay Bridge |
 | New York, NY | Empire State Building, Brooklyn Bridge, Statue of Liberty, One WTC |
-| Tokyo, Japan | Tokyo Tower, Shibuya Crossing, Senso-ji Temple, Tokyo Skytree |
+| Tokyo, Japan | Tokyo Tower, Shibuya Crossing, Senso-ji, Tokyo Skytree |
 | London, UK | Tower Bridge, Big Ben, Buckingham Palace, The Shard |
 | Paris, France | Eiffel Tower, Arc de Triomphe, Notre-Dame, Louvre |
 | Dubai, UAE | Burj Khalifa, Palm Jumeirah, Dubai Frame, Burj Al Arab |
 | Washington, DC | US Capitol, Washington Monument, Pentagon, Lincoln Memorial |
 
-## Troubleshooting
+---
 
-### "Proxy server not running" error
+## Project Structure
 
-Make sure the proxy server is running:
-```bash
-bun run proxy
+```
+tbd
 ```
 
-### "API Key Error" on screen
+---
 
-1. Verify your `.env` file contains a valid `GOOGLE_MAPS_TILE_API_KEY`
-2. Check that the Map Tiles API is enabled in Google Cloud Console
-3. Verify API key restrictions allow the Map Tiles API
+## Roadmap
 
-### Tiles not loading / blank globe
+| Milestone | Description | Status |
+|---|---|---|
+| 1 — Globe Foundation | 3D globe, camera nav, POI fly-to, UI shell | In planning |
+| 2 — Shader Pipeline | CRT, NVG, FLIR, cel-shading post-processing | Planned |
+| 3 — Satellite Layer | CelesTrak TLE, orbital rendering, click-to-track | Planned |
+| 4 — Flight Layer | OpenSky commercial + ADS-B military flights | Planned |
+| 5 — Ground Layer | OSM traffic particles, CCTV feed projection | Planned |
+| 6 — Timeline Playback | OSINT snapshot recording + replay system | Planned |
 
-1. Check browser console for network errors
-2. Verify the proxy is running on port 3001
-3. Test the proxy health: `curl http://localhost:3001/health`
+---
 
-## License
+## Data Sources
 
-Private project - all rights reserved.
+| Feed | Source | Used In |
+|---|---|---|
+| Photorealistic 3D Tiles | Google Maps Tile API | Milestone 1+ |
+| Satellite orbits | CelesTrak TLE | Milestone 3 |
+| Commercial flights | OpenSky Network | Milestone 4 |
+| Military flights | ADS-B Exchange | Milestone 4 |
+| Street network | OpenStreetMap Overpass API | Milestone 5 |
+| CCTV cameras | Austin public traffic cams | Milestone 5 |
+| Seismic activity | USGS Earthquake API | Milestone 5 |
+
+---
+
+## Reference
+
+- [Bilawal Sidhu — I Built a Spy Satellite Simulator](https://www.spatialintelligence.ai/p/i-built-a-spy-satellite-simulator)
+- [YouTube walkthrough — original build](https://www.youtube.com/watch?v=rXvU7bPJ8n4)
+- [YouTube — Operation Epic Fury reconstruction](https://www.youtube.com/watch?v=0p8o7AeHDzg)
+- [Google Maps Tile API docs](https://developers.google.com/maps/documentation/tile)
