@@ -70,7 +70,7 @@ Run: `bun scripts/sgp4-smoke.ts`
 
 ### Tasks
 
-- [ ] Define `SatelliteRecord` TypeScript interface in `src/layers/satellites.ts`:
+- [x] Define `SatelliteRecord` TypeScript interface in `src/layers/satellites.ts`:
   ```ts
   interface SatelliteRecord {
     name: string;
@@ -80,14 +80,14 @@ Run: `bun scripts/sgp4-smoke.ts`
     color: Cesium.Color;
   }
   ```
-- [ ] Implement `fetchTLEs(category)` — fetches from CelesTrak, parses raw TLE triplets, returns `SatelliteRecord[]`
+- [x] Implement `fetchTLEs(category)` — fetches from CelesTrak, parses raw TLE triplets, returns `SatelliteRecord[]`
   - URL: `https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle`
   - Parse: split on `\n`, group into triplets (name + line1 + line2), call `satellite.twoline2satrec`
   - Skip records where `satrec.error !== 0`
   - Assign color per category: `active=#00ff41`, `stations=#00cfff`, `military=#ff4444`
-- [ ] Implement `loadAllTLEs()` — parallel-fetches all three categories, merges into `records: SatelliteRecord[]`
-- [ ] Add CORS fallback: if direct fetch fails, retry via `http://localhost:3001/tle?group={group}` (proxy route to be added)
-- [ ] Add proxy route to `src/proxy.ts` for `/tle?group=` → forward to CelesTrak (handles CORS in browser)
+- [x] Implement `loadAllTLEs()` — parallel-fetches all three categories, merges into `records: SatelliteRecord[]`
+- [x] Add CORS fallback: if direct fetch fails, retry via `http://localhost:3001/tle?group={group}` (proxy route to be added)
+- [x] Add proxy route to `src/proxy.ts` for `/tle?group=` → forward to CelesTrak (handles CORS in browser)
 
 ### Verification — Autonomous Check
 

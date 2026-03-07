@@ -51,6 +51,28 @@ Bun.serve({
       return jsonResponse({ status: "ok" });
     }
 
+    // TLE proxy: forward to CelesTrak (handles CORS for browser clients)
+    if (url.pathname === "/tle") {
+      const group = url.searchParams.get("group");
+      if (!group) {
+        return jsonResponse({ error: "Missing ?group= parameter" }, 400);
+      }
+
+      const celestrakUrl = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=tle`;
+
+      try {
+        const response = await fetch(celestrakUrl);
+        const headers = new Headers({
+          "Content-Type": "text/plain; charset=utf-8",
+          ...CORS_HEADERS,
+        });
+        return new Response(response.body, { status: response.status, headers });
+      } catch (error) {
+        console.error("TLE proxy error:", error);
+        return jsonResponse({ error: "TLE proxy error" }, 502);
+      }
+    }
+
     // Proxy all other requests to Google
     const targetUrl = new URL(url.pathname + url.search, GOOGLE_TILES_URL);
     targetUrl.searchParams.set("key", apiKey);
