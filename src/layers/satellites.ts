@@ -134,6 +134,7 @@ export class SatelliteLayer {
   private selectedNoradId: string | null = null;
   private orbitalPathEntity: Cesium.Entity | null = null;
   private followEntity: Cesium.Entity | null = null;
+  private followPosition: Cesium.ConstantPositionProperty | null = null;
   private satellitePositions: Map<string, Cesium.Cartesian3> = new Map();
   private hiddenCategories: Set<string> = new Set();
   private onExternalDeselect: (() => void) | null = null;
@@ -185,6 +186,11 @@ export class SatelliteLayer {
       const bb = this.billboardMap.get(record.noradId);
       if (bb) bb.position = cartesian;
       this.satellitePositions.set(record.noradId, cartesian);
+    }
+    // Keep the tracked entity in sync so the camera follows the updated position
+    if (this.followPosition && this.selectedNoradId) {
+      const pos = this.satellitePositions.get(this.selectedNoradId);
+      if (pos) this.followPosition.setValue(pos);
     }
     this.notifyVisibleCount();
   }
@@ -259,10 +265,10 @@ export class SatelliteLayer {
     if (!this.selectedNoradId) return;
     this.stopFollow();
 
+    const current = this.satellitePositions.get(this.selectedNoradId) ?? new Cesium.Cartesian3();
+    this.followPosition = new Cesium.ConstantPositionProperty(current);
     this.followEntity = this.viewer.entities.add({
-      position: new Cesium.CallbackProperty(() => {
-        return this.satellitePositions.get(this.selectedNoradId!) ?? new Cesium.Cartesian3();
-      }, false) as unknown as Cesium.PositionProperty,
+      position: this.followPosition,
     });
 
     this.viewer.trackedEntity = this.followEntity;
@@ -275,6 +281,7 @@ export class SatelliteLayer {
     }
     this.viewer.entities.remove(this.followEntity);
     this.followEntity = null;
+    this.followPosition = null;
   }
 
   setCategory(category: "active" | "stations" | "military", visible: boolean): void {
