@@ -3,6 +3,8 @@
  * City and POI data with navigation functions
  */
 
+import { flyToTarget } from "./camera.ts";
+
 // Use global Cesium from script tag
 declare const Cesium: typeof import("cesium");
 type Viewer = import("cesium").Viewer;
@@ -35,7 +37,7 @@ const cities: City[] = [
     name: "San Francisco, CA",
     pois: [
       { name: "Golden Gate Bridge", lat: 37.8199, lng: -122.4783, altitude: 500, pitch: -45 },
-      { name: "Salesforce Tower", lat: 37.7898, lng: -122.3969, altitude: 500, pitch: -45 },
+      { name: "Salesforce Tower", lat: 37.7898, lng: -122.3969, altitude: 1500, pitch: -45 },
       { name: "Alcatraz", lat: 37.8267, lng: -122.4230, altitude: 500, pitch: -45 },
       { name: "Bay Bridge", lat: 37.7983, lng: -122.3778, altitude: 500, pitch: -45 },
     ],
@@ -52,10 +54,10 @@ const cities: City[] = [
   {
     name: "Tokyo, Japan",
     pois: [
-      { name: "Tokyo Tower", lat: 35.6586, lng: 139.7454, altitude: 500, pitch: -45 },
+      { name: "Tokyo Tower", lat: 35.6586, lng: 139.7454, altitude: 1000, pitch: -45 },
       { name: "Shibuya Crossing", lat: 35.6595, lng: 139.7004, altitude: 500, pitch: -45 },
       { name: "Senso-ji Temple", lat: 35.7148, lng: 139.7967, altitude: 500, pitch: -45 },
-      { name: "Tokyo Skytree", lat: 35.7101, lng: 139.8107, altitude: 500, pitch: -45 },
+      { name: "Tokyo Skytree", lat: 35.7101, lng: 139.8107, altitude: 2000, pitch: -45 },
     ],
   },
   {
@@ -70,10 +72,10 @@ const cities: City[] = [
   {
     name: "Paris, France",
     pois: [
-      { name: "Eiffel Tower", lat: 48.8584, lng: 2.2945, altitude: 500, pitch: -45 },
-      { name: "Arc de Triomphe", lat: 48.8738, lng: 2.2950, altitude: 500, pitch: -45 },
-      { name: "Notre-Dame", lat: 48.8530, lng: 2.3499, altitude: 500, pitch: -45 },
-      { name: "Louvre", lat: 48.8606, lng: 2.3376, altitude: 500, pitch: -45 },
+      { name: "Eiffel Tower", lat: 48.8584, lng: 2.2945, altitude: 1500, pitch: -45 },
+      { name: "Arc de Triomphe", lat: 48.8738, lng: 2.2950, altitude: 750, pitch: -45 },
+      { name: "Notre-Dame", lat: 48.8530, lng: 2.3499, altitude: 1000, pitch: -45 },
+      { name: "Louvre", lat: 48.8606, lng: 2.3376, altitude: 1000, pitch: -45 },
     ],
   },
   {
@@ -90,7 +92,7 @@ const cities: City[] = [
     pois: [
       { name: "US Capitol", lat: 38.8899, lng: -77.0091, altitude: 500, pitch: -45 },
       { name: "Washington Monument", lat: 38.8895, lng: -77.0353, altitude: 500, pitch: -45 },
-      { name: "Pentagon", lat: 38.8719, lng: -77.0563, altitude: 500, pitch: -45 },
+      { name: "Pentagon", lat: 38.8719, lng: -77.0563, altitude: 750, pitch: -45 },
       { name: "Lincoln Memorial", lat: 38.8893, lng: -77.0502, altitude: 500, pitch: -45 },
     ],
   },
@@ -195,17 +197,15 @@ export function flyToPOIByIndex(index: number): void {
 }
 
 /**
- * Fly the camera to a specific POI with 2s animation
- * Camera arrives at ~500m altitude with ~45 degree pitch looking down
+ * Fly the camera to view a specific POI with 2s animation.
+ * Camera is positioned at the specified range, looking AT the POI.
  */
 export function flyToPOI(viewer: Viewer, poi: POI): void {
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(poi.lng, poi.lat, poi.altitude),
-    orientation: {
-      heading: Cesium.Math.toRadians(0), // North
-      pitch: Cesium.Math.toRadians(poi.pitch), // Looking down (negative value)
-      roll: 0,
-    },
-    duration: 2, // 2 seconds animation
+  const target = Cesium.Cartesian3.fromDegrees(poi.lng, poi.lat, 0);
+
+  flyToTarget(viewer, target, {
+    pitch: Cesium.Math.toRadians(poi.pitch),
+    range: poi.altitude,
+    duration: 2,
   });
 }

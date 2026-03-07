@@ -1,24 +1,28 @@
 import * as satellite from "satellite.js";
+import { lookAtTarget, unlockCamera } from "../camera.ts";
+
 // Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
 declare const Cesium: typeof import("cesium");
 
 export interface SatelliteRecord {
   name: string;
   noradId: string;
-  category: "active" | "stations" | "military";
+  category: "stations" | "military" | "starlink" | "gnss" | "research";
   satrec: satellite.SatRec;
   color: Cesium.Color;
 }
 
 const CATEGORY_COLORS: Record<string, Cesium.Color> = {
-  active: Cesium.Color.fromCssColorString("#00ff41"),
   stations: Cesium.Color.fromCssColorString("#00cfff"),
   military: Cesium.Color.fromCssColorString("#ff4444"),
+  starlink: Cesium.Color.fromCssColorString("#ffffff"),
+  gnss: Cesium.Color.fromCssColorString("#ffaa00"),
+  research: Cesium.Color.fromCssColorString("#aa44ff"),
 };
 
 function parseTLEText(
   text: string,
-  category: "active" | "stations" | "military"
+  category: "stations" | "military" | "starlink" | "gnss" | "research"
 ): SatelliteRecord[] {
   const lines = text
     .split("\n")
@@ -48,34 +52,58 @@ function parseTLEText(
   return records;
 }
 
+// Maps UI categories to CelesTrak group names
+const CATEGORY_TO_GROUPS: Record<string, string[]> = {
+  stations: ["stations"],
+  military: ["military"],
+  starlink: ["starlink"],
+  gnss: ["gnss"],
+  research: ["science"],
+  // research: ["weather", "science"],
+};
+
 export async function fetchTLEs(
-  category: "active" | "stations" | "military"
+  category: "stations" | "military" | "starlink" | "gnss" | "research"
 ): Promise<SatelliteRecord[]> {
-  const directUrl = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${category}&FORMAT=tle`;
-  const proxyUrl = `http://localhost:3001/tle?group=${category}`;
+  const groups = CATEGORY_TO_GROUPS[category] || [category];
+  const allRecords: SatelliteRecord[] = [];
 
-  // Try direct fetch first, fall back to local CORS proxy
-  try {
-    const res = await fetch(directUrl);
-    if (res.ok) return parseTLEText(await res.text(), category);
-  } catch {
-    // fall through to proxy
+  for (const group of groups) {
+    const directUrl = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
+    const proxyUrl = `http://localhost:3001/tle?group=${group}`;
+
+    // Try direct fetch first, fall back to local CORS proxy
+    let text: string | null = null;
+    try {
+      const res = await fetch(directUrl);
+      if (res.ok) text = await res.text();
+    } catch {
+      // fall through to proxy
+    }
+
+    if (!text) {
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch TLEs for "${group}" via proxy: ${res.status}`);
+      }
+      text = await res.text();
+    }
+
+    allRecords.push(...parseTLEText(text, category));
   }
 
-  const res = await fetch(proxyUrl);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch TLEs for "${category}" via proxy: ${res.status}`);
-  }
-  return parseTLEText(await res.text(), category);
+  return allRecords;
 }
 
 export async function loadAllTLEs(): Promise<SatelliteRecord[]> {
-  const [active, stations, military] = await Promise.all([
-    fetchTLEs("active"),
+  const [stations, military, starlink, gnss, research] = await Promise.all([
     fetchTLEs("stations"),
     fetchTLEs("military"),
+    fetchTLEs("starlink"),
+    fetchTLEs("gnss"),
+    fetchTLEs("research"),
   ]);
-  return [...active, ...stations, ...military];
+  return [...stations, ...military, ...starlink, ...gnss, ...research];
 }
 
 export function propagateAll(
@@ -163,7 +191,7 @@ export class SatelliteLayer {
       this.satellitePositions.set(record.noradId, cartesian);
     }
 
-    this.updateInterval = setInterval(() => this.updatePositions(), 5000);
+    this.updateInterval = setInterval(() => this.updatePositions(), 2500);
     this.onCountUpdate?.(this.billboardMap.size);
   }
 
@@ -262,27 +290,14 @@ export class SatelliteLayer {
     this.stopFollow();
 
     // Drive camera manually every render frame — reliable, no trackedEntity lag.
-    // Look straight down from ~2× the satellite's orbital altitude above it.
     const listener = () => {
       if (!this.selectedNoradId) return;
       const pos = this.satellitePositions.get(this.selectedNoradId);
       if (!pos) return;
 
-      const carto = Cesium.Cartographic.fromCartesian(pos);
-      const orbitAltM = carto.height;               // satellite altitude in metres
-      const cameraAltM = orbitAltM + 2_500_000;     // 2 500 km above the satellite
-
-      this.viewer.camera.setView({
-        destination: Cesium.Cartesian3.fromRadians(
-          carto.longitude,
-          carto.latitude,
-          cameraAltM,
-        ),
-        orientation: {
-          heading: 0,
-          pitch: -Cesium.Math.PI_OVER_TWO,   // straight down (nadir)
-          roll: 0,
-        },
+      lookAtTarget(this.viewer, pos, {
+        range: 2_500_000,                        // 2500 km from satellite
+        pitch: Cesium.Math.toRadians(-45),       // 45° above horizon
       });
     };
 
@@ -294,6 +309,9 @@ export class SatelliteLayer {
     this.followTickRemove?.();
     this.followTickRemove = null;
 
+    // Unlock camera so user can pan/zoom freely
+    unlockCamera(this.viewer);
+
     if (this.followEntity) {
       if (this.viewer.trackedEntity === this.followEntity) {
         this.viewer.trackedEntity = undefined as unknown as Cesium.Entity;
@@ -304,7 +322,7 @@ export class SatelliteLayer {
     this.followPosition = null;
   }
 
-  setCategory(category: "active" | "stations" | "military", visible: boolean): void {
+  setCategory(category: "stations" | "military" | "starlink" | "gnss" | "research", visible: boolean): void {
     if (visible) {
       this.hiddenCategories.delete(category);
     } else {

@@ -104,9 +104,11 @@ function createToggles(): HTMLElement {
       <button class="toggle-btn" id="satellite-toggle">OFF</button>
     </div>
     <div class="sat-filter-row hidden" id="sat-filter-row">
-      <button class="toggle-btn on" id="filter-active" data-category="active">ACTIVE</button>
       <button class="toggle-btn on" id="filter-stations" data-category="stations">STATIONS</button>
       <button class="toggle-btn on" id="filter-military" data-category="military">MILITARY</button>
+      <button class="toggle-btn on" id="filter-gnss" data-category="gnss">GNSS</button>
+      <button class="toggle-btn on" id="filter-research" data-category="research">RESEARCH</button>
+      <button class="toggle-btn" id="filter-starlink" data-category="starlink">STARLINK</button>
     </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
@@ -162,17 +164,21 @@ function wireUpSatelliteToggle(): void {
   wireUpCategoryFilters();
 }
 
-const CATEGORIES = ["active", "stations", "military"] as const;
+const CATEGORIES = ["stations", "military", "gnss", "research", "starlink"] as const;
 type Category = (typeof CATEGORIES)[number];
+
+// Starlink defaults to OFF when enabling satellites
+const DEFAULT_OFF_CATEGORIES: Set<Category> = new Set(["starlink"]);
 
 function resetFilterButtons(): void {
   for (const cat of CATEGORIES) {
     const btn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
+    const defaultOn = !DEFAULT_OFF_CATEGORIES.has(cat);
     if (btn) {
-      btn.classList.add("on");
-      btn.dataset.active = "true";
+      btn.classList.toggle("on", defaultOn);
+      btn.dataset.active = String(defaultOn);
     }
-    sat.layer?.setCategory(cat, true);
+    sat.layer?.setCategory(cat, defaultOn);
   }
 }
 

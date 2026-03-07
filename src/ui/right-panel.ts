@@ -193,16 +193,24 @@ function createLiveReadout(): HTMLElement {
   container.className = "live-readout";
   container.innerHTML = `
     <div class="readout-row">
+      <span class="readout-label">LAT</span>
+      <span class="readout-value" id="readout-lat">--°</span>
+    </div>
+    <div class="readout-row">
+      <span class="readout-label">LNG</span>
+      <span class="readout-value" id="readout-lng">--°</span>
+    </div>
+    <div class="readout-row">
+      <span class="readout-label">ALT</span>
+      <span class="readout-value" id="readout-alt">----m</span>
+    </div>
+    <div class="readout-row">
       <span class="readout-label">GSD</span>
       <span class="readout-value" id="readout-gsd">--m</span>
     </div>
     <div class="readout-row">
       <span class="readout-label">NIIRS</span>
       <span class="readout-value" id="readout-niirs">--</span>
-    </div>
-    <div class="readout-row">
-      <span class="readout-label">ALT</span>
-      <span class="readout-value" id="readout-alt">----m</span>
     </div>
     <div class="readout-row">
       <span class="readout-label">SUB</span>
@@ -244,6 +252,8 @@ function updateReadoutsFromCamera(viewer: Viewer): void {
   const cartographic = camera.positionCartographic;
   if (!cartographic) return;
 
+  const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+  const longitude = Cesium.Math.toDegrees(cartographic.longitude);
   const altitude = cartographic.height;
   
   // Get camera pitch (negative because Cesium uses negative for looking down)
@@ -260,9 +270,11 @@ function updateReadoutsFromCamera(viewer: Viewer): void {
   const niirs = Math.max(1, Math.min(9, 9 - Math.log10(altitude / 100)));
 
   updateReadouts({
+    latitude,
+    longitude,
+    altitude,
     gsd,
     niirs,
-    altitude,
     pitch: pitchDegrees,
   });
 }
@@ -295,16 +307,36 @@ function setReadout(id: string, value: number | undefined, formatter: (v: number
 }
 
 /**
+ * Format latitude with N/S indicator
+ */
+function formatLatitude(lat: number): string {
+  const dir = lat >= 0 ? "N" : "S";
+  return `${Math.abs(lat).toFixed(4)}° ${dir}`;
+}
+
+/**
+ * Format longitude with E/W indicator
+ */
+function formatLongitude(lng: number): string {
+  const dir = lng >= 0 ? "E" : "W";
+  return `${Math.abs(lng).toFixed(4)}° ${dir}`;
+}
+
+/**
  * Update the live readouts with calculated data
  */
 export function updateReadouts(data: {
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
   gsd?: number;
   niirs?: number;
-  altitude?: number;
   pitch?: number;
 }): void {
+  setReadout("readout-lat", data.latitude, formatLatitude);
+  setReadout("readout-lng", data.longitude, formatLongitude);
+  setReadout("readout-alt", data.altitude, formatAltitude);
   setReadout("readout-gsd", data.gsd, formatDistance);
   setReadout("readout-niirs", data.niirs, (v) => v.toFixed(1));
-  setReadout("readout-alt", data.altitude, formatAltitude);
   setReadout("readout-sub", data.pitch, (v) => `${v.toFixed(1)}° EL`);
 }
