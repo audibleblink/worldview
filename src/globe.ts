@@ -116,16 +116,7 @@ export async function initGlobe(
     }
   } catch (error) {
     console.error("Failed to load Google 3D Tiles:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    // Check for specific error types
-    if (errorMessage.includes("403") || errorMessage.includes("401")) {
-      showApiKeyError();
-    } else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
-      showErrorOverlay("Unable to connect to tile proxy server.\n\nMake sure the proxy is running:\nbun run proxy");
-    } else {
-      showErrorOverlay(`Failed to load 3D tiles:\n${errorMessage}`);
-    }
+    handleTileLoadError(error);
   }
 
   // Configure scene settings
@@ -181,27 +172,43 @@ export function resetCamera(): void {
   flyTo(DEFAULT_CAMERA.longitude, DEFAULT_CAMERA.latitude, DEFAULT_CAMERA.height, 2);
 }
 
+/** Check if an error message indicates an auth failure */
+function isAuthError(msg: string): boolean {
+  return msg.includes("403") || msg.includes("401");
+}
+
+/** Check if an error message indicates a network failure */
+function isNetworkError(msg: string): boolean {
+  return msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("ECONNREFUSED");
+}
+
+/** Handle tile loading errors with appropriate user feedback */
+function handleTileLoadError(error: unknown): void {
+  const msg = error instanceof Error ? error.message : String(error);
+  
+  if (isAuthError(msg)) {
+    showApiKeyError();
+  } else if (isNetworkError(msg)) {
+    showErrorOverlay("Unable to connect to tile proxy server.\n\nMake sure the proxy is running:\nbun run proxy");
+  } else {
+    showErrorOverlay(`Failed to load 3D tiles:\n${msg}`);
+  }
+}
+
 /**
  * Check if the proxy server is healthy and has API key configured
  */
 async function checkProxyHealth(): Promise<{ ok: boolean; message: string }> {
   try {
-    const response = await fetch(`${PROXY_URL}/health`, { 
-      signal: AbortSignal.timeout(5000) 
-    });
-    if (response.ok) {
-      return { ok: true, message: "Proxy is healthy" };
-    }
-    return { ok: false, message: `Proxy returned status ${response.status}` };
+    const response = await fetch(`${PROXY_URL}/health`, { signal: AbortSignal.timeout(5000) });
+    return response.ok
+      ? { ok: true, message: "Proxy is healthy" }
+      : { ok: false, message: `Proxy returned status ${response.status}` };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("Failed to fetch") || message.includes("NetworkError") || message.includes("ECONNREFUSED")) {
-      return { 
-        ok: false, 
-        message: "Proxy server not running.\n\nStart the proxy with:\nbun run proxy" 
-      };
-    }
-    return { ok: false, message: `Proxy health check failed: ${message}` };
+    const msg = error instanceof Error ? error.message : String(error);
+    return isNetworkError(msg)
+      ? { ok: false, message: "Proxy server not running.\n\nStart the proxy with:\nbun run proxy" }
+      : { ok: false, message: `Proxy health check failed: ${msg}` };
   }
 }
 

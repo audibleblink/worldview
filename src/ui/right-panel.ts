@@ -72,6 +72,26 @@ function createParametersHeader(): HTMLElement {
   return header;
 }
 
+const SLIDER_NAMES = ["PIXELATION", "DISTORTION", "INSTABILITY"] as const;
+type SliderName = typeof SLIDER_NAMES[number];
+
+/** Create a single slider row element */
+function createSliderRow(name: SliderName): { row: HTMLElement; input: HTMLInputElement; value: HTMLSpanElement } {
+  const row = document.createElement("div");
+  row.className = "slider-row";
+  row.id = `slider-row-${name.toLowerCase()}`;
+  row.innerHTML = `
+    <label>${name}</label>
+    <input type="range" min="0" max="100" value="50" id="slider-${name.toLowerCase()}">
+    <span class="slider-value" id="slider-value-${name.toLowerCase()}">50%</span>
+  `;
+  return {
+    row,
+    input: row.querySelector("input") as HTMLInputElement,
+    value: row.querySelector(".slider-value") as HTMLSpanElement,
+  };
+}
+
 /**
  * Create the effect sliders
  */
@@ -79,61 +99,27 @@ function createEffectSliders(): HTMLElement {
   const container = document.createElement("div");
   container.className = "effect-sliders panel-section";
 
-  const sliderNames = ["PIXELATION", "DISTORTION", "INSTABILITY"] as const;
+  sliderElements = {} as typeof sliderElements;
 
-  // Initialize slider elements storage
-  sliderElements = {
-    PIXELATION: { input: null!, value: null! },
-    DISTORTION: { input: null!, value: null! },
-    INSTABILITY: { input: null!, value: null! },
-  };
-
-  sliderNames.forEach((name) => {
-    const row = document.createElement("div");
-    row.className = "slider-row";
-    row.id = `slider-row-${name.toLowerCase()}`;
-    
-    const label = document.createElement("label");
-    label.textContent = name;
-    
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = "0";
-    input.max = "100";
-    input.value = "50";
-    input.id = `slider-${name.toLowerCase()}`;
-    
-    const valueSpan = document.createElement("span");
-    valueSpan.className = "slider-value";
-    valueSpan.textContent = "50%";
-    valueSpan.id = `slider-value-${name.toLowerCase()}`;
-    
-    row.appendChild(label);
-    row.appendChild(input);
-    row.appendChild(valueSpan);
+  for (const name of SLIDER_NAMES) {
+    const { row, input, value: valueSpan } = createSliderRow(name);
     container.appendChild(row);
-    
-    // Store references
     sliderElements![name] = { input, value: valueSpan };
-    
-    // Add event listener for real-time updates
+
     input.addEventListener("input", () => {
       const sliderValue = parseInt(input.value, 10);
       valueSpan.textContent = `${sliderValue}%`;
-      
-      // Map slider value (0-100) to parameter value
+
       const mode = shaderManager.getMode();
       if (mode === "NORMAL" || mode === "NAVI") return;
-      
+
       const mapping = PARAMETER_MAPPINGS[mode]?.[name];
       if (mapping) {
-        // Convert 0-100 slider to min-max range
-        const normalizedValue = sliderValue / 100;
-        const paramValue = mapping.min + normalizedValue * (mapping.max - mapping.min);
+        const paramValue = mapping.min + (sliderValue / 100) * (mapping.max - mapping.min);
         shaderManager.setParameter(mapping.uniform, paramValue);
       }
     });
-  });
+  }
 
   return container;
 }
@@ -143,39 +129,28 @@ function createEffectSliders(): HTMLElement {
  */
 function updateSlidersForMode(mode: ViewMode): void {
   if (!sliderElements) return;
-  
-  const sliderNames = ["PIXELATION", "DISTORTION", "INSTABILITY"] as const;
+
   const isEffectMode = mode !== "NORMAL" && mode !== "NAVI";
-  
-  sliderNames.forEach((name) => {
-    const { input, value } = sliderElements![name];
-    
-    if (isEffectMode) {
-      // Enable slider
-      input.disabled = false;
-      input.parentElement?.classList.remove("disabled");
-      
-      // Get current parameter value and convert to slider percentage
-      const mapping = PARAMETER_MAPPINGS[mode as keyof typeof PARAMETER_MAPPINGS]?.[name];
-      if (mapping) {
-        const params = shaderManager.getParameters();
-        const paramValue = params[mapping.uniform] ?? mapping.default;
-        
-        // Convert parameter value to 0-100 slider range
-        const normalizedValue = (paramValue - mapping.min) / (mapping.max - mapping.min);
-        const sliderValue = Math.round(normalizedValue * 100);
-        
-        input.value = String(Math.max(0, Math.min(100, sliderValue)));
-        value.textContent = `${input.value}%`;
-      }
-    } else {
-      // Disable slider for NORMAL mode
-      input.disabled = true;
-      input.parentElement?.classList.add("disabled");
+
+  for (const name of SLIDER_NAMES) {
+    const { input, value } = sliderElements[name];
+    input.disabled = !isEffectMode;
+    input.parentElement?.classList.toggle("disabled", !isEffectMode);
+
+    if (!isEffectMode) {
       input.value = "0";
       value.textContent = "--";
+      continue;
     }
-  });
+
+    const mapping = PARAMETER_MAPPINGS[mode as keyof typeof PARAMETER_MAPPINGS]?.[name];
+    if (mapping) {
+      const paramValue = shaderManager.getParameters()[mapping.uniform] ?? mapping.default;
+      const sliderValue = Math.round(((paramValue - mapping.min) / (mapping.max - mapping.min)) * 100);
+      input.value = String(Math.max(0, Math.min(100, sliderValue)));
+      value.textContent = `${input.value}%`;
+    }
+  }
 }
 
 /**

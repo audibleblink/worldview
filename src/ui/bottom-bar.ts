@@ -182,18 +182,11 @@ function wireUpCityTabs(): void {
         dropdown.value = String(cityIndex);
       }
 
-      // Update POI display
-      const updatePOI = getPOIDisplayUpdater();
-      if (updatePOI) {
-        updatePOI();
-      }
-
-      // Update location tooltip
+      // Update POI display and tooltip
+      getPOIDisplayUpdater()();
       const city = getCurrentCity();
       const poi = getCurrentPOI();
-      if (city && poi) {
-        updateLocationTooltip(poi.name, city.name);
-      }
+      if (city && poi) updateLocationTooltip(poi.name, city.name);
     });
   });
 }

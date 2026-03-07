@@ -126,26 +126,27 @@ export function getCurrentCity(): City | undefined {
   return cities[currentCityIndex];
 }
 
+/** Navigate to the current POI if viewer is available */
+function navigateToCurrent(): void {
+  const poi = getCurrentPOI();
+  if (poi && viewerRef) flyToPOI(viewerRef, poi);
+}
+
 /**
  * Set the current city by index and fly to its first POI
  */
 export function setCurrentCity(cityIndex: number): void {
-  if (cityIndex >= 0 && cityIndex < cities.length) {
-    currentCityIndex = cityIndex;
-    currentPOIIndex = 0;
-    const poi = getCurrentPOI();
-    if (poi && viewerRef) {
-      flyToPOI(viewerRef, poi);
-    }
-  }
+  if (cityIndex < 0 || cityIndex >= cities.length) return;
+  currentCityIndex = cityIndex;
+  currentPOIIndex = 0;
+  navigateToCurrent();
 }
 
 /**
  * Get the current POI
  */
 export function getCurrentPOI(): POI | undefined {
-  const city = getCurrentCity();
-  return city?.pois[currentPOIIndex];
+  return cities[currentCityIndex]?.pois[currentPOIIndex];
 }
 
 /**
@@ -162,10 +163,7 @@ export function nextPOI(): void {
   const city = getCurrentCity();
   if (city && currentPOIIndex < city.pois.length - 1) {
     currentPOIIndex++;
-    const poi = getCurrentPOI();
-    if (poi && viewerRef) {
-      flyToPOI(viewerRef, poi);
-    }
+    navigateToCurrent();
   }
 }
 
@@ -175,10 +173,7 @@ export function nextPOI(): void {
 export function prevPOI(): void {
   if (currentPOIIndex > 0) {
     currentPOIIndex--;
-    const poi = getCurrentPOI();
-    if (poi && viewerRef) {
-      flyToPOI(viewerRef, poi);
-    }
+    navigateToCurrent();
   }
 }
 
@@ -189,10 +184,7 @@ export function flyToPOIByIndex(index: number): void {
   const city = getCurrentCity();
   if (city && index >= 0 && index < city.pois.length) {
     currentPOIIndex = index;
-    const poi = city.pois[index];
-    if (poi && viewerRef) {
-      flyToPOI(viewerRef, poi);
-    }
+    navigateToCurrent();
   }
 }
 

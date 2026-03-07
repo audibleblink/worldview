@@ -16,8 +16,6 @@ import {
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 
-let updatePOIDisplay: (() => void) | null = null;
-
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
   layer: null as SatelliteLayer | null,
@@ -296,7 +294,6 @@ function handlePOINavigation(navigateFn: () => void): void {
 function wireUpPOINavigation(): void {
   document.getElementById("prev-poi")?.addEventListener("click", () => handlePOINavigation(prevPOI));
   document.getElementById("next-poi")?.addEventListener("click", () => handlePOINavigation(nextPOI));
-  updatePOIDisplay = updatePOIDisplayState;
 }
 
 function updatePOIDisplayState(): void {
@@ -337,6 +334,6 @@ export function addLogEntry(message: string, type: "info" | "error" | "success" 
   }
 }
 
-export function getPOIDisplayUpdater(): (() => void) | null {
-  return updatePOIDisplay;
+export function getPOIDisplayUpdater(): () => void {
+  return updatePOIDisplayState;
 }

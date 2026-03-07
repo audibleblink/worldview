@@ -12,6 +12,12 @@ export interface SatelliteRecord {
   color: Cesium.Color;
 }
 
+// Visual constants
+const BILLBOARD_SIZE_NORMAL = 16;
+const BILLBOARD_SIZE_SELECTED = 28;
+const POSITION_UPDATE_INTERVAL_MS = 2500;
+const FOLLOW_RANGE_METERS = 2_500_000;
+
 const CATEGORY_COLORS: Record<string, Cesium.Color> = {
   stations: Cesium.Color.fromCssColorString("#00cfff"),
   military: Cesium.Color.fromCssColorString("#ff4444"),
@@ -182,8 +188,8 @@ export class SatelliteLayer {
       const billboard = this.billboards.add({
         position: cartesian,
         image: createGlowTexture(record.color.toCssHexString()),
-        width: 16,
-        height: 16,
+        width: BILLBOARD_SIZE_NORMAL,
+        height: BILLBOARD_SIZE_NORMAL,
         color: record.color,
         id: record.noradId,
       });
@@ -191,7 +197,7 @@ export class SatelliteLayer {
       this.satellitePositions.set(record.noradId, cartesian);
     }
 
-    this.updateInterval = setInterval(() => this.updatePositions(), 2500);
+    this.updateInterval = setInterval(() => this.updatePositions(), POSITION_UPDATE_INTERVAL_MS);
     this.onCountUpdate?.(this.billboardMap.size);
   }
 
@@ -244,7 +250,7 @@ export class SatelliteLayer {
     this.selectedNoradId = noradId;
 
     const bb = this.billboardMap.get(noradId);
-    if (bb) { bb.width = 28; bb.height = 28; }
+    if (bb) { bb.width = BILLBOARD_SIZE_SELECTED; bb.height = BILLBOARD_SIZE_SELECTED; }
 
     // Compute velocity magnitude from SGP4 velocity vector (km/s in ECI frame)
     let velocityKmS = 0;
@@ -272,7 +278,7 @@ export class SatelliteLayer {
   deselectSatellite(onDeselect?: () => void): void {
     if (this.selectedNoradId) {
       const bb = this.billboardMap.get(this.selectedNoradId);
-      if (bb) { bb.width = 16; bb.height = 16; }
+      if (bb) { bb.width = BILLBOARD_SIZE_NORMAL; bb.height = BILLBOARD_SIZE_NORMAL; }
       this.selectedNoradId = null;
     }
 
@@ -296,8 +302,8 @@ export class SatelliteLayer {
       if (!pos) return;
 
       lookAtTarget(this.viewer, pos, {
-        range: 2_500_000,                        // 2500 km from satellite
-        pitch: Cesium.Math.toRadians(-45),       // 45° above horizon
+        range: FOLLOW_RANGE_METERS,
+        pitch: Cesium.Math.toRadians(-45),
       });
     };
 

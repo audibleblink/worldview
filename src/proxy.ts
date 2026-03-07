@@ -25,13 +25,19 @@ if (!apiKey) {
 
 console.log(`Starting Google 3D Tiles proxy on port ${PROXY_PORT}...`);
 
-/**
- * Create a JSON response with CORS headers
- */
+/** Create a response with CORS headers */
+function corsResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
+  return new Response(body, {
+    ...init,
+    headers: { ...CORS_HEADERS, ...init.headers },
+  });
+}
+
+/** Create a JSON response with CORS headers */
 function jsonResponse(data: object, status = 200): Response {
-  return new Response(JSON.stringify(data), {
+  return corsResponse(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -41,39 +47,29 @@ Bun.serve({
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
-    // Handle CORS preflight requests
-    if (req.method === "OPTIONS") {
-      return new Response(null, { headers: CORS_HEADERS });
-    }
+    if (req.method === "OPTIONS") return corsResponse(null);
+    if (url.pathname === "/health") return jsonResponse({ status: "ok" });
 
-    // Health check endpoint
-    if (url.pathname === "/health") {
-      return jsonResponse({ status: "ok" });
-    }
-
-    // TLE proxy: forward to CelesTrak (handles CORS for browser clients)
+    // TLE proxy: forward to CelesTrak
     if (url.pathname === "/tle") {
       const group = url.searchParams.get("group");
-      if (!group) {
-        return jsonResponse({ error: "Missing ?group= parameter" }, 400);
-      }
-
-      const celestrakUrl = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=tle`;
+      if (!group) return jsonResponse({ error: "Missing ?group= parameter" }, 400);
 
       try {
-        const response = await fetch(celestrakUrl);
-        const headers = new Headers({
-          "Content-Type": "text/plain; charset=utf-8",
-          ...CORS_HEADERS,
+        const response = await fetch(
+          `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=tle`
+        );
+        return corsResponse(response.body, {
+          status: response.status,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
         });
-        return new Response(response.body, { status: response.status, headers });
       } catch (error) {
         console.error("TLE proxy error:", error);
         return jsonResponse({ error: "TLE proxy error" }, 502);
       }
     }
 
-    // Proxy all other requests to Google
+    // Proxy to Google 3D Tiles
     const targetUrl = new URL(url.pathname + url.search, GOOGLE_TILES_URL);
     targetUrl.searchParams.set("key", apiKey);
 
@@ -81,15 +77,14 @@ Bun.serve({
       const response = await fetch(targetUrl.toString(), {
         method: req.method,
         headers: {
-          "Accept": req.headers.get("Accept") || "*/*",
+          Accept: req.headers.get("Accept") || "*/*",
           "Accept-Encoding": req.headers.get("Accept-Encoding") || "gzip, deflate, br",
         },
       });
-
-      const headers = new Headers(response.headers);
-      Object.entries(CORS_HEADERS).forEach(([k, v]) => headers.set(k, v));
-
-      return new Response(response.body, { status: response.status, headers });
+      return corsResponse(response.body, {
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+      });
     } catch (error) {
       console.error("Proxy error:", error);
       return jsonResponse({ error: "Proxy error" }, 502);

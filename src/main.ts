@@ -15,18 +15,12 @@ import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } fro
 // POI navigation key mappings: q→0, w→1, e→2, r→3, t→4
 const POI_KEY_MAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3, t: 4 };
 
-function isTypingInFormElement(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  );
-}
-
 function setupKeyboardNavigation(): void {
   document.addEventListener("keydown", (event: KeyboardEvent) => {
-    if (isTypingInFormElement(event.target)) return;
+    const el = document.activeElement;
+    const tag = el?.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || (el as HTMLElement)?.isContentEditable) return;
+    
     const poiIndex = POI_KEY_MAP[event.key.toLowerCase()];
     if (poiIndex !== undefined) flyToPOIByIndex(poiIndex);
   });

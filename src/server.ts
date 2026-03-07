@@ -34,68 +34,56 @@ function getContentType(path: string): string {
   return CONTENT_TYPES[ext] ?? "application/octet-stream";
 }
 
+/** Serve a static file with appropriate content type */
+async function serveFile(filePath: string, notFoundMsg: string): Promise<Response> {
+  const file = Bun.file(filePath);
+  if (await file.exists()) {
+    return new Response(file, { headers: { "Content-Type": getContentType(filePath) } });
+  }
+  return new Response(notFoundMsg, { status: 404 });
+}
+
+/** Transpile TypeScript file on the fly */
+async function serveTranspiledTS(filePath: string): Promise<Response | null> {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) return null;
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const result = transpiler.transformSync(await file.text());
+  return new Response(result, { headers: { "Content-Type": "application/javascript" } });
+}
+
 Bun.serve({
   port: PORT,
   async fetch(req) {
-    const url = new URL(req.url);
-    let pathname = url.pathname;
+    const { pathname } = new URL(req.url);
 
     // Serve index.html at root
     if (pathname === "/" || pathname === "/index.html") {
-      const file = Bun.file(join(PUBLIC_PATH, "index.html"));
-      return new Response(file, {
+      return new Response(Bun.file(join(PUBLIC_PATH, "index.html")), {
         headers: { "Content-Type": "text/html" },
       });
     }
 
     // Serve satellite.js ES module from node_modules
     if (pathname.startsWith("/satellite.js/")) {
-      const filePath = join(SATELLITE_JS_PATH, pathname.replace("/satellite.js/", ""));
-      const file = Bun.file(filePath);
-      if (await file.exists()) {
-        return new Response(file, { headers: { "Content-Type": "application/javascript" } });
-      }
-      return new Response("satellite.js asset not found: " + pathname, { status: 404 });
+      const filePath = join(SATELLITE_JS_PATH, pathname.slice(14));
+      return serveFile(filePath, `satellite.js asset not found: ${pathname}`);
     }
 
     // Serve Cesium assets from node_modules
     if (pathname.startsWith("/cesium/")) {
-      const filePath = join(CESIUM_PATH, pathname.replace("/cesium/", ""));
-      const file = Bun.file(filePath);
-      if (await file.exists()) {
-        return new Response(file, {
-          headers: { "Content-Type": getContentType(filePath) },
-        });
-      }
-      return new Response("Cesium asset not found: " + pathname, { status: 404 });
+      const filePath = join(CESIUM_PATH, pathname.slice(8));
+      return serveFile(filePath, `Cesium asset not found: ${pathname}`);
     }
 
-    // Serve TypeScript files from src/ - transpile on the fly
+    // Transpile TypeScript files from src/
     if (pathname.startsWith("/src/") && pathname.endsWith(".ts")) {
-      const filePath = join(ROOT, pathname);
-      const file = Bun.file(filePath);
-      if (await file.exists()) {
-        // Use Bun's built-in transpiler
-        const transpiler = new Bun.Transpiler({ loader: "ts" });
-        const code = await file.text();
-        const result = transpiler.transformSync(code);
-        return new Response(result, {
-          headers: { "Content-Type": "application/javascript" },
-        });
-      }
+      const response = await serveTranspiledTS(join(ROOT, pathname));
+      if (response) return response;
     }
 
-    // Serve public assets (styles.css, etc.)
-    const publicFilePath = join(PUBLIC_PATH, pathname);
-    const publicFile = Bun.file(publicFilePath);
-    if (await publicFile.exists()) {
-      return new Response(publicFile, {
-        headers: { "Content-Type": getContentType(publicFilePath) },
-      });
-    }
-
-    // 404 for other requests
-    return new Response("Not Found: " + pathname, { status: 404 });
+    // Serve public assets
+    return serveFile(join(PUBLIC_PATH, pathname), `Not Found: ${pathname}`);
   },
 });
 
