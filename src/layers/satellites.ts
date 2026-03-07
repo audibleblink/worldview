@@ -96,7 +96,137 @@ export function propagateAll(
   records: SatelliteRecord[],
   date: Date
 ): { record: SatelliteRecord; cartesian: Cesium.Cartesian3 }[] {
-  return [];
+  const results: { record: SatelliteRecord; cartesian: Cesium.Cartesian3 }[] = [];
+  const gmst = satellite.gstime(date);
+
+  for (const record of records) {
+    const result = satellite.propagate(record.satrec, date);
+
+    // Skip if no valid position (decayed, not yet launched, or error)
+    if (!result.position || typeof result.position === "boolean") continue;
+
+    const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
+
+    // geo.height is in km; Cesium needs meters
+    const cartesian = Cesium.Cartesian3.fromRadians(
+      geo.longitude,
+      geo.latitude,
+      geo.height * 1000
+    );
+
+    results.push({ record, cartesian });
+  }
+
+  return results;
+}
+
+/**
+ * Creates a 32×32 glow texture canvas data URL.
+ * White/color center → transparent edge radial gradient.
+ * Runs in browser context only.
+ */
+export function createGlowTexture(color: string): string {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
+  gradient.addColorStop(0, "white");
+  gradient.addColorStop(0.3, color);
+  gradient.addColorStop(1, "transparent");
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  return canvas.toDataURL();
+}
+
+export class SatelliteLayer {
+  private viewer: Cesium.Viewer;
+  private records: SatelliteRecord[] = [];
+  private billboards: Cesium.BillboardCollection | null = null;
+  private updateInterval: ReturnType<typeof setInterval> | null = null;
+  private billboardMap: Map<string, Cesium.Billboard> = new Map(); // noradId → billboard
+  private onCountUpdate: ((n: number | null) => void) | null = null;
+
+  constructor(viewer: Cesium.Viewer, onCountUpdate?: (n: number | null) => void) {
+    this.viewer = viewer;
+    this.onCountUpdate = onCountUpdate ?? null;
+  }
+
+  async show(records: SatelliteRecord[]): Promise<void> {
+    this.records = records;
+
+    // Create BillboardCollection and add to scene
+    this.billboards = new Cesium.BillboardCollection({ scene: this.viewer.scene });
+    this.viewer.scene.primitives.add(this.billboards);
+
+    // Initial position propagation
+    const positions = propagateAll(this.records, new Date());
+
+    // Add one billboard per position
+    for (const { record, cartesian } of positions) {
+      const img = createGlowTexture(record.color.toCssHexString());
+      const billboard = this.billboards.add({
+        position: cartesian,
+        image: img,
+        width: 16,
+        height: 16,
+        color: record.color,
+        id: record.noradId, // for pick resolution
+      });
+      this.billboardMap.set(record.noradId, billboard);
+    }
+
+    // Start update loop (every 5 seconds)
+    this.updateInterval = setInterval(() => this.updatePositions(), 5000);
+
+    // Notify count
+    this.onCountUpdate?.(this.billboardMap.size);
+  }
+
+  hide(): void {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+    if (this.billboards) {
+      this.viewer.scene.primitives.remove(this.billboards);
+      this.billboards = null;
+    }
+    this.billboardMap.clear();
+    this.records = [];
+    this.onCountUpdate?.(null);
+  }
+
+  updatePositions(): void {
+    if (!this.billboards) return;
+    const positions = propagateAll(this.records, new Date());
+    for (const { record, cartesian } of positions) {
+      const bb = this.billboardMap.get(record.noradId);
+      if (bb) bb.position = cartesian;
+    }
+    // Update count (only visible ones)
+    const visibleCount = [...this.billboardMap.values()].filter((b) => b.show).length;
+    this.onCountUpdate?.(visibleCount);
+  }
+
+  getBillboardCollection(): Cesium.BillboardCollection | null {
+    return this.billboards;
+  }
+
+  getRecords(): SatelliteRecord[] {
+    return this.records;
+  }
+
+  getBillboard(noradId: string): Cesium.Billboard | undefined {
+    return this.billboardMap.get(noradId);
+  }
 }
 
 export function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[] {

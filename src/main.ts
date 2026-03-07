@@ -4,9 +4,10 @@
  */
 
 import { initGlobe } from "./globe.ts";
-import { initShell } from "./ui/shell.ts";
+import { initShell, updateSatelliteCount } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
+import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
 
 /**
  * Check if the user is currently interacting with a form element
@@ -50,8 +51,11 @@ export async function init(): Promise<void> {
     // Set the viewer reference for POI navigation
     setViewer(viewer);
 
+    // Create satellite layer (browser-side, needs viewer)
+    const satelliteLayer = new SatelliteLayer(viewer, updateSatelliteCount);
+
     // Initialize the UI shell
-    initShell(viewer);
+    initShell(viewer, { satelliteLayer, loadAllTLEs });
 
     // Set up keyboard shortcuts for POI navigation
     setupKeyboardNavigation();

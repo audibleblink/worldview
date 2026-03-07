@@ -128,22 +128,22 @@ Run: `bun scripts/tle-fetch-smoke.ts`
 
 ### Tasks
 
-- [ ] Install `satellite.js` type bindings if not already bundled — confirm `import * as satellite from "satellite.js"` resolves types
-- [ ] Implement `propagateAll(records, date)` — returns `{ record, cartesian: Cesium.Cartesian3 }[]`
+- [x] Install `satellite.js` type bindings if not already bundled — confirm `import * as satellite from "satellite.js"` resolves types
+- [x] Implement `propagateAll(records, date)` — returns `{ record, cartesian: Cesium.Cartesian3 }[]`
   - Call `satellite.propagate(satrec, date)` per record
   - Skip if result has no position (satellite below horizon / decayed)
   - Convert ECI → geodetic → `Cesium.Cartesian3.fromRadians(lon, lat, altMeters)`
-- [ ] Create glow billboard texture: 32×32 canvas radial gradient (white center, transparent edge), stored as data URL
-- [ ] Implement `SatelliteLayer` class:
+- [x] Create glow billboard texture: 32×32 canvas radial gradient (white center, transparent edge), stored as data URL
+- [x] Implement `SatelliteLayer` class:
   - `billboards: Cesium.BillboardCollection` added to `viewer.scene.primitives`
   - `show()` — populate BillboardCollection from propagated positions; start 5-second `setInterval`
   - `hide()` — stop interval, remove BillboardCollection from scene
   - `updatePositions()` — called by interval; update each Billboard's `position` in-place (no add/remove)
-- [ ] Wire layer toggle into `src/ui/left-panel.ts`:
+- [x] Wire layer toggle into `src/ui/left-panel.ts`:
   - Replace the stubbed `COVERAGE` (or add new) `SATELLITES` toggle button — remove `disabled` attribute
   - On toggle ON: instantiate `SatelliteLayer`, call `show()`, update button class to `.on`
   - On toggle OFF: call `hide()`, clear info panel, update button class
-- [ ] Add `TRACKING: N SATS` counter to the top bar center (`<div class="top-bar-center">`) in `src/ui/shell.ts`
+- [x] Add `TRACKING: N SATS` counter to the top bar center (`<div class="top-bar-center">`) in `src/ui/shell.ts`
   - Export `updateSatelliteCount(n: number | null)` from `shell.ts`
   - Call with current visible count after each position update; call with `null` on layer hide
 

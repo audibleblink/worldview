@@ -15,14 +15,28 @@ import {
   prevPOI,
 } from "../pois.ts";
 import { updateLocationTooltip } from "./bottom-bar.ts";
+import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 
 // Store reference to update functions
 let updatePOIDisplay: (() => void) | null = null;
 
+// Satellite layer state
+let _satelliteLayer: SatelliteLayer | null = null;
+let _loadAllTLEs: (() => Promise<SatelliteRecord[]>) | null = null;
+let _cachedTLERecords: SatelliteRecord[] | null = null;
+let _satLayerActive = false;
+
+export interface LeftPanelOptions {
+  satelliteLayer?: SatelliteLayer;
+  loadAllTLEs?: () => Promise<SatelliteRecord[]>;
+}
+
 /**
  * Initialize the left panel
  */
-export function initLeftPanel(_viewer: Viewer): void {
+export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void {
+  _satelliteLayer = options?.satelliteLayer ?? null;
+  _loadAllTLEs = options?.loadAllTLEs ?? null;
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
     console.error("Left panel element not found");
@@ -72,6 +86,7 @@ export function initLeftPanel(_viewer: Viewer): void {
   // Wire up event handlers
   wireUpCitySelector();
   wireUpPOINavigation();
+  wireUpSatelliteToggle();
 
   // Initial update
   updatePOIDisplayState();
@@ -123,8 +138,8 @@ function createToggles(): HTMLElement {
   container.className = "toggles panel-section";
   container.innerHTML = `
     <div class="toggle-row">
-      <span>COVERAGE</span>
-      <button class="toggle-btn" disabled>ON</button>
+      <span>SATELLITES</span>
+      <button class="toggle-btn" id="satellite-toggle">OFF</button>
     </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
@@ -136,6 +151,47 @@ function createToggles(): HTMLElement {
     </div>
   `;
   return container;
+}
+
+/**
+ * Wire up the satellite layer toggle button
+ */
+function wireUpSatelliteToggle(): void {
+  const btn = document.getElementById("satellite-toggle") as HTMLButtonElement | null;
+  if (!btn || !_satelliteLayer || !_loadAllTLEs) return;
+
+  btn.addEventListener("click", async () => {
+    if (_satLayerActive) {
+      // Turn OFF
+      _satelliteLayer!.hide();
+      _satLayerActive = false;
+      btn.textContent = "OFF";
+      btn.classList.remove("on");
+      addLogEntry("[SAT] Satellite layer disabled");
+    } else {
+      // Turn ON
+      btn.textContent = "LOADING";
+      btn.disabled = true;
+      try {
+        // Fetch TLEs once, then cache
+        if (!_cachedTLERecords) {
+          addLogEntry("[SAT] Fetching TLE data...");
+          _cachedTLERecords = await _loadAllTLEs!();
+          addLogEntry(`[SAT] Loaded ${_cachedTLERecords.length} records`, "success");
+        }
+        await _satelliteLayer!.show(_cachedTLERecords);
+        _satLayerActive = true;
+        btn.textContent = "ON";
+        btn.classList.add("on");
+        addLogEntry(`[SAT] Satellite layer active`, "success");
+      } catch (err) {
+        addLogEntry(`[SAT] Failed to load TLEs: ${err}`, "error");
+        btn.textContent = "ERR";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  });
 }
 
 /**

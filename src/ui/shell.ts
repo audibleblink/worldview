@@ -5,14 +5,14 @@
 
 // Use global Cesium type
 type Viewer = import("cesium").Viewer;
-import { initLeftPanel } from "./left-panel.ts";
+import { initLeftPanel, type LeftPanelOptions } from "./left-panel.ts";
 import { initRightPanel } from "./right-panel.ts";
 import { initBottomBar, setMode, type ViewMode } from "./bottom-bar.ts";
 
 /**
  * Initialize the complete UI shell
  */
-export function initShell(viewer: Viewer): void {
+export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): void {
   console.log("Initializing UI shell...");
 
   // Get the app container
@@ -29,7 +29,7 @@ export function initShell(viewer: Viewer): void {
   updateClassificationWatermark();
 
   // Initialize sub-components
-  initLeftPanel(viewer);
+  initLeftPanel(viewer, leftPanelOptions);
   initRightPanel(viewer);
   initBottomBar(viewer);
 
@@ -51,7 +51,9 @@ const TOP_BAR_HTML = `
     <div class="wordmark">WORLDVIEW</div>
     <div class="tagline">NO PLACE LEFT BEHIND</div>
   </div>
-  <div class="top-bar-center"></div>
+  <div class="top-bar-center">
+    <span id="sat-tracking-counter" class="hidden">TRACKING: 0 SATS</span>
+  </div>
   <div class="top-bar-right">
     <div class="mode-indicator">CRT</div>
     <div class="rec-section">
@@ -184,6 +186,21 @@ function isTypingInInput(): boolean {
     tagName === "textarea" ||
     (activeElement as HTMLElement).isContentEditable
   );
+}
+
+/**
+ * Update the satellite TRACKING counter in the top bar.
+ * Pass a number to show "TRACKING: N SATS"; pass null to hide the counter.
+ */
+export function updateSatelliteCount(n: number | null): void {
+  const counter = document.getElementById("sat-tracking-counter");
+  if (!counter) return;
+  if (n === null || n === undefined) {
+    counter.classList.add("hidden");
+  } else {
+    counter.textContent = `TRACKING: ${n} SATS`;
+    counter.classList.remove("hidden");
+  }
 }
 
 /**
