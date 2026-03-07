@@ -7,7 +7,7 @@
 type Viewer = import("cesium").Viewer;
 import { initLeftPanel } from "./left-panel.ts";
 import { initRightPanel } from "./right-panel.ts";
-import { initBottomBar } from "./bottom-bar.ts";
+import { initBottomBar, setMode, type ViewMode } from "./bottom-bar.ts";
 
 /**
  * Initialize the complete UI shell
@@ -38,6 +38,9 @@ export function initShell(viewer: Viewer): void {
 
   // Start fake telemetry updates
   startTelemetry();
+
+  // Initialize keyboard shortcuts
+  initKeyboardShortcuts();
 
   console.log("UI shell initialized");
 }
@@ -154,4 +157,52 @@ export function createVignetteOverlay(): HTMLElement {
   const vignette = document.createElement("div");
   vignette.className = "vignette-overlay";
   return vignette;
+}
+
+/**
+ * Keyboard shortcut mapping for view modes
+ */
+const MODE_SHORTCUTS: Record<string, ViewMode> = {
+  "1": "NORMAL",
+  "2": "CRT",
+  "3": "NVG",
+  "4": "FLIR",
+  "5": "ANIME",
+  "6": "NAVI",
+};
+
+/**
+ * Check if the user is typing in an input field
+ */
+function isTypingInInput(): boolean {
+  const activeElement = document.activeElement;
+  if (!activeElement) return false;
+  
+  const tagName = activeElement.tagName.toLowerCase();
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    (activeElement as HTMLElement).isContentEditable
+  );
+}
+
+/**
+ * Initialize keyboard shortcuts for mode switching
+ */
+function initKeyboardShortcuts(): void {
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
+    // Don't capture when user is typing in an input
+    if (isTypingInInput()) return;
+
+    // Don't capture when modifier keys are pressed (allow browser shortcuts)
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const mode = MODE_SHORTCUTS[event.key];
+    if (mode) {
+      event.preventDefault();
+      setMode(mode);
+    }
+  });
+
+  console.log("Keyboard shortcuts initialized (1-6 for view modes)");
 }
