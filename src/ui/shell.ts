@@ -37,6 +37,7 @@ const TOP_BAR_HTML = `
   </div>
   <div class="top-bar-center">
     <span id="sat-tracking-counter" class="hidden">TRACKING: 0 SATS</span>
+    <span id="flight-tracking-counter" class="hidden">TRACKING: 0 FLIGHTS</span>
   </div>
   <div class="top-bar-right">
     <div class="mode-indicator">CRT</div>
@@ -134,6 +135,21 @@ export function updateSatelliteCount(n: number | null): void {
     counter.classList.add("hidden");
   } else {
     counter.textContent = `TRACKING: ${n} SATS`;
+    counter.classList.remove("hidden");
+  }
+}
+
+/**
+ * Update the flight TRACKING counter in the top bar.
+ * Pass a number to show "TRACKING: N FLIGHTS"; pass null to hide the counter.
+ */
+export function updateFlightCount(n: number | null): void {
+  const counter = document.getElementById("flight-tracking-counter");
+  if (!counter) return;
+  if (n === null) {
+    counter.classList.add("hidden");
+  } else {
+    counter.textContent = `TRACKING: ${n} FLIGHTS`;
     counter.classList.remove("hidden");
   }
 }

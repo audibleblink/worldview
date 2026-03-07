@@ -15,6 +15,7 @@ import {
 } from "../pois.ts";
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
+import type { FlightLayer } from "../layers/flights.ts";
 
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
@@ -24,9 +25,16 @@ const sat = {
   active: false,
 };
 
+// Flight layer state — parallel structure to sat
+const flight = {
+  layer: null as FlightLayer | null,
+  active: false,
+};
+
 export interface LeftPanelOptions {
   satelliteLayer?: SatelliteLayer;
   loadAllTLEs?: () => Promise<SatelliteRecord[]>;
+  flightLayer?: FlightLayer;
 }
 
 export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void {
@@ -34,6 +42,9 @@ export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void
   sat.loadTLEs = options?.loadAllTLEs ?? null;
   sat.cachedRecords = null;
   sat.active = false;
+
+  flight.layer = options?.flightLayer ?? null;
+  flight.active = false;
 
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
@@ -60,6 +71,7 @@ export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void
   wireUpCitySelector();
   wireUpPOINavigation();
   wireUpSatelliteToggle();
+  wireUpFlightToggle();
 
   updatePOIDisplayState();
   updateTooltipFromCurrentPOI();
@@ -107,6 +119,10 @@ function createToggles(): HTMLElement {
       <button class="toggle-btn on" id="filter-gnss" data-category="gnss">GNSS</button>
       <button class="toggle-btn on" id="filter-research" data-category="research">RESEARCH</button>
       <button class="toggle-btn" id="filter-starlink" data-category="starlink">STARLINK</button>
+    </div>
+    <div class="toggle-row">
+      <span>FLIGHTS</span>
+      <button class="toggle-btn" id="flight-toggle">OFF</button>
     </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
@@ -194,6 +210,37 @@ function wireUpCategoryFilters(): void {
       addLogEntry(`[SAT] ${cat.toUpperCase()} ${nowActive ? "ON" : "OFF"}`);
     });
   }
+}
+
+function wireUpFlightToggle(): void {
+  const btn = document.getElementById("flight-toggle") as HTMLButtonElement | null;
+  if (!btn || !flight.layer) return;
+
+  btn.addEventListener("click", async () => {
+    if (flight.active) {
+      flight.layer!.hide();
+      flight.active = false;
+      btn.textContent = "OFF";
+      btn.classList.remove("on");
+      addLogEntry("[FLIGHTS] Layer disabled");
+      return;
+    }
+
+    btn.textContent = "LOADING";
+    btn.disabled = true;
+    try {
+      await flight.layer!.show();
+      flight.active = true;
+      btn.textContent = "ON";
+      btn.classList.add("on");
+      addLogEntry("[FLIGHTS] Layer active", "success");
+    } catch (err) {
+      addLogEntry(`[FLIGHTS] Failed to load flights: ${err}`, "error");
+      btn.textContent = "ERR";
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 function createActionButtons(): HTMLElement {
