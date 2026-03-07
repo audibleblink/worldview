@@ -18,10 +18,10 @@ This plan breaks down Milestone 1 (3D Globe Foundation + UI Shell) into 6 phases
 
 ### Checklist
 
-- [ ] Initialize Bun project (`bun init`)
-- [ ] Add TypeScript configuration (`tsconfig.json`)
-- [ ] Install CesiumJS dependency (`bun add cesium`)
-- [ ] Create directory structure:
+- [x] Initialize Bun project (`bun init`)
+- [x] Add TypeScript configuration (`tsconfig.json`)
+- [x] Install CesiumJS dependency (`bun add cesium`)
+- [x] Create directory structure:
   ```
   src/
     main.ts
@@ -36,12 +36,12 @@ This plan breaks down Milestone 1 (3D Globe Foundation + UI Shell) into 6 phases
   public/
     index.html
   ```
-- [ ] Configure Bun bundler for CesiumJS assets (workers, static files)
-- [ ] Create `package.json` scripts:
+- [x] Configure Bun bundler for CesiumJS assets (workers, static files)
+- [x] Create `package.json` scripts:
   - `dev` — starts both frontend dev server and proxy concurrently
   - `build` — produces production bundle
-- [ ] Verify `.env` exists with `GOOGLE_MAPS_TILE_API_KEY` placeholder
-- [ ] Update `.gitignore` to exclude `.env` and build artifacts
+- [x] Verify `.env` exists with `GOOGLE_MAPS_TILE_API_KEY` placeholder
+- [x] Update `.gitignore` to exclude `.env` and build artifacts
 
 ### Verification (Autonomous Feedback Loop)
 
@@ -93,14 +93,14 @@ echo "=== Phase 1 PASSED ==="
 
 ### Checklist
 
-- [ ] Implement `src/proxy.ts`:
+- [x] Implement `src/proxy.ts`:
   - Bun HTTP server listening on `localhost:3001`
   - Read `GOOGLE_MAPS_TILE_API_KEY` from environment
   - Proxy all requests to `https://tile.googleapis.com`
   - Inject API key as query parameter
   - Set proper CORS headers for local development
-- [ ] Add startup validation (fail fast if API key missing)
-- [ ] Log requests for debugging (optional toggle)
+- [x] Add startup validation (fail fast if API key missing)
+- [x] Log requests for debugging (optional toggle)
 
 ### Verification (Autonomous Feedback Loop)
 
