@@ -42,31 +42,33 @@ export function initShell(viewer: Viewer): void {
   console.log("UI shell initialized");
 }
 
+// Shared HTML template for top bar
+const TOP_BAR_HTML = `
+  <div class="top-bar-left">
+    <div class="wordmark">WORLDVIEW</div>
+    <div class="tagline">NO PLACE LEFT BEHIND</div>
+  </div>
+  <div class="top-bar-center"></div>
+  <div class="top-bar-right">
+    <div class="mode-indicator">CRT</div>
+    <div class="rec-section">
+      <div class="rec-indicator">
+        <span class="rec-dot"></span>
+        <span>REC</span>
+        <span id="live-clock">-------:--:--Z</span>
+      </div>
+      <div class="telemetry" id="telemetry">GRB: ----- PASS: DESC:---</div>
+    </div>
+  </div>
+`;
+
 /**
  * Update the existing top bar with new structure
  */
 function updateTopBar(): void {
   const topBar = document.querySelector(".top-bar");
   if (!topBar) return;
-
-  topBar.innerHTML = `
-    <div class="top-bar-left">
-      <div class="wordmark">WORLDVIEW</div>
-      <div class="tagline">NO PLACE LEFT BEHIND</div>
-    </div>
-    <div class="top-bar-center"></div>
-    <div class="top-bar-right">
-      <div class="mode-indicator">CRT</div>
-      <div class="rec-section">
-        <div class="rec-indicator">
-          <span class="rec-dot"></span>
-          <span>REC</span>
-          <span id="live-clock">-------:--:--Z</span>
-        </div>
-        <div class="telemetry" id="telemetry">GRB: ----- PASS: DESC:---</div>
-      </div>
-    </div>
-  `;
+  topBar.innerHTML = TOP_BAR_HTML;
 }
 
 /**
@@ -80,28 +82,34 @@ function updateClassificationWatermark(): void {
 }
 
 /**
+ * Format current time as UTC timestamp
+ */
+function formatUTCTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}Z`;
+}
+
+/**
  * Start the live clock update interval
  */
 function startClock(): void {
   const updateClock = () => {
-    const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(now.getUTCDate()).padStart(2, "0");
-    const hours = String(now.getUTCHours()).padStart(2, "0");
-    const minutes = String(now.getUTCMinutes()).padStart(2, "0");
-    const seconds = String(now.getUTCSeconds()).padStart(2, "0");
-    
-    const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}Z`;
     const clockElement = document.getElementById("live-clock");
     if (clockElement) {
-      clockElement.textContent = timestamp;
+      clockElement.textContent = formatUTCTimestamp();
     }
   };
 
-  // Update immediately and then every second
   updateClock();
   setInterval(updateClock, 1000);
+}
+
+/**
+ * Generate random padded number
+ */
+function randomPadded(max: number, width: number): string {
+  return String(Math.floor(Math.random() * max)).padStart(width, "0");
 }
 
 /**
@@ -109,16 +117,12 @@ function startClock(): void {
  */
 function startTelemetry(): void {
   const updateTelemetry = () => {
-    const grb = String(Math.floor(Math.random() * 99999)).padStart(5, "0");
-    const desc = String(Math.floor(Math.random() * 999)).padStart(3, "0");
-    
     const telemetryElement = document.getElementById("telemetry");
     if (telemetryElement) {
-      telemetryElement.textContent = `GRB: ${grb} PASS: DESC:${desc}`;
+      telemetryElement.textContent = `GRB: ${randomPadded(99999, 5)} PASS: DESC:${randomPadded(999, 3)}`;
     }
   };
 
-  // Update immediately and then every 3 seconds
   updateTelemetry();
   setInterval(updateTelemetry, 3000);
 }
@@ -129,24 +133,7 @@ function startTelemetry(): void {
 export function createTopBar(): HTMLElement {
   const topBar = document.createElement("div");
   topBar.className = "top-bar";
-  topBar.innerHTML = `
-    <div class="top-bar-left">
-      <div class="wordmark">WORLDVIEW</div>
-      <div class="tagline">NO PLACE LEFT BEHIND</div>
-    </div>
-    <div class="top-bar-center"></div>
-    <div class="top-bar-right">
-      <div class="mode-indicator">CRT</div>
-      <div class="rec-section">
-        <div class="rec-indicator">
-          <span class="rec-dot"></span>
-          <span>REC</span>
-          <span id="live-clock">-------:--:--Z</span>
-        </div>
-        <div class="telemetry" id="telemetry">GRB: ----- PASS: DESC:---</div>
-      </div>
-    </div>
-  `;
+  topBar.innerHTML = TOP_BAR_HTML;
   return topBar;
 }
 

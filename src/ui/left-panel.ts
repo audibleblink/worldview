@@ -237,41 +237,33 @@ function wireUpCitySelector(): void {
     setCurrentCity(cityIndex);
     updatePOIDisplayState();
     updateTooltipFromCurrentPOI();
-    updateCityTabs(cityIndex);
+    // Update city tabs visual state
+    document.querySelectorAll(".city-tab").forEach((tab, i) => {
+      tab.classList.toggle("active", i === cityIndex);
+    });
     addLogEntry(`[NAV] Flying to ${getCities()[cityIndex]?.name}`);
   });
+}
+
+/**
+ * Handle POI navigation and update UI
+ */
+function handlePOINavigation(navigateFn: () => void): void {
+  navigateFn();
+  updatePOIDisplayState();
+  updateTooltipFromCurrentPOI();
+  const poi = getCurrentPOI();
+  if (poi) {
+    addLogEntry(`[NAV] POI: ${poi.name}`);
+  }
 }
 
 /**
  * Wire up POI navigation buttons
  */
 function wireUpPOINavigation(): void {
-  const prevBtn = document.getElementById("prev-poi");
-  const nextBtn = document.getElementById("next-poi");
-
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      prevPOI();
-      updatePOIDisplayState();
-      updateTooltipFromCurrentPOI();
-      const poi = getCurrentPOI();
-      if (poi) {
-        addLogEntry(`[NAV] POI: ${poi.name}`);
-      }
-    });
-  }
-
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      nextPOI();
-      updatePOIDisplayState();
-      updateTooltipFromCurrentPOI();
-      const poi = getCurrentPOI();
-      if (poi) {
-        addLogEntry(`[NAV] POI: ${poi.name}`);
-      }
-    });
-  }
+  document.getElementById("prev-poi")?.addEventListener("click", () => handlePOINavigation(prevPOI));
+  document.getElementById("next-poi")?.addEventListener("click", () => handlePOINavigation(nextPOI));
 
   // Store the update function for external access
   updatePOIDisplay = updatePOIDisplayState;
@@ -282,24 +274,20 @@ function wireUpPOINavigation(): void {
  */
 function updatePOIDisplayState(): void {
   const display = document.getElementById("poi-display");
-  const prevBtn = document.getElementById("prev-poi") as HTMLButtonElement;
-  const nextBtn = document.getElementById("next-poi") as HTMLButtonElement;
+  const prevBtn = document.getElementById("prev-poi") as HTMLButtonElement | null;
+  const nextBtn = document.getElementById("next-poi") as HTMLButtonElement | null;
   
   const city = getCurrentCity();
   const poiIndex = getCurrentPOIIndex();
   const poi = getCurrentPOI();
 
-  if (display && city && poi) {
-    const total = city.pois.length;
+  if (display && poi) {
     display.textContent = poi.name;
   }
 
-  // Update button states
-  if (prevBtn && city) {
-    prevBtn.disabled = poiIndex === 0;
-  }
-  if (nextBtn && city) {
-    nextBtn.disabled = poiIndex >= city.pois.length - 1;
+  if (city) {
+    if (prevBtn) prevBtn.disabled = poiIndex === 0;
+    if (nextBtn) nextBtn.disabled = poiIndex >= city.pois.length - 1;
   }
 }
 
@@ -315,15 +303,7 @@ function updateTooltipFromCurrentPOI(): void {
   }
 }
 
-/**
- * Update city tabs to reflect current selection
- */
-function updateCityTabs(activeIndex: number): void {
-  const tabs = document.querySelectorAll(".city-tab");
-  tabs.forEach((tab, index) => {
-    tab.classList.toggle("active", index === activeIndex);
-  });
-}
+// Note: City tab visual updates are handled by bottom-bar.ts
 
 /**
  * Add an entry to the system log

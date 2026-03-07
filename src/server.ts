@@ -13,19 +13,24 @@ const SRC_PATH = join(ROOT, "src");
 
 console.log(`Starting WorldView dev server on port ${PORT}...`);
 
-// Get content type based on file extension
+// Content type mapping by file extension
+const CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".ts": "application/javascript",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
+
 function getContentType(path: string): string {
-  if (path.endsWith(".html")) return "text/html";
-  if (path.endsWith(".css")) return "text/css";
-  if (path.endsWith(".js")) return "application/javascript";
-  if (path.endsWith(".ts")) return "application/javascript";
-  if (path.endsWith(".json")) return "application/json";
-  if (path.endsWith(".png")) return "image/png";
-  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
-  if (path.endsWith(".svg")) return "image/svg+xml";
-  if (path.endsWith(".woff")) return "font/woff";
-  if (path.endsWith(".woff2")) return "font/woff2";
-  return "application/octet-stream";
+  const ext = path.slice(path.lastIndexOf("."));
+  return CONTENT_TYPES[ext] ?? "application/octet-stream";
 }
 
 Bun.serve({

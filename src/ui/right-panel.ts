@@ -167,6 +167,33 @@ function updateReadoutsFromCamera(viewer: Viewer): void {
 }
 
 /**
+ * Format distance value with appropriate unit (cm, m, km)
+ */
+function formatDistance(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}km`;
+  if (value >= 1) return `${value.toFixed(1)}m`;
+  return `${(value * 100).toFixed(1)}cm`;
+}
+
+/**
+ * Format altitude with appropriate precision
+ */
+function formatAltitude(altitude: number): string {
+  if (altitude >= 1_000_000) return `${(altitude / 1000).toFixed(0)}km`;
+  if (altitude >= 1000) return `${Math.round(altitude)}m`;
+  return `${altitude.toFixed(1)}m`;
+}
+
+/**
+ * Update a readout element if it exists and value is defined
+ */
+function setReadout(id: string, value: number | undefined, formatter: (v: number) => string): void {
+  if (value === undefined) return;
+  const el = document.getElementById(id);
+  if (el) el.textContent = formatter(value);
+}
+
+/**
  * Update the live readouts with calculated data
  */
 export function updateReadouts(data: {
@@ -175,37 +202,8 @@ export function updateReadouts(data: {
   altitude?: number;
   pitch?: number;
 }): void {
-  const gsdEl = document.getElementById("readout-gsd");
-  const niirsEl = document.getElementById("readout-niirs");
-  const altEl = document.getElementById("readout-alt");
-  const subEl = document.getElementById("readout-sub");
-
-  if (gsdEl && data.gsd !== undefined) {
-    if (data.gsd >= 1000) {
-      gsdEl.textContent = `${(data.gsd / 1000).toFixed(1)}km`;
-    } else if (data.gsd >= 1) {
-      gsdEl.textContent = `${data.gsd.toFixed(1)}m`;
-    } else {
-      gsdEl.textContent = `${(data.gsd * 100).toFixed(1)}cm`;
-    }
-  }
-
-  if (niirsEl && data.niirs !== undefined) {
-    niirsEl.textContent = data.niirs.toFixed(1);
-  }
-
-  if (altEl && data.altitude !== undefined) {
-    if (data.altitude >= 1000000) {
-      altEl.textContent = `${(data.altitude / 1000).toFixed(0)}km`;
-    } else if (data.altitude >= 1000) {
-      altEl.textContent = `${Math.round(data.altitude)}m`;
-    } else {
-      altEl.textContent = `${data.altitude.toFixed(1)}m`;
-    }
-  }
-
-  if (subEl && data.pitch !== undefined) {
-    // Display elevation angle (pitch relative to horizon)
-    subEl.textContent = `${data.pitch.toFixed(1)}° EL`;
-  }
+  setReadout("readout-gsd", data.gsd, formatDistance);
+  setReadout("readout-niirs", data.niirs, (v) => v.toFixed(1));
+  setReadout("readout-alt", data.altitude, formatAltitude);
+  setReadout("readout-sub", data.pitch, (v) => `${v.toFixed(1)}° EL`);
 }

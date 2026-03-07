@@ -129,20 +129,14 @@ export async function initGlobe(
   }
 
   // Configure scene settings
-  viewer.scene.globe.show = false; // Hide default globe since we use 3D tiles
-
-  if (viewer.scene.skyAtmosphere) {
-    viewer.scene.skyAtmosphere.show = true;
-  }
-  if (viewer.scene.sun) {
-    viewer.scene.sun.show = true;
-  }
-  if (viewer.scene.moon) {
-    viewer.scene.moon.show = true;
-  }
-
-  // Enable depth testing for better rendering
-  viewer.scene.globe.depthTestAgainstTerrain = false;
+  const { scene } = viewer;
+  scene.globe.show = false; // Hide default globe since we use 3D tiles
+  scene.globe.depthTestAgainstTerrain = false;
+  
+  // Enable celestial bodies
+  if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
+  if (scene.sun) scene.sun.show = true;
+  if (scene.moon) scene.moon.show = true;
 
   console.log("Globe initialized successfully");
   return viewer;
@@ -174,9 +168,7 @@ export function flyTo(
   height: number = 1_000_000,
   duration: number = 2
 ): void {
-  if (!viewer) return;
-
-  viewer.camera.flyTo({
+  viewer?.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height),
     duration,
   });
@@ -186,16 +178,7 @@ export function flyTo(
  * Reset camera to default position
  */
 export function resetCamera(): void {
-  if (!viewer) return;
-
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      DEFAULT_CAMERA.longitude,
-      DEFAULT_CAMERA.latitude,
-      DEFAULT_CAMERA.height
-    ),
-    duration: 2,
-  });
+  flyTo(DEFAULT_CAMERA.longitude, DEFAULT_CAMERA.latitude, DEFAULT_CAMERA.height, 2);
 }
 
 /**

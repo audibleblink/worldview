@@ -10,25 +10,15 @@ import { setViewer, flyToPOIByIndex } from "./pois.ts";
 /**
  * Check if the user is currently interacting with a form element
  */
-function isUserTyping(event: KeyboardEvent): boolean {
-  const target = event.target;
-  
-  // Check for input elements where typing should be allowed
-  if (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  ) {
+function isUserTyping(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
     return true;
   }
-  
-  // Check for contenteditable elements
-  if (target instanceof HTMLElement && target.isContentEditable) {
-    return true;
-  }
-  
-  return false;
+  return target instanceof HTMLElement && target.isContentEditable;
 }
+
+// POI navigation key mappings: key -> POI index
+const POI_KEY_MAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3, t: 4 };
 
 /**
  * Set up keyboard event listeners for POI navigation
@@ -36,27 +26,11 @@ function isUserTyping(event: KeyboardEvent): boolean {
  */
 function setupKeyboardNavigation(): void {
   document.addEventListener("keydown", (event: KeyboardEvent) => {
-    // Ignore if user is typing in a form element
-    if (isUserTyping(event)) {
-      return;
-    }
+    if (isUserTyping(event.target)) return;
 
-    switch (event.key.toLowerCase()) {
-      case "q":
-        flyToPOIByIndex(0);
-        break;
-      case "w":
-        flyToPOIByIndex(1);
-        break;
-      case "e":
-        flyToPOIByIndex(2);
-        break;
-      case "r":
-        flyToPOIByIndex(3);
-        break;
-      case "t":
-        flyToPOIByIndex(4);
-        break;
+    const poiIndex = POI_KEY_MAP[event.key.toLowerCase()];
+    if (poiIndex !== undefined) {
+      flyToPOIByIndex(poiIndex);
     }
   });
 }
