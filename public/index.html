@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WORLDVIEW // GEOSPATIAL INTELLIGENCE SYSTEM</title>
+
+  <!-- CesiumJS CSS -->
+  <link rel="stylesheet" href="/cesium/Widgets/widgets.css">
+
+  <!-- WorldView Styles -->
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <!-- Classification Watermark -->
+  <div class="classification-watermark">TOP SECRET // SI-TK // NOFORN</div>
+
+  <!-- Main Container -->
+  <div id="app">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="wordmark">WORLDVIEW</div>
+      <div class="tagline">GEOSPATIAL INTELLIGENCE SYSTEM</div>
+      <div class="mode-indicator">MODE: OBSERVATION</div>
+      <div class="rec-indicator">
+        <span class="rec-dot"></span>
+        REC <span id="live-clock">--:--:--</span>
+      </div>
+    </header>
+
+    <!-- Cesium Globe Container -->
+    <div id="cesium-container"></div>
+
+    <!-- Vignette Overlay -->
+    <div class="vignette-overlay"></div>
+
+    <!-- Left Panel -->
+    <aside class="left-panel">
+      <!-- Content populated by JavaScript -->
+    </aside>
+
+    <!-- Right Panel -->
+    <aside class="right-panel">
+      <!-- Content populated by JavaScript -->
+    </aside>
+
+    <!-- Bottom Bar -->
+    <footer class="bottom-bar">
+      <!-- Content populated by JavaScript -->
+    </footer>
+  </div>
+
+  <!-- CesiumJS Library -->
+  <script src="/cesium/Cesium.js"></script>
+
+  <!-- WorldView Application -->
+  <script type="module" src="../src/main.ts"></script>
+</body>
+</html>
