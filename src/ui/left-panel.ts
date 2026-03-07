@@ -141,6 +141,11 @@ function createToggles(): HTMLElement {
       <span>SATELLITES</span>
       <button class="toggle-btn" id="satellite-toggle">OFF</button>
     </div>
+    <div class="sat-filter-row hidden" id="sat-filter-row">
+      <button class="toggle-btn on" id="filter-active" data-category="active">ACTIVE</button>
+      <button class="toggle-btn on" id="filter-stations" data-category="stations">STATIONS</button>
+      <button class="toggle-btn on" id="filter-military" data-category="military">MILITARY</button>
+    </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
       <button class="toggle-btn" disabled>OFF</button>
@@ -154,10 +159,11 @@ function createToggles(): HTMLElement {
 }
 
 /**
- * Wire up the satellite layer toggle button
+ * Wire up the satellite layer toggle button and category filter buttons
  */
 function wireUpSatelliteToggle(): void {
   const btn = document.getElementById("satellite-toggle") as HTMLButtonElement | null;
+  const filterRow = document.getElementById("sat-filter-row");
   if (!btn || !_satelliteLayer || !_loadAllTLEs) return;
 
   btn.addEventListener("click", async () => {
@@ -167,6 +173,8 @@ function wireUpSatelliteToggle(): void {
       _satLayerActive = false;
       btn.textContent = "OFF";
       btn.classList.remove("on");
+      // Hide filter buttons
+      filterRow?.classList.add("hidden");
       addLogEntry("[SAT] Satellite layer disabled");
     } else {
       // Turn ON
@@ -183,6 +191,9 @@ function wireUpSatelliteToggle(): void {
         _satLayerActive = true;
         btn.textContent = "ON";
         btn.classList.add("on");
+        // Show filter buttons and reset them to ON state
+        filterRow?.classList.remove("hidden");
+        resetFilterButtons();
         addLogEntry(`[SAT] Satellite layer active`, "success");
       } catch (err) {
         addLogEntry(`[SAT] Failed to load TLEs: ${err}`, "error");
@@ -192,6 +203,51 @@ function wireUpSatelliteToggle(): void {
       }
     }
   });
+
+  // Wire category filter buttons
+  wireUpCategoryFilters();
+}
+
+/**
+ * Reset all category filter buttons to ON state
+ */
+function resetFilterButtons(): void {
+  const categories: Array<"active" | "stations" | "military"> = ["active", "stations", "military"];
+  for (const cat of categories) {
+    const filterBtn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
+    if (filterBtn) {
+      filterBtn.classList.add("on");
+      filterBtn.dataset.active = "true";
+    }
+    // Ensure layer shows the category if it was toggled off before
+    _satelliteLayer?.setCategory(cat, true);
+  }
+}
+
+/**
+ * Wire the three category filter buttons to the satellite layer
+ */
+function wireUpCategoryFilters(): void {
+  const categories: Array<"active" | "stations" | "military"> = ["active", "stations", "military"];
+  for (const cat of categories) {
+    const filterBtn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
+    if (!filterBtn) continue;
+    // Mark as active by default
+    filterBtn.dataset.active = "true";
+    filterBtn.addEventListener("click", () => {
+      if (!_satLayerActive) return;
+      const isActive = filterBtn.dataset.active === "true";
+      const nowActive = !isActive;
+      filterBtn.dataset.active = String(nowActive);
+      if (nowActive) {
+        filterBtn.classList.add("on");
+      } else {
+        filterBtn.classList.remove("on");
+      }
+      _satelliteLayer?.setCategory(cat, nowActive);
+      addLogEntry(`[SAT] ${cat.toUpperCase()} ${nowActive ? "ON" : "OFF"}`);
+    });
+  }
 }
 
 /**

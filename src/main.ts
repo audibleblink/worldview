@@ -5,11 +5,11 @@
 
 import * as Cesium from "cesium";
 import { initGlobe } from "./globe.ts";
-import { initShell, updateSatelliteCount } from "./ui/shell.ts";
+import { initShell, updateSatelliteCount, setEscapeHandler } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
-import { showSatelliteInfoPanel, hideSatelliteInfoPanel } from "./ui/sat-info-panel.ts";
+import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } from "./ui/sat-info-panel.ts";
 
 /**
  * Check if the user is currently interacting with a form element
@@ -56,8 +56,20 @@ export async function init(): Promise<void> {
     // Create satellite layer (browser-side, needs viewer)
     const satelliteLayer = new SatelliteLayer(viewer, updateSatelliteCount);
 
+    // Wire external deselect callback (Phase 5): hide panel + reset follow button
+    satelliteLayer.setExternalDeselectCallback(() => {
+      hideSatelliteInfoPanel();
+      resetFollowButton();
+    });
+
     // Initialize the UI shell
     initShell(viewer, { satelliteLayer, loadAllTLEs });
+
+    // Wire Escape key to stop follow mode (Phase 5)
+    setEscapeHandler(() => {
+      satelliteLayer.stopFollow();
+      resetFollowButton();
+    });
 
     // Set up keyboard shortcuts for POI navigation
     setupKeyboardNavigation();

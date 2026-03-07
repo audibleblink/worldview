@@ -487,6 +487,24 @@ select:disabled {
   border-color: var(--color-highlight);
 }
 
+/* Satellite category filter buttons row */
+.sat-filter-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+}
+
+.sat-filter-row.hidden {
+  display: none;
+}
+
+.sat-filter-row .toggle-btn {
+  flex: 1;
+  font-size: 8px;
+  padding: 2px var(--spacing-xs);
+}
+
 /* ============================================
    Action Buttons Row
    ============================================ */

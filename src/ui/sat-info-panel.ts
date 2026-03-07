@@ -85,15 +85,23 @@ export function showSatelliteInfoPanel(
     });
   }
 
-  // Wire FOLLOW button — Phase 5 wiring placeholder
+  // Wire FOLLOW button — toggle follow mode
   const followBtn = document.getElementById("sat-info-follow");
   if (followBtn) {
-    const newFollow = followBtn.cloneNode(true) as HTMLElement;
+    const newFollow = followBtn.cloneNode(true) as HTMLButtonElement;
     followBtn.parentNode?.replaceChild(newFollow, followBtn);
     newFollow.addEventListener("click", () => {
-      // TODO Phase 5: toggle follow mode
-      console.log("[SAT] FOLLOW clicked for", record.noradId, "— Phase 5 wiring pending");
-      satelliteLayer.startFollow();
+      if (newFollow.dataset.following === "true") {
+        // Unfollow
+        satelliteLayer.stopFollow();
+        newFollow.textContent = "FOLLOW";
+        newFollow.dataset.following = "false";
+      } else {
+        // Follow
+        satelliteLayer.startFollow();
+        newFollow.textContent = "UNFOLLOW";
+        newFollow.dataset.following = "true";
+      }
     });
   }
 
@@ -102,9 +110,22 @@ export function showSatelliteInfoPanel(
 }
 
 /**
- * Hide the satellite info panel.
+ * Hide the satellite info panel and reset follow button state.
  */
 export function hideSatelliteInfoPanel(): void {
   const panel = document.getElementById(PANEL_ID);
   if (panel) panel.classList.add("hidden");
+  resetFollowButton();
+}
+
+/**
+ * Reset the [FOLLOW] button back to its default (not-following) state.
+ * Called when the panel is hidden or Escape is pressed.
+ */
+export function resetFollowButton(): void {
+  const followBtn = document.getElementById("sat-info-follow") as HTMLButtonElement | null;
+  if (followBtn) {
+    followBtn.textContent = "FOLLOW";
+    followBtn.dataset.following = "false";
+  }
 }

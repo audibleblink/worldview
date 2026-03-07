@@ -158,8 +158,13 @@ export class SatelliteLayer {
   private selectedNoradId: string | null = null;
   private orbitalPathEntity: Cesium.Entity | null = null;
 
-  // Follow mode state (wired in Phase 5)
+  // Follow mode state (Phase 5)
   private followEntity: Cesium.Entity | null = null;
+  private satellitePositions: Map<string, Cesium.Cartesian3> = new Map();
+
+  // Category filtering (Phase 5)
+  private hiddenCategories: Set<string> = new Set();
+  private onExternalDeselect: (() => void) | null = null;
 
   constructor(viewer: Cesium.Viewer, onCountUpdate?: (n: number | null) => void) {
     this.viewer = viewer;
@@ -188,6 +193,7 @@ export class SatelliteLayer {
         id: record.noradId, // for pick resolution
       });
       this.billboardMap.set(record.noradId, billboard);
+      this.satellitePositions.set(record.noradId, cartesian);
     }
 
     // Start update loop (every 5 seconds)
@@ -217,6 +223,8 @@ export class SatelliteLayer {
     for (const { record, cartesian } of positions) {
       const bb = this.billboardMap.get(record.noradId);
       if (bb) bb.position = cartesian;
+      // Keep satellitePositions map current for follow mode
+      this.satellitePositions.set(record.noradId, cartesian);
     }
     // Update count (only visible ones)
     const visibleCount = [...this.billboardMap.values()].filter((b) => b.show).length;
@@ -303,18 +311,23 @@ export class SatelliteLayer {
     onDeselect();
   }
 
-  // --- Follow mode (Phase 5 wiring) ---
+  // --- Follow mode (Phase 5) ---
 
   startFollow(): void {
     if (!this.selectedNoradId) return;
+
+    // Stop any existing follow first
+    this.stopFollow();
+
     const self = this;
     this.followEntity = this.viewer.entities.add({
-      // CallbackProperty returns the current billboard position each frame
+      // CallbackProperty reads from satellitePositions map (updated each 5-second tick)
       position: new Cesium.CallbackProperty(() => {
-        const bb = self.selectedNoradId ? self.billboardMap.get(self.selectedNoradId) : null;
-        return (bb?.position as Cesium.ConstantProperty | undefined)?.getValue(Cesium.JulianDate.now()) ?? new Cesium.Cartesian3();
+        if (!self.selectedNoradId) return new Cesium.Cartesian3();
+        return self.satellitePositions.get(self.selectedNoradId) ?? new Cesium.Cartesian3();
       }, false) as unknown as Cesium.PositionProperty,
     });
+
     this.viewer.trackedEntity = this.followEntity;
   }
 
@@ -326,6 +339,40 @@ export class SatelliteLayer {
       this.viewer.entities.remove(this.followEntity);
       this.followEntity = null;
     }
+  }
+
+  // --- Category filtering (Phase 5) ---
+
+  setCategory(category: "active" | "stations" | "military", visible: boolean): void {
+    if (visible) {
+      this.hiddenCategories.delete(category);
+    } else {
+      this.hiddenCategories.add(category);
+    }
+
+    for (const record of this.records) {
+      if (record.category === category) {
+        const bb = this.billboardMap.get(record.noradId);
+        if (bb) bb.show = visible;
+      }
+    }
+
+    // If selected satellite's category is now hidden, deselect it
+    if (!visible && this.selectedNoradId) {
+      const selectedRecord = this.records.find((r) => r.noradId === this.selectedNoradId);
+      if (selectedRecord && selectedRecord.category === category) {
+        this.deselectSatellite(() => {});
+        this.onExternalDeselect?.();
+      }
+    }
+
+    // Update visible count
+    const visibleCount = [...this.billboardMap.values()].filter((b) => b.show).length;
+    this.onCountUpdate?.(visibleCount);
+  }
+
+  setExternalDeselectCallback(cb: () => void): void {
+    this.onExternalDeselect = cb;
   }
 }
 

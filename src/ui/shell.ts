@@ -203,6 +203,17 @@ export function updateSatelliteCount(n: number | null): void {
   }
 }
 
+// Escape key handler registered from outside (e.g. main.ts for follow mode)
+let escapeHandler: (() => void) | null = null;
+
+/**
+ * Register a callback to be invoked when the Escape key is pressed.
+ * Only one handler is supported at a time.
+ */
+export function setEscapeHandler(handler: () => void): void {
+  escapeHandler = handler;
+}
+
 /**
  * Initialize keyboard shortcuts for mode switching
  */
@@ -214,6 +225,13 @@ function initKeyboardShortcuts(): void {
     // Don't capture when modifier keys are pressed (allow browser shortcuts)
     if (event.ctrlKey || event.metaKey || event.altKey) return;
 
+    // Escape key — stop follow mode
+    if (event.key === "Escape") {
+      event.preventDefault();
+      escapeHandler?.();
+      return;
+    }
+
     const mode = MODE_SHORTCUTS[event.key];
     if (mode) {
       event.preventDefault();
@@ -221,5 +239,5 @@ function initKeyboardShortcuts(): void {
     }
   });
 
-  console.log("Keyboard shortcuts initialized (1-6 for view modes)");
+  console.log("Keyboard shortcuts initialized (1-6 for view modes, Escape for unfollow)");
 }

@@ -298,27 +298,27 @@ Run: `bun scripts/select-check.ts`
 ### Tasks
 
 **Follow Mode:**
-- [ ] Wire `[FOLLOW]` button in info panel:
+- [x] Wire `[FOLLOW]` button in info panel:
   - On click: set `viewer.trackedEntity` to a hidden `Cesium.Entity` whose `position` is a `CallbackProperty` returning the satellite's current `Cartesian3` (updated on each 5-second tick)
   - Set `viewer.trackedEntity.viewFrom` to `new Cesium.Cartesian3(0, 0, altMeters * 1.5)` for nadir-looking chase offset
   - Button label changes to `[UNFOLLOW]`
-- [ ] Wire exit conditions:
+- [x] Wire exit conditions:
   - `[UNFOLLOW]` button → `viewer.trackedEntity = undefined`
   - `Escape` key → same (add to existing keydown handler in `shell.ts`)
   - Click empty space → `deselectSatellite()` already clears tracked entity
-- [ ] Ensure 5-second position update ticks update the tracked entity's `CallbackProperty` position source
+- [x] Ensure 5-second position update ticks update the tracked entity's `CallbackProperty` position source
 
 **Constellation Filtering (F3.9):**
-- [ ] Add three category filter buttons below the `SATELLITES` toggle in the left panel:
+- [x] Add three category filter buttons below the `SATELLITES` toggle in the left panel:
   - `[ACTIVE]` `[STATIONS]` `[MILITARY]` — all ON by default
   - Visual: `.toggle-btn.on` for active, `.toggle-btn` for inactive (reuses existing CSS)
-- [ ] Implement `setCategory(category, visible: boolean)` on `SatelliteLayer`:
+- [x] Implement `setCategory(category, visible: boolean)` on `SatelliteLayer`:
   - Track a `hiddenCategories: Set<string>` 
   - If category hidden: set all billboards of that category `show = false`
   - If category shown: set billboards `show = true`
   - Update `TRACKING: N SATS` counter to reflect only visible sats
   - If selected satellite's category is hidden: call `deselectSatellite()`
-- [ ] Wire filter buttons to `setCategory()`
+- [x] Wire filter buttons to `setCategory()`
 
 ### Verification — Autonomous Check
 
