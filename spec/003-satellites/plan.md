@@ -199,32 +199,32 @@ Run: `bun scripts/render-check.ts`
 
 ### Tasks
 
-- [ ] Set `id` on each Billboard to the satellite's `SatelliteRecord` (or NORAD ID string) for pick resolution
-- [ ] Wire `viewer.screenSpaceEventHandler` (or `viewer.selectedEntityChanged`) to handle left-click:
+- [x] Set `id` on each Billboard to the satellite's `SatelliteRecord` (or NORAD ID string) for pick resolution
+- [x] Wire `viewer.screenSpaceEventHandler` (or `viewer.selectedEntityChanged`) to handle left-click:
   - Pick billboard via `viewer.scene.pick(event.position)`
   - If hit is a satellite billboard: call `selectSatellite(record)`
   - If hit is empty space: call `deselectSatellite()`
-- [ ] Implement `selectSatellite(record)`:
+- [x] Implement `selectSatellite(record)`:
   - Scale selected billboard to 14px, increase glow brightness (new texture or `scale` property)
   - Compute velocity magnitude from SGP4 velocity vector: `|v| = sqrt(vx²+vy²+vz²)` in km/s (ECI km/s units)
   - Show info panel (see below)
   - Compute and render orbital path (see below)
   - Store reference to selected record
-- [ ] Implement `deselectSatellite()`:
+- [x] Implement `deselectSatellite()`:
   - Restore previous billboard scale/texture
   - Hide info panel
   - Remove orbital path polyline
   - Clear `viewer.trackedEntity` if follow mode is active
-- [ ] Info panel UI (`src/ui/left-panel.ts` or new floating div injected into `#globe-container`):
+- [x] Info panel UI (`src/ui/sat-info-panel.ts` — floating div injected into `#cesium-container`):
   - Fields: NAME, NORAD ID, VELOCITY (km/s), CATEGORY
   - Styled in terminal aesthetic (monospace, green-on-dark, border)
   - `[FOLLOW]` button (wired in Phase 5)
   - Hidden by default; shown via CSS class toggle on select
-- [ ] Implement `computeOrbitalPath(record)` → `Cesium.Cartesian3[]`:
+- [x] Implement `computeOrbitalPath(record)` → `Cesium.Cartesian3[]`:
   - Get orbital period in minutes: `T = (2π / n) * (1/60)` where `n` = mean motion (rev/day × 2π / 86400)
   - Step through one full period at 60-second intervals using `satellite.propagate`
   - Return array of `Cartesian3` positions
-- [ ] Render orbital path as `viewer.entities.add({ polyline: { positions, material, width: 1.5 } })`
+- [x] Render orbital path as `viewer.entities.add({ polyline: { positions, material, width: 1.5 } })`
   - Color = category color at 50% opacity
   - Store entity reference for cleanup on deselect
 

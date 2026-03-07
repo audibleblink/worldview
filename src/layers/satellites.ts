@@ -154,6 +154,13 @@ export class SatelliteLayer {
   private billboardMap: Map<string, Cesium.Billboard> = new Map(); // noradId → billboard
   private onCountUpdate: ((n: number | null) => void) | null = null;
 
+  // Selection state
+  private selectedNoradId: string | null = null;
+  private orbitalPathEntity: Cesium.Entity | null = null;
+
+  // Follow mode state (wired in Phase 5)
+  private followEntity: Cesium.Entity | null = null;
+
   constructor(viewer: Cesium.Viewer, onCountUpdate?: (n: number | null) => void) {
     this.viewer = viewer;
     this.onCountUpdate = onCountUpdate ?? null;
@@ -227,8 +234,118 @@ export class SatelliteLayer {
   getBillboard(noradId: string): Cesium.Billboard | undefined {
     return this.billboardMap.get(noradId);
   }
+
+  getSelectedNoradId(): string | null {
+    return this.selectedNoradId;
+  }
+
+  selectSatellite(noradId: string, onSelect: (record: SatelliteRecord, velocityKmS: number) => void): void {
+    // Deselect any previous selection first
+    this.deselectSatellite(() => {});
+
+    const record = this.records.find((r) => r.noradId === noradId);
+    if (!record) return;
+
+    this.selectedNoradId = noradId;
+
+    // Scale up the selected billboard
+    const bb = this.billboardMap.get(noradId);
+    if (bb) {
+      bb.width = 28;
+      bb.height = 28;
+    }
+
+    // Compute velocity magnitude from SGP4 velocity vector (km/s in ECI frame)
+    const result = satellite.propagate(record.satrec, new Date());
+    let velocityKmS = 0;
+    if (result.velocity && typeof result.velocity !== "boolean") {
+      const v = result.velocity;
+      velocityKmS = Math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2);
+    }
+
+    // Compute and render orbital path as a polyline entity
+    const path = computeOrbitalPath(record);
+    if (path.length > 1) {
+      const pathColor = record.color.withAlpha(0.5);
+      this.orbitalPathEntity = this.viewer.entities.add({
+        polyline: {
+          positions: path,
+          width: 1.5,
+          material: new Cesium.ColorMaterialProperty(pathColor),
+          arcType: Cesium.ArcType.NONE,
+        },
+      });
+    }
+
+    onSelect(record, velocityKmS);
+  }
+
+  deselectSatellite(onDeselect: () => void): void {
+    // Restore previous billboard size
+    if (this.selectedNoradId) {
+      const bb = this.billboardMap.get(this.selectedNoradId);
+      if (bb) {
+        bb.width = 16;
+        bb.height = 16;
+      }
+      this.selectedNoradId = null;
+    }
+
+    // Remove the orbital path entity
+    if (this.orbitalPathEntity) {
+      this.viewer.entities.remove(this.orbitalPathEntity);
+      this.orbitalPathEntity = null;
+    }
+
+    // Stop follow mode if active
+    this.stopFollow();
+
+    onDeselect();
+  }
+
+  // --- Follow mode (Phase 5 wiring) ---
+
+  startFollow(): void {
+    if (!this.selectedNoradId) return;
+    const self = this;
+    this.followEntity = this.viewer.entities.add({
+      // CallbackProperty returns the current billboard position each frame
+      position: new Cesium.CallbackProperty(() => {
+        const bb = self.selectedNoradId ? self.billboardMap.get(self.selectedNoradId) : null;
+        return (bb?.position as Cesium.ConstantProperty | undefined)?.getValue(Cesium.JulianDate.now()) ?? new Cesium.Cartesian3();
+      }, false) as unknown as Cesium.PositionProperty,
+    });
+    this.viewer.trackedEntity = this.followEntity;
+  }
+
+  stopFollow(): void {
+    if (this.followEntity) {
+      if (this.viewer.trackedEntity === this.followEntity) {
+        this.viewer.trackedEntity = undefined as unknown as Cesium.Entity;
+      }
+      this.viewer.entities.remove(this.followEntity);
+      this.followEntity = null;
+    }
+  }
 }
 
 export function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[] {
-  return [];
+  // Period in minutes: satrec.no is mean motion in rad/min, so T = 2π / no
+  const periodMinutes = (2 * Math.PI) / record.satrec.no;
+  const stepMinutes = 1;
+  const steps = Math.ceil(periodMinutes / stepMinutes);
+
+  const now = new Date();
+  const positions: Cesium.Cartesian3[] = [];
+
+  for (let i = 0; i <= steps; i++) {
+    const t = new Date(now.getTime() + i * stepMinutes * 60 * 1000);
+    const result = satellite.propagate(record.satrec, t);
+    if (!result.position || typeof result.position === "boolean") continue;
+    const gmst = satellite.gstime(t);
+    const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
+    positions.push(Cesium.Cartesian3.fromRadians(geo.longitude, geo.latitude, geo.height * 1000));
+  }
+
+  return positions;
 }

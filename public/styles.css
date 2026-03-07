@@ -677,6 +677,108 @@ select:disabled {
 }
 
 /* ============================================
+   Satellite Info Panel
+   ============================================ */
+.sat-info-panel {
+  position: absolute;
+  top: var(--spacing-md);
+  right: calc(var(--panel-width) + var(--spacing-md));
+  width: 240px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid var(--color-highlight);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-highlight);
+  z-index: 300;
+  pointer-events: all;
+}
+
+.sat-info-panel.hidden {
+  display: none;
+}
+
+.sat-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--color-highlight);
+  background: rgba(0, 255, 136, 0.08);
+}
+
+.sat-info-title {
+  letter-spacing: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-highlight);
+}
+
+.sat-info-close {
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font-size: var(--font-size-xs);
+  padding: 0 var(--spacing-xs);
+  cursor: pointer;
+  line-height: 1;
+  min-width: unset;
+}
+
+.sat-info-close:hover {
+  color: var(--color-warning);
+  background: transparent;
+}
+
+.sat-info-body {
+  padding: var(--spacing-sm);
+}
+
+.sat-info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.1);
+}
+
+.sat-info-row:last-child {
+  border-bottom: none;
+}
+
+.sat-info-label {
+  color: var(--color-text-dim);
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  width: 50px;
+}
+
+.sat-info-value {
+  color: var(--color-highlight);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.sat-info-footer {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-top: 1px solid rgba(0, 255, 136, 0.2);
+}
+
+.sat-info-follow-btn {
+  width: 100%;
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs);
+  letter-spacing: 2px;
+  border-color: var(--color-highlight);
+  color: var(--color-highlight);
+}
+
+.sat-info-follow-btn:hover {
+  background: var(--color-highlight);
+  color: var(--color-bg);
+}
+
+/* ============================================
    Scrollbar Styling
    ============================================ */
 ::-webkit-scrollbar {

@@ -3,11 +3,13 @@
  * Initializes the globe and UI shell
  */
 
+import * as Cesium from "cesium";
 import { initGlobe } from "./globe.ts";
 import { initShell, updateSatelliteCount } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
+import { showSatelliteInfoPanel, hideSatelliteInfoPanel } from "./ui/sat-info-panel.ts";
 
 /**
  * Check if the user is currently interacting with a form element
@@ -65,6 +67,26 @@ export async function init(): Promise<void> {
 
     // Expose shaderManager for testing
     (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
+
+    // --- Phase 4: Click-to-select satellite ---
+    // In CesiumJS, scene.pick().id is the `id` property set on the billboard at creation.
+    // We set id = record.noradId (a string) so picked.id will be the NORAD ID string.
+    viewer.screenSpaceEventHandler.setInputAction((click: { position: { x: number; y: number } }) => {
+      const picked = viewer.scene.pick((click as any).position);
+
+      if (picked && typeof picked.id === "string" && satelliteLayer) {
+        // Hit a billboard tagged with a noradId string
+        satelliteLayer.selectSatellite(picked.id, (record, velocity) => {
+          showSatelliteInfoPanel(record, velocity, satelliteLayer);
+        });
+        return;
+      }
+
+      // Clicked empty space — deselect
+      if (satelliteLayer) {
+        satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     console.log("WorldView initialized");
   } catch (error) {
