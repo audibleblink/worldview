@@ -8,14 +8,11 @@ import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 
 const PANEL_ID = "sat-info-panel";
 
-/**
- * Create the panel DOM element and inject it once into the document.
- */
 function getOrCreatePanel(): HTMLElement {
-  let panel = document.getElementById(PANEL_ID);
-  if (panel) return panel;
+  const existing = document.getElementById(PANEL_ID);
+  if (existing) return existing;
 
-  panel = document.createElement("div");
+  const panel = document.createElement("div");
   panel.id = PANEL_ID;
   panel.className = "sat-info-panel hidden";
   panel.innerHTML = `
@@ -46,11 +43,31 @@ function getOrCreatePanel(): HTMLElement {
     </div>
   `;
 
-  // Inject into cesium container so it sits over the globe
-  const container = document.getElementById("cesium-container") ?? document.getElementById("app") ?? document.body;
+  const container =
+    document.getElementById("cesium-container") ??
+    document.getElementById("app") ??
+    document.body;
   container.appendChild(panel);
 
   return panel;
+}
+
+/** Set a text field by element ID. */
+function setField(id: string, value: string): void {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+/**
+ * Replace an element with a fresh clone to clear all event listeners,
+ * then return the new element.
+ */
+function replaceWithClone<T extends HTMLElement>(id: string): T | null {
+  const el = document.getElementById(id) as T | null;
+  if (!el) return null;
+  const clone = el.cloneNode(true) as T;
+  el.parentNode?.replaceChild(clone, el);
+  return clone;
 }
 
 /**
@@ -63,49 +80,32 @@ export function showSatelliteInfoPanel(
 ): void {
   const panel = getOrCreatePanel();
 
-  // Populate fields
-  const setField = (id: string, value: string) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  };
-
   setField("sat-info-name", record.name);
   setField("sat-info-norad", record.noradId);
   setField("sat-info-vel", `${velocityKmS.toFixed(3)} KM/S`);
   setField("sat-info-cat", record.category.toUpperCase());
 
-  // Wire close button (deselects satellite)
-  const closeBtn = document.getElementById("sat-info-close");
-  if (closeBtn) {
-    // Replace to clear old listeners
-    const newClose = closeBtn.cloneNode(true) as HTMLElement;
-    closeBtn.parentNode?.replaceChild(newClose, closeBtn);
-    newClose.addEventListener("click", () => {
-      satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
-    });
-  }
+  // Re-wire close button (clone clears stale listeners)
+  const closeBtn = replaceWithClone("sat-info-close");
+  closeBtn?.addEventListener("click", () => {
+    satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
+  });
 
-  // Wire FOLLOW button — toggle follow mode
-  const followBtn = document.getElementById("sat-info-follow");
-  if (followBtn) {
-    const newFollow = followBtn.cloneNode(true) as HTMLButtonElement;
-    followBtn.parentNode?.replaceChild(newFollow, followBtn);
-    newFollow.addEventListener("click", () => {
-      if (newFollow.dataset.following === "true") {
-        // Unfollow
-        satelliteLayer.stopFollow();
-        newFollow.textContent = "FOLLOW";
-        newFollow.dataset.following = "false";
-      } else {
-        // Follow
-        satelliteLayer.startFollow();
-        newFollow.textContent = "UNFOLLOW";
-        newFollow.dataset.following = "true";
-      }
-    });
-  }
+  // Re-wire FOLLOW/UNFOLLOW toggle button
+  const followBtn = replaceWithClone<HTMLButtonElement>("sat-info-follow");
+  followBtn?.addEventListener("click", () => {
+    const following = followBtn.dataset.following === "true";
+    if (following) {
+      satelliteLayer.stopFollow();
+      followBtn.textContent = "FOLLOW";
+      followBtn.dataset.following = "false";
+    } else {
+      satelliteLayer.startFollow();
+      followBtn.textContent = "UNFOLLOW";
+      followBtn.dataset.following = "true";
+    }
+  });
 
-  // Show the panel
   panel.classList.remove("hidden");
 }
 
@@ -113,13 +113,12 @@ export function showSatelliteInfoPanel(
  * Hide the satellite info panel and reset follow button state.
  */
 export function hideSatelliteInfoPanel(): void {
-  const panel = document.getElementById(PANEL_ID);
-  if (panel) panel.classList.add("hidden");
+  document.getElementById(PANEL_ID)?.classList.add("hidden");
   resetFollowButton();
 }
 
 /**
- * Reset the [FOLLOW] button back to its default (not-following) state.
+ * Reset the FOLLOW button back to its default (not-following) state.
  * Called when the panel is hidden or Escape is pressed.
  */
 export function resetFollowButton(): void {

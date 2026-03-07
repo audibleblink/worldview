@@ -3,7 +3,6 @@
  * City selector, POI navigation, and calibration controls
  */
 
-// Use global Cesium type
 type Viewer = import("cesium").Viewer;
 import {
   getCities,
@@ -17,7 +16,6 @@ import {
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 
-// Store reference to update functions
 let updatePOIDisplay: (() => void) | null = null;
 
 // Satellite layer state
@@ -31,94 +29,57 @@ export interface LeftPanelOptions {
   loadAllTLEs?: () => Promise<SatelliteRecord[]>;
 }
 
-/**
- * Initialize the left panel
- */
 export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void {
   _satelliteLayer = options?.satelliteLayer ?? null;
   _loadAllTLEs = options?.loadAllTLEs ?? null;
+
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
     console.error("Left panel element not found");
     return;
   }
 
-  // Clear existing content
   leftPanel.innerHTML = "";
+  leftPanel.appendChild(createCitySelector());
+  leftPanel.appendChild(createPOINavigation());
+  leftPanel.appendChild(createToggles());
+  leftPanel.appendChild(createActionButtons());
 
-  // Create city selector
-  const citySelector = createCitySelector();
-  leftPanel.appendChild(citySelector);
-
-  // Create POI navigation
-  const poiNav = createPOINavigation();
-  leftPanel.appendChild(poiNav);
-
-  // Create toggles section
-  const toggles = createToggles();
-  leftPanel.appendChild(toggles);
-
-  // Create action buttons
-  const actionButtons = createActionButtons();
-  leftPanel.appendChild(actionButtons);
-
-  // Create calibration sliders
   const calibrationHeader = document.createElement("div");
   calibrationHeader.className = "panel-header";
   calibrationHeader.textContent = "CALIBRATION";
   leftPanel.appendChild(calibrationHeader);
 
-  const calibrationSliders = createCalibrationSliders();
-  leftPanel.appendChild(calibrationSliders);
+  leftPanel.appendChild(createCalibrationSliders());
+  leftPanel.appendChild(createCalibrationButtons());
+  leftPanel.appendChild(createCCTVPlaceholder());
+  leftPanel.appendChild(createSystemLog());
 
-  // Create calibration buttons
-  const calibrationButtons = createCalibrationButtons();
-  leftPanel.appendChild(calibrationButtons);
-
-  // Create CCTV placeholder
-  const cctv = createCCTVPlaceholder();
-  leftPanel.appendChild(cctv);
-
-  // Create system log
-  const systemLog = createSystemLog();
-  leftPanel.appendChild(systemLog);
-
-  // Wire up event handlers
   wireUpCitySelector();
   wireUpPOINavigation();
   wireUpSatelliteToggle();
 
-  // Initial update
   updatePOIDisplayState();
   updateTooltipFromCurrentPOI();
 
   console.log("Left panel initialized");
 }
 
-/**
- * Create the city selector dropdown
- */
 function createCitySelector(): HTMLElement {
   const container = document.createElement("div");
   container.className = "city-selector panel-section";
 
-  const cities = getCities();
-  const options = cities
-    .map((city, index) => `<option value="${index}">${city.name}</option>`)
+  const options = getCities()
+    .map((city, i) => `<option value="${i}">${city.name}</option>`)
     .join("");
 
   container.innerHTML = `
     <label>LOCATION</label>
-    <select id="city-dropdown">
-      ${options}
-    </select>
+    <select id="city-dropdown">${options}</select>
   `;
   return container;
 }
 
-/**
- * Create the POI navigation controls
- */
 function createPOINavigation(): HTMLElement {
   const container = document.createElement("div");
   container.className = "poi-navigation panel-section";
@@ -130,9 +91,6 @@ function createPOINavigation(): HTMLElement {
   return container;
 }
 
-/**
- * Create stubbed toggle controls
- */
 function createToggles(): HTMLElement {
   const container = document.createElement("div");
   container.className = "toggles panel-section";
@@ -158,9 +116,6 @@ function createToggles(): HTMLElement {
   return container;
 }
 
-/**
- * Wire up the satellite layer toggle button and category filter buttons
- */
 function wireUpSatelliteToggle(): void {
   const btn = document.getElementById("satellite-toggle") as HTMLButtonElement | null;
   const filterRow = document.getElementById("sat-filter-row");
@@ -168,91 +123,71 @@ function wireUpSatelliteToggle(): void {
 
   btn.addEventListener("click", async () => {
     if (_satLayerActive) {
-      // Turn OFF
       _satelliteLayer!.hide();
       _satLayerActive = false;
       btn.textContent = "OFF";
       btn.classList.remove("on");
-      // Hide filter buttons
       filterRow?.classList.add("hidden");
       addLogEntry("[SAT] Satellite layer disabled");
-    } else {
-      // Turn ON
-      btn.textContent = "LOADING";
-      btn.disabled = true;
-      try {
-        // Fetch TLEs once, then cache
-        if (!_cachedTLERecords) {
-          addLogEntry("[SAT] Fetching TLE data...");
-          _cachedTLERecords = await _loadAllTLEs!();
-          addLogEntry(`[SAT] Loaded ${_cachedTLERecords.length} records`, "success");
-        }
-        await _satelliteLayer!.show(_cachedTLERecords);
-        _satLayerActive = true;
-        btn.textContent = "ON";
-        btn.classList.add("on");
-        // Show filter buttons and reset them to ON state
-        filterRow?.classList.remove("hidden");
-        resetFilterButtons();
-        addLogEntry(`[SAT] Satellite layer active`, "success");
-      } catch (err) {
-        addLogEntry(`[SAT] Failed to load TLEs: ${err}`, "error");
-        btn.textContent = "ERR";
-      } finally {
-        btn.disabled = false;
+      return;
+    }
+
+    btn.textContent = "LOADING";
+    btn.disabled = true;
+    try {
+      if (!_cachedTLERecords) {
+        addLogEntry("[SAT] Fetching TLE data...");
+        _cachedTLERecords = await _loadAllTLEs!();
+        addLogEntry(`[SAT] Loaded ${_cachedTLERecords.length} records`, "success");
       }
+      await _satelliteLayer!.show(_cachedTLERecords);
+      _satLayerActive = true;
+      btn.textContent = "ON";
+      btn.classList.add("on");
+      filterRow?.classList.remove("hidden");
+      resetFilterButtons();
+      addLogEntry("[SAT] Satellite layer active", "success");
+    } catch (err) {
+      addLogEntry(`[SAT] Failed to load TLEs: ${err}`, "error");
+      btn.textContent = "ERR";
+    } finally {
+      btn.disabled = false;
     }
   });
 
-  // Wire category filter buttons
   wireUpCategoryFilters();
 }
 
-/**
- * Reset all category filter buttons to ON state
- */
+const CATEGORIES = ["active", "stations", "military"] as const;
+type Category = (typeof CATEGORIES)[number];
+
 function resetFilterButtons(): void {
-  const categories: Array<"active" | "stations" | "military"> = ["active", "stations", "military"];
-  for (const cat of categories) {
-    const filterBtn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
-    if (filterBtn) {
-      filterBtn.classList.add("on");
-      filterBtn.dataset.active = "true";
+  for (const cat of CATEGORIES) {
+    const btn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
+    if (btn) {
+      btn.classList.add("on");
+      btn.dataset.active = "true";
     }
-    // Ensure layer shows the category if it was toggled off before
     _satelliteLayer?.setCategory(cat, true);
   }
 }
 
-/**
- * Wire the three category filter buttons to the satellite layer
- */
 function wireUpCategoryFilters(): void {
-  const categories: Array<"active" | "stations" | "military"> = ["active", "stations", "military"];
-  for (const cat of categories) {
-    const filterBtn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
-    if (!filterBtn) continue;
-    // Mark as active by default
-    filterBtn.dataset.active = "true";
-    filterBtn.addEventListener("click", () => {
+  for (const cat of CATEGORIES) {
+    const btn = document.getElementById(`filter-${cat}`) as HTMLButtonElement | null;
+    if (!btn) continue;
+    btn.dataset.active = "true";
+    btn.addEventListener("click", () => {
       if (!_satLayerActive) return;
-      const isActive = filterBtn.dataset.active === "true";
-      const nowActive = !isActive;
-      filterBtn.dataset.active = String(nowActive);
-      if (nowActive) {
-        filterBtn.classList.add("on");
-      } else {
-        filterBtn.classList.remove("on");
-      }
-      _satelliteLayer?.setCategory(cat, nowActive);
+      const nowActive = btn.dataset.active !== "true";
+      btn.dataset.active = String(nowActive);
+      btn.classList.toggle("on", nowActive);
+      _satelliteLayer?.setCategory(cat as Category, nowActive);
       addLogEntry(`[SAT] ${cat.toUpperCase()} ${nowActive ? "ON" : "OFF"}`);
     });
   }
 }
 
-/**
- * Create action buttons
- */
 function createActionButtons(): HTMLElement {
   const container = document.createElement("div");
   container.className = "action-buttons panel-section";
@@ -263,40 +198,34 @@ function createActionButtons(): HTMLElement {
   return container;
 }
 
-/**
- * Create stubbed calibration sliders
- */
 function createCalibrationSliders(): HTMLElement {
   const container = document.createElement("div");
   container.className = "calibration-sliders";
 
-  const sliderConfigs = [
+  const sliders = [
     { name: "AZIMUTH", value: 0, unit: "°" },
-    { name: "PITCH", value: 0, unit: "°" },
-    { name: "FOC", value: 50, unit: "" },
-    { name: "RANGE", value: 100, unit: "%" },
-    { name: "HEIGHT", value: 0, unit: "m" },
-    { name: "NORTH", value: 0, unit: "m" },
-    { name: "EAST", value: 0, unit: "m" },
+    { name: "PITCH",   value: 0, unit: "°" },
+    { name: "FOC",     value: 50, unit: "" },
+    { name: "RANGE",   value: 100, unit: "%" },
+    { name: "HEIGHT",  value: 0, unit: "m" },
+    { name: "NORTH",   value: 0, unit: "m" },
+    { name: "EAST",    value: 0, unit: "m" },
   ];
 
-  sliderConfigs.forEach((config) => {
-    const slider = document.createElement("div");
-    slider.className = "slider-row";
-    slider.innerHTML = `
-      <label>${config.name}</label>
-      <input type="range" min="0" max="100" value="${config.value}" disabled>
-      <span class="slider-value">${config.value}${config.unit}</span>
+  for (const { name, value, unit } of sliders) {
+    const row = document.createElement("div");
+    row.className = "slider-row";
+    row.innerHTML = `
+      <label>${name}</label>
+      <input type="range" min="0" max="100" value="${value}" disabled>
+      <span class="slider-value">${value}${unit}</span>
     `;
-    container.appendChild(slider);
-  });
+    container.appendChild(row);
+  }
 
   return container;
 }
 
-/**
- * Create calibration action buttons
- */
 function createCalibrationButtons(): HTMLElement {
   const container = document.createElement("div");
   container.className = "calibration-buttons panel-section";
@@ -307,9 +236,6 @@ function createCalibrationButtons(): HTMLElement {
   return container;
 }
 
-/**
- * Create CCTV placeholder
- */
 function createCCTVPlaceholder(): HTMLElement {
   const container = document.createElement("div");
   container.className = "cctv-placeholder";
@@ -320,9 +246,6 @@ function createCCTVPlaceholder(): HTMLElement {
   return container;
 }
 
-/**
- * Create system log placeholder
- */
 function createSystemLog(): HTMLElement {
   const container = document.createElement("div");
   container.className = "system-log";
@@ -336,20 +259,15 @@ function createSystemLog(): HTMLElement {
   return container;
 }
 
-/**
- * Wire up city selector change handler
- */
 function wireUpCitySelector(): void {
-  const dropdown = document.getElementById("city-dropdown") as HTMLSelectElement;
+  const dropdown = document.getElementById("city-dropdown") as HTMLSelectElement | null;
   if (!dropdown) return;
 
   dropdown.addEventListener("change", (event) => {
-    const target = event.target as HTMLSelectElement;
-    const cityIndex = parseInt(target.value, 10);
+    const cityIndex = parseInt((event.target as HTMLSelectElement).value, 10);
     setCurrentCity(cityIndex);
     updatePOIDisplayState();
     updateTooltipFromCurrentPOI();
-    // Update city tabs visual state
     document.querySelectorAll(".city-tab").forEach((tab, i) => {
       tab.classList.toggle("active", i === cityIndex);
     });
@@ -357,45 +275,30 @@ function wireUpCitySelector(): void {
   });
 }
 
-/**
- * Handle POI navigation and update UI
- */
 function handlePOINavigation(navigateFn: () => void): void {
   navigateFn();
   updatePOIDisplayState();
   updateTooltipFromCurrentPOI();
   const poi = getCurrentPOI();
-  if (poi) {
-    addLogEntry(`[NAV] POI: ${poi.name}`);
-  }
+  if (poi) addLogEntry(`[NAV] POI: ${poi.name}`);
 }
 
-/**
- * Wire up POI navigation buttons
- */
 function wireUpPOINavigation(): void {
   document.getElementById("prev-poi")?.addEventListener("click", () => handlePOINavigation(prevPOI));
   document.getElementById("next-poi")?.addEventListener("click", () => handlePOINavigation(nextPOI));
-
-  // Store the update function for external access
   updatePOIDisplay = updatePOIDisplayState;
 }
 
-/**
- * Update the POI display text and button states
- */
 function updatePOIDisplayState(): void {
   const display = document.getElementById("poi-display");
   const prevBtn = document.getElementById("prev-poi") as HTMLButtonElement | null;
   const nextBtn = document.getElementById("next-poi") as HTMLButtonElement | null;
-  
-  const city = getCurrentCity();
-  const poiIndex = getCurrentPOIIndex();
-  const poi = getCurrentPOI();
 
-  if (display && poi) {
-    display.textContent = poi.name;
-  }
+  const city = getCurrentCity();
+  const poi = getCurrentPOI();
+  const poiIndex = getCurrentPOIIndex();
+
+  if (display && poi) display.textContent = poi.name;
 
   if (city) {
     if (prevBtn) prevBtn.disabled = poiIndex === 0;
@@ -403,23 +306,12 @@ function updatePOIDisplayState(): void {
   }
 }
 
-/**
- * Update location tooltip from current POI
- */
 function updateTooltipFromCurrentPOI(): void {
   const city = getCurrentCity();
   const poi = getCurrentPOI();
-  
-  if (city && poi) {
-    updateLocationTooltip(poi.name, city.name);
-  }
+  if (city && poi) updateLocationTooltip(poi.name, city.name);
 }
 
-// Note: City tab visual updates are handled by bottom-bar.ts
-
-/**
- * Add an entry to the system log
- */
 export function addLogEntry(message: string, type: "info" | "error" | "success" = "info"): void {
   const logContent = document.getElementById("system-log-content");
   if (!logContent) return;
@@ -427,7 +319,6 @@ export function addLogEntry(message: string, type: "info" | "error" | "success" 
   const entry = document.createElement("div");
   entry.className = `log-entry ${type}`;
   entry.textContent = message;
-
   logContent.insertBefore(entry, logContent.firstChild);
 
   // Keep only the last 20 entries
@@ -436,9 +327,6 @@ export function addLogEntry(message: string, type: "info" | "error" | "success" 
   }
 }
 
-/**
- * Get the POI display update function
- */
 export function getPOIDisplayUpdater(): (() => void) | null {
   return updatePOIDisplay;
 }

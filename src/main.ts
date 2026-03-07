@@ -11,31 +11,23 @@ import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
 import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } from "./ui/sat-info-panel.ts";
 
-/**
- * Check if the user is currently interacting with a form element
- */
-function isUserTyping(target: EventTarget | null): boolean {
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
-    return true;
-  }
-  return target instanceof HTMLElement && target.isContentEditable;
-}
-
-// POI navigation key mappings: key -> POI index
+// POI navigation key mappings: q→0, w→1, e→2, r→3, t→4
 const POI_KEY_MAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3, t: 4 };
 
-/**
- * Set up keyboard event listeners for POI navigation
- * Q = POI 1, W = POI 2, E = POI 3, R = POI 4, T = POI 5
- */
+function isTypingInFormElement(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
 function setupKeyboardNavigation(): void {
   document.addEventListener("keydown", (event: KeyboardEvent) => {
-    if (isUserTyping(event.target)) return;
-
+    if (isTypingInFormElement(event.target)) return;
     const poiIndex = POI_KEY_MAP[event.key.toLowerCase()];
-    if (poiIndex !== undefined) {
-      flyToPOIByIndex(poiIndex);
-    }
+    if (poiIndex !== undefined) flyToPOIByIndex(poiIndex);
   });
 }
 
@@ -47,47 +39,35 @@ export async function init(): Promise<void> {
   }
 
   try {
-    // Initialize the 3D globe (async for loading 3D tiles)
     const viewer = await initGlobe(container);
-
-    // Set the viewer reference for POI navigation
     setViewer(viewer);
 
-    // Create satellite layer (browser-side, needs viewer)
     const satelliteLayer = new SatelliteLayer(viewer, updateSatelliteCount);
 
-    // Wire external deselect callback (Phase 5): hide panel + reset follow button
+    // When a category filter hides the selected satellite, close the panel
     satelliteLayer.setExternalDeselectCallback(() => {
       hideSatelliteInfoPanel();
       resetFollowButton();
     });
 
-    // Initialize the UI shell
     initShell(viewer, { satelliteLayer, loadAllTLEs });
 
-    // Wire Escape key to stop follow mode (Phase 5)
+    // Escape stops follow mode
     setEscapeHandler(() => {
       satelliteLayer.stopFollow();
       resetFollowButton();
     });
 
-    // Set up keyboard shortcuts for POI navigation
     setupKeyboardNavigation();
 
-    // Initialize shader manager
     shaderManager.init(viewer);
-
-    // Expose shaderManager for testing
     (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
 
-    // --- Phase 4: Click-to-select satellite ---
-    // In CesiumJS, scene.pick().id is the `id` property set on the billboard at creation.
-    // We set id = record.noradId (a string) so picked.id will be the NORAD ID string.
+    // Click-to-select: billboard id is set to noradId string at creation time
     viewer.screenSpaceEventHandler.setInputAction((click: { position: { x: number; y: number } }) => {
       const picked = viewer.scene.pick((click as any).position);
 
-      if (picked && typeof picked.id === "string" && satelliteLayer) {
-        // Hit a billboard tagged with a noradId string
+      if (picked && typeof picked.id === "string") {
         satelliteLayer.selectSatellite(picked.id, (record, velocity) => {
           showSatelliteInfoPanel(record, velocity, satelliteLayer);
         });
@@ -95,9 +75,7 @@ export async function init(): Promise<void> {
       }
 
       // Clicked empty space — deselect
-      if (satelliteLayer) {
-        satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
-      }
+      satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     console.log("WorldView initialized");
@@ -106,7 +84,6 @@ export async function init(): Promise<void> {
   }
 }
 
-// Auto-initialize when DOM is ready
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
