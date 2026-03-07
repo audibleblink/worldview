@@ -29,6 +29,17 @@ type PostProcessStage = import("cesium").PostProcessStage;
 /** Transition duration in milliseconds */
 const TRANSITION_DURATION = 300;
 
+/** localStorage key for persisting shader state */
+const STORAGE_KEY = "worldview-shader-state";
+
+/**
+ * Interface for persisted shader state
+ */
+interface ShaderState {
+  mode: ViewMode;
+  parameters: Record<ViewMode, Record<string, number>>;
+}
+
 /**
  * Transition shader that blends two textures based on u_blend factor
  */
@@ -76,6 +87,13 @@ class ShaderManager implements ShaderManagerInterface {
   
   constructor() {
     // Initialize default parameters for each mode
+    this.initializeDefaults();
+  }
+
+  /**
+   * Initialize default parameters for all modes
+   */
+  private initializeDefaults(): void {
     this.modeParameters.set("CRT", { ...CRT_DEFAULTS });
     this.modeParameters.set("NVG", { ...NVG_DEFAULTS });
     this.modeParameters.set("FLIR", { ...FLIR_DEFAULTS });
@@ -85,11 +103,85 @@ class ShaderManager implements ShaderManagerInterface {
   }
 
   /**
+   * Save current state to localStorage
+   */
+  private saveState(): void {
+    try {
+      const state: ShaderState = {
+        mode: this.currentMode,
+        parameters: {} as Record<ViewMode, Record<string, number>>,
+      };
+      
+      // Convert Map to plain object for JSON serialization
+      for (const [mode, params] of this.modeParameters.entries()) {
+        state.parameters[mode] = { ...params };
+      }
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // localStorage unavailable or quota exceeded - fail silently
+    }
+  }
+
+  /**
+   * Load state from localStorage
+   * Returns true if state was restored, false otherwise
+   */
+  private loadState(): boolean {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return false;
+      
+      const state: ShaderState = JSON.parse(stored);
+      
+      // Validate mode
+      const validModes: ViewMode[] = ["NORMAL", "CRT", "NVG", "FLIR", "ANIME", "NAVI"];
+      if (!state.mode || !validModes.includes(state.mode)) {
+        return false;
+      }
+      
+      // Restore parameters (merge with defaults to handle new parameters)
+      if (state.parameters && typeof state.parameters === "object") {
+        for (const mode of validModes) {
+          const storedParams = state.parameters[mode];
+          if (storedParams && typeof storedParams === "object") {
+            const defaults = this.modeParameters.get(mode) || {};
+            this.modeParameters.set(mode, { ...defaults, ...storedParams });
+          }
+        }
+      }
+      
+      // Restore mode
+      this.currentMode = state.mode;
+      return true;
+    } catch {
+      // Invalid JSON or other error - use defaults
+      return false;
+    }
+  }
+
+  /**
    * Initialize the shader manager with a Cesium viewer
    */
   init(viewer: Viewer): void {
     this.viewer = viewer;
-    console.log("ShaderManager initialized");
+    
+    // Load persisted state before setting up shaders
+    const restored = this.loadState();
+    
+    // If we restored a non-normal mode, apply the shader
+    if (restored && this.currentMode !== "NORMAL") {
+      const config = this.getShaderConfig(this.currentMode);
+      if (config) {
+        this.currentStage = new Cesium.PostProcessStage({
+          fragmentShader: config.fragmentShader,
+          uniforms: config.uniforms,
+        });
+        this.viewer.scene.postProcessStages.add(this.currentStage);
+      }
+      // Notify listeners of the restored mode
+      this.notifyModeChange();
+    }
   }
 
   /**
@@ -121,7 +213,7 @@ class ShaderManager implements ShaderManagerInterface {
     // If both are null (both NORMAL), just update state
     if (!fromConfig && !toConfig) {
       this.currentMode = mode;
-      console.log(`Shader mode set to: ${mode}`);
+      this.saveState();
       return;
     }
 
@@ -215,7 +307,7 @@ class ShaderManager implements ShaderManagerInterface {
 
     // Update current mode immediately for getMode()
     this.currentMode = toMode;
-    console.log(`Transitioning from ${fromMode} to ${toMode}`);
+    this.saveState();
   }
 
   /**
@@ -278,7 +370,6 @@ class ShaderManager implements ShaderManagerInterface {
       this.currentStage = null;
     }
 
-    console.log(`Shader mode set to: ${toMode}`);
     this.transition = null;
     
     // Notify listeners after transition completes
@@ -305,7 +396,6 @@ class ShaderManager implements ShaderManagerInterface {
     }
 
     this.transition = null;
-    console.log("Transition cancelled");
   }
 
   /**
@@ -335,6 +425,9 @@ class ShaderManager implements ShaderManagerInterface {
         this.recreateCurrentStage();
       }
     }
+    
+    // Persist state after parameter change
+    this.saveState();
   }
 
   /**
@@ -399,7 +492,6 @@ class ShaderManager implements ShaderManagerInterface {
     
     this.removeCurrentStage();
     this.viewer = null;
-    console.log("ShaderManager disposed");
   }
 
   /**
@@ -432,7 +524,6 @@ class ShaderManager implements ShaderManagerInterface {
         return createNormalConfig();
       // Placeholder for future modes
       case "NAVI":
-        console.log(`Mode ${mode} not yet implemented, using NORMAL`);
         return createNormalConfig();
       default:
         return createNormalConfig();
