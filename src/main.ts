@@ -5,7 +5,7 @@
 
 import * as Cesium from "cesium";
 import { initGlobe } from "./globe.ts";
-import { initShell, updateSatelliteCount, setEscapeHandler } from "./ui/shell.ts";
+import { initShell, updateSatelliteCount, addEscapeHandler } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
@@ -53,7 +53,7 @@ export async function init(): Promise<void> {
     initShell(viewer, { satelliteLayer, loadAllTLEs });
 
     // Escape stops follow mode
-    setEscapeHandler(() => {
+    addEscapeHandler(() => {
       satelliteLayer.stopFollow();
       resetFollowButton();
     });
@@ -75,7 +75,7 @@ export async function init(): Promise<void> {
       }
 
       // Clicked empty space — deselect
-      satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
+      satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     console.log("WorldView initialized");

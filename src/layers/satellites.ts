@@ -27,9 +27,10 @@ function parseTLEText(
   const records: SatelliteRecord[] = [];
 
   for (let i = 0; i + 2 < lines.length; i += 3) {
-    const name = lines[i];
-    const line1 = lines[i + 1];
-    const line2 = lines[i + 2];
+    // Loop guard ensures all three indices are in bounds
+    const name = lines[i]!;
+    const line1 = lines[i + 1]!;
+    const line2 = lines[i + 2]!;
 
     if (!line1.startsWith("1 ") || !line2.startsWith("2 ")) continue;
 
@@ -38,8 +39,9 @@ function parseTLEText(
 
     // NORAD catalog number: columns 3–7 (0-indexed chars 2–6)
     const noradId = line1.substring(2, 7).trim();
+    const color = CATEGORY_COLORS[category]!;
 
-    records.push({ name, noradId, category, satrec, color: CATEGORY_COLORS[category] });
+    records.push({ name, noradId, category, satrec, color });
   }
 
   return records;
@@ -84,7 +86,7 @@ export function propagateAll(
 
   for (const record of records) {
     const result = satellite.propagate(record.satrec, date);
-    if (!result.position || typeof result.position === "boolean") continue;
+    if (!result?.position || typeof result.position === "boolean") continue;
 
     const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
     results.push({
@@ -203,7 +205,7 @@ export class SatelliteLayer {
   }
 
   selectSatellite(noradId: string, onSelect: (record: SatelliteRecord, velocityKmS: number) => void): void {
-    this.deselectSatellite(() => {});
+    this.deselectSatellite();
 
     const record = this.records.find((r) => r.noradId === noradId);
     if (!record) return;
@@ -216,7 +218,7 @@ export class SatelliteLayer {
     // Compute velocity magnitude from SGP4 velocity vector (km/s in ECI frame)
     let velocityKmS = 0;
     const result = satellite.propagate(record.satrec, new Date());
-    if (result.velocity && typeof result.velocity !== "boolean") {
+    if (result?.velocity && typeof result.velocity !== "boolean") {
       const { x, y, z } = result.velocity;
       velocityKmS = Math.sqrt(x ** 2 + y ** 2 + z ** 2);
     }
@@ -236,7 +238,7 @@ export class SatelliteLayer {
     onSelect(record, velocityKmS);
   }
 
-  deselectSatellite(onDeselect: () => void): void {
+  deselectSatellite(onDeselect?: () => void): void {
     if (this.selectedNoradId) {
       const bb = this.billboardMap.get(this.selectedNoradId);
       if (bb) { bb.width = 16; bb.height = 16; }
@@ -249,7 +251,7 @@ export class SatelliteLayer {
     }
 
     this.stopFollow();
-    onDeselect();
+    onDeselect?.();
   }
 
   startFollow(): void {
@@ -292,7 +294,7 @@ export class SatelliteLayer {
     if (!visible && this.selectedNoradId) {
       const selected = this.records.find((r) => r.noradId === this.selectedNoradId);
       if (selected?.category === category) {
-        this.deselectSatellite(() => {});
+        this.deselectSatellite();
         this.onExternalDeselect?.();
       }
     }
@@ -321,7 +323,7 @@ export function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[]
   for (let i = 0; i <= steps; i++) {
     const t = new Date(now.getTime() + i * stepMinutes * 60_000);
     const result = satellite.propagate(record.satrec, t);
-    if (!result.position || typeof result.position === "boolean") continue;
+    if (!result?.position || typeof result.position === "boolean") continue;
     const gmst = satellite.gstime(t);
     const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
     positions.push(Cesium.Cartesian3.fromRadians(geo.longitude, geo.latitude, geo.height * 1000));

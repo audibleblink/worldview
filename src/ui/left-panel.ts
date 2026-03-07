@@ -18,11 +18,13 @@ import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 
 let updatePOIDisplay: (() => void) | null = null;
 
-// Satellite layer state
-let _satelliteLayer: SatelliteLayer | null = null;
-let _loadAllTLEs: (() => Promise<SatelliteRecord[]>) | null = null;
-let _cachedTLERecords: SatelliteRecord[] | null = null;
-let _satLayerActive = false;
+// Satellite layer state — grouped to make lifecycle clear
+const sat = {
+  layer: null as SatelliteLayer | null,
+  loadTLEs: null as (() => Promise<SatelliteRecord[]>) | null,
+  cachedRecords: null as SatelliteRecord[] | null,
+  active: false,
+};
 
 export interface LeftPanelOptions {
   satelliteLayer?: SatelliteLayer;
@@ -30,8 +32,10 @@ export interface LeftPanelOptions {
 }
 
 export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void {
-  _satelliteLayer = options?.satelliteLayer ?? null;
-  _loadAllTLEs = options?.loadAllTLEs ?? null;
+  sat.layer = options?.satelliteLayer ?? null;
+  sat.loadTLEs = options?.loadAllTLEs ?? null;
+  sat.cachedRecords = null;
+  sat.active = false;
 
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
@@ -119,12 +123,12 @@ function createToggles(): HTMLElement {
 function wireUpSatelliteToggle(): void {
   const btn = document.getElementById("satellite-toggle") as HTMLButtonElement | null;
   const filterRow = document.getElementById("sat-filter-row");
-  if (!btn || !_satelliteLayer || !_loadAllTLEs) return;
+  if (!btn || !sat.layer || !sat.loadTLEs) return;
 
   btn.addEventListener("click", async () => {
-    if (_satLayerActive) {
-      _satelliteLayer!.hide();
-      _satLayerActive = false;
+    if (sat.active) {
+      sat.layer!.hide();
+      sat.active = false;
       btn.textContent = "OFF";
       btn.classList.remove("on");
       filterRow?.classList.add("hidden");
@@ -135,13 +139,13 @@ function wireUpSatelliteToggle(): void {
     btn.textContent = "LOADING";
     btn.disabled = true;
     try {
-      if (!_cachedTLERecords) {
+      if (!sat.cachedRecords) {
         addLogEntry("[SAT] Fetching TLE data...");
-        _cachedTLERecords = await _loadAllTLEs!();
-        addLogEntry(`[SAT] Loaded ${_cachedTLERecords.length} records`, "success");
+        sat.cachedRecords = await sat.loadTLEs!();
+        addLogEntry(`[SAT] Loaded ${sat.cachedRecords.length} records`, "success");
       }
-      await _satelliteLayer!.show(_cachedTLERecords);
-      _satLayerActive = true;
+      await sat.layer!.show(sat.cachedRecords);
+      sat.active = true;
       btn.textContent = "ON";
       btn.classList.add("on");
       filterRow?.classList.remove("hidden");
@@ -168,7 +172,7 @@ function resetFilterButtons(): void {
       btn.classList.add("on");
       btn.dataset.active = "true";
     }
-    _satelliteLayer?.setCategory(cat, true);
+    sat.layer?.setCategory(cat, true);
   }
 }
 
@@ -178,11 +182,11 @@ function wireUpCategoryFilters(): void {
     if (!btn) continue;
     btn.dataset.active = "true";
     btn.addEventListener("click", () => {
-      if (!_satLayerActive) return;
+      if (!sat.active) return;
       const nowActive = btn.dataset.active !== "true";
       btn.dataset.active = String(nowActive);
       btn.classList.toggle("on", nowActive);
-      _satelliteLayer?.setCategory(cat as Category, nowActive);
+      sat.layer?.setCategory(cat as Category, nowActive);
       addLogEntry(`[SAT] ${cat.toUpperCase()} ${nowActive ? "ON" : "OFF"}`);
     });
   }

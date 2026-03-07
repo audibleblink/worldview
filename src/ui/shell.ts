@@ -139,14 +139,11 @@ export function updateSatelliteCount(n: number | null): void {
   }
 }
 
-let escapeHandler: (() => void) | null = null;
+const escapeHandlers: (() => void)[] = [];
 
-/**
- * Register a callback to be invoked when the Escape key is pressed.
- * Only one handler is supported at a time.
- */
-export function setEscapeHandler(handler: () => void): void {
-  escapeHandler = handler;
+/** Register a callback to be invoked when the Escape key is pressed. */
+export function addEscapeHandler(handler: () => void): void {
+  escapeHandlers.push(handler);
 }
 
 function initKeyboardShortcuts(): void {
@@ -156,7 +153,7 @@ function initKeyboardShortcuts(): void {
 
     if (event.key === "Escape") {
       event.preventDefault();
-      escapeHandler?.();
+      for (const handler of escapeHandlers) handler();
       return;
     }
 

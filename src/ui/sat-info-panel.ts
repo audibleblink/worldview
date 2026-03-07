@@ -88,7 +88,7 @@ export function showSatelliteInfoPanel(
   // Re-wire close button (clone clears stale listeners)
   const closeBtn = replaceWithClone("sat-info-close");
   closeBtn?.addEventListener("click", () => {
-    satelliteLayer.deselectSatellite(() => hideSatelliteInfoPanel());
+    satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
   });
 
   // Re-wire FOLLOW/UNFOLLOW toggle button
