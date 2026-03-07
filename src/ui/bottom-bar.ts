@@ -4,34 +4,83 @@
  */
 
 import type { Viewer } from "cesium";
+import { getCities, setCurrentCity, getCurrentCity, getCurrentPOI } from "../pois.ts";
+import { getPOIDisplayUpdater } from "./left-panel.ts";
 
 export type ViewMode = "NORMAL" | "CRT" | "NVG" | "FLIR" | "ANIME" | "NAVI";
 
-let currentMode: ViewMode = "NORMAL";
+let currentMode: ViewMode = "CRT";
+
+// City abbreviations for tabs
+const CITY_ABBREVS = ["ATX", "SFO", "NYC", "TYO", "LDN", "PAR", "DXB", "DCA"];
 
 /**
  * Initialize the bottom bar
  */
 export function initBottomBar(_viewer: Viewer): void {
-  console.log("Bottom bar initialized (stub)");
+  const bottomBar = document.querySelector(".bottom-bar");
+  if (!bottomBar) {
+    console.error("Bottom bar element not found");
+    return;
+  }
+
+  // Clear existing content
+  bottomBar.innerHTML = "";
+
+  // Create left section with style presets label and mode switcher
+  const leftSection = document.createElement("div");
+  leftSection.className = "bottom-bar-left";
+
+  const styleLabel = createStylePresetsLabel();
+  leftSection.appendChild(styleLabel);
+
+  const modeSwitcher = createModeSwitcher();
+  leftSection.appendChild(modeSwitcher);
+
+  bottomBar.appendChild(leftSection);
+
+  // Create center section with city tabs
+  const centerSection = document.createElement("div");
+  centerSection.className = "bottom-bar-center";
+
+  const cityTabs = createCityTabs();
+  centerSection.appendChild(cityTabs);
+
+  bottomBar.appendChild(centerSection);
+
+  // Create right section with location tooltip
+  const rightSection = document.createElement("div");
+  rightSection.className = "bottom-bar-right";
+
+  const locationTooltip = createLocationTooltip();
+  rightSection.appendChild(locationTooltip);
+
+  bottomBar.appendChild(rightSection);
+
+  // Wire up event handlers
+  wireUpModeButtons();
+  wireUpCityTabs();
+
+  // Set initial active city tab
+  updateCityTabsActive(0);
+
+  console.log("Bottom bar initialized");
 }
 
 /**
- * Create the style presets section
+ * Create the style presets label
  */
-export function createStylePresets(): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "style-presets";
-  container.innerHTML = `
-    <span class="presets-label">STYLE PRESETS</span>
-  `;
-  return container;
+function createStylePresetsLabel(): HTMLElement {
+  const label = document.createElement("span");
+  label.className = "style-presets-label";
+  label.textContent = "STYLE PRESETS";
+  return label;
 }
 
 /**
  * Create the mode switcher buttons
  */
-export function createModeSwitcher(): HTMLElement {
+function createModeSwitcher(): HTMLElement {
   const container = document.createElement("div");
   container.className = "mode-switcher";
 
@@ -42,11 +91,26 @@ export function createModeSwitcher(): HTMLElement {
     button.className = `mode-btn ${mode === currentMode ? "active" : ""}`;
     button.textContent = mode;
     button.dataset.mode = mode;
-    button.addEventListener("click", () => setMode(mode));
     container.appendChild(button);
   });
 
   return container;
+}
+
+/**
+ * Wire up mode button click handlers
+ */
+function wireUpModeButtons(): void {
+  const buttons = document.querySelectorAll(".mode-btn");
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      const target = event.target as HTMLButtonElement;
+      const mode = target.dataset.mode as ViewMode;
+      if (mode) {
+        setMode(mode);
+      }
+    });
+  });
 }
 
 /**
@@ -57,8 +121,15 @@ export function setMode(mode: ViewMode): void {
 
   // Update button states
   document.querySelectorAll(".mode-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.textContent === mode);
+    const btnMode = (btn as HTMLElement).dataset.mode;
+    btn.classList.toggle("active", btnMode === mode);
   });
+
+  // Update the top bar mode indicator
+  const modeIndicator = document.querySelector(".mode-indicator");
+  if (modeIndicator) {
+    modeIndicator.textContent = mode;
+  }
 
   console.log(`Mode changed to: ${mode}`);
 }
@@ -73,33 +144,82 @@ export function getMode(): ViewMode {
 /**
  * Create the city quick-jump tabs
  */
-export function createCityTabs(): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "city-tabs";
+function createCityTabs(): DocumentFragment {
+  const fragment = document.createDocumentFragment();
 
-  // Placeholder cities - will be populated from pois.ts in Phase 4
-  const cities = ["ATX", "SFO", "NYC", "TYO", "LDN", "PAR", "DXB", "DCA"];
-
-  cities.forEach((city) => {
+  CITY_ABBREVS.forEach((abbrev, index) => {
     const tab = document.createElement("button");
     tab.className = "city-tab";
-    tab.textContent = city;
-    tab.disabled = true; // Disabled until Phase 4
-    container.appendChild(tab);
+    tab.textContent = abbrev;
+    tab.dataset.cityIndex = String(index);
+    fragment.appendChild(tab);
   });
 
-  return container;
+  return fragment;
+}
+
+/**
+ * Wire up city tab click handlers
+ */
+function wireUpCityTabs(): void {
+  const tabs = document.querySelectorAll(".city-tab");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", (event) => {
+      const target = event.target as HTMLButtonElement;
+      const cityIndex = parseInt(target.dataset.cityIndex || "0", 10);
+      
+      // Set the current city
+      setCurrentCity(cityIndex);
+      
+      // Update tabs visual state
+      updateCityTabsActive(cityIndex);
+      
+      // Update city dropdown to match
+      const dropdown = document.getElementById("city-dropdown") as HTMLSelectElement;
+      if (dropdown) {
+        dropdown.value = String(cityIndex);
+      }
+
+      // Update POI display
+      const updatePOI = getPOIDisplayUpdater();
+      if (updatePOI) {
+        updatePOI();
+      }
+
+      // Update location tooltip
+      const city = getCurrentCity();
+      const poi = getCurrentPOI();
+      if (city && poi) {
+        updateLocationTooltip(poi.name, city.name);
+      }
+    });
+  });
+}
+
+/**
+ * Update city tabs active state
+ */
+function updateCityTabsActive(activeIndex: number): void {
+  const tabs = document.querySelectorAll(".city-tab");
+  tabs.forEach((tab, index) => {
+    tab.classList.toggle("active", index === activeIndex);
+  });
 }
 
 /**
  * Create the location tooltip
  */
-export function createLocationTooltip(): HTMLElement {
+function createLocationTooltip(): HTMLElement {
   const container = document.createElement("div");
   container.className = "location-tooltip";
+  
+  // Get initial values
+  const city = getCurrentCity();
+  const poi = getCurrentPOI();
+  
   container.innerHTML = `
-    <span class="tooltip-poi" id="current-poi-name">--</span>
-    <span class="tooltip-city" id="current-city-name">--</span>
+    <span class="tooltip-poi" id="current-poi-name">${poi?.name || "--"}</span>
+    <span class="tooltip-city" id="current-city-name">${city?.name || "--"}</span>
   `;
   return container;
 }

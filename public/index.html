@@ -12,19 +12,28 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <!-- Classification Watermark -->
-  <div class="classification-watermark">TOP SECRET // SI-TK // NOFORN</div>
-
   <!-- Main Container -->
   <div id="app">
+    <!-- Classification Watermark (top-left, small, 30% opacity) -->
+    <div class="classification-watermark">TOP SECRET // SI-TK // NOFORN</div>
+
     <!-- Top Bar -->
     <header class="top-bar">
-      <div class="wordmark">WORLDVIEW</div>
-      <div class="tagline">GEOSPATIAL INTELLIGENCE SYSTEM</div>
-      <div class="mode-indicator">MODE: OBSERVATION</div>
-      <div class="rec-indicator">
-        <span class="rec-dot"></span>
-        REC <span id="live-clock">--:--:--</span>
+      <div class="top-bar-left">
+        <div class="wordmark">WORLDVIEW</div>
+        <div class="tagline">NO PLACE LEFT BEHIND</div>
+      </div>
+      <div class="top-bar-center"></div>
+      <div class="top-bar-right">
+        <div class="mode-indicator">CRT</div>
+        <div class="rec-section">
+          <div class="rec-indicator">
+            <span class="rec-dot"></span>
+            <span>REC</span>
+            <span id="live-clock">----:--:--Z</span>
+          </div>
+          <div class="telemetry" id="telemetry">GRB: ----- PASS: DESC:---</div>
+        </div>
       </div>
     </header>
 

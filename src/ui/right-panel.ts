@@ -3,21 +3,55 @@
  * Parameters, sliders, and live readouts
  */
 
+import * as Cesium from "cesium";
 import type { Viewer } from "cesium";
 
 /**
  * Initialize the right panel
  */
-export function initRightPanel(_viewer: Viewer): void {
-  console.log("Right panel initialized (stub)");
+export function initRightPanel(viewer: Viewer): void {
+  const rightPanel = document.querySelector(".right-panel");
+  if (!rightPanel) {
+    console.error("Right panel element not found");
+    return;
+  }
+
+  // Clear existing content
+  rightPanel.innerHTML = "";
+
+  // Create parameters header
+  const header = createParametersHeader();
+  rightPanel.appendChild(header);
+
+  // Create effect sliders
+  const effectSliders = createEffectSliders();
+  rightPanel.appendChild(effectSliders);
+
+  // Create live readout section
+  const readoutHeader = document.createElement("div");
+  readoutHeader.className = "panel-header";
+  readoutHeader.textContent = "LIVE READOUT";
+  readoutHeader.style.marginTop = "var(--spacing-lg)";
+  rightPanel.appendChild(readoutHeader);
+
+  const liveReadout = createLiveReadout();
+  rightPanel.appendChild(liveReadout);
+
+  // Subscribe to camera change events
+  subscribeToCameraChanges(viewer);
+
+  // Initial readout update
+  updateReadoutsFromCamera(viewer);
+
+  console.log("Right panel initialized");
 }
 
 /**
  * Create the parameters header
  */
-export function createParametersHeader(): HTMLElement {
+function createParametersHeader(): HTMLElement {
   const header = document.createElement("div");
-  header.className = "parameters-header";
+  header.className = "panel-header";
   header.textContent = "PARAMETERS";
   return header;
 }
@@ -25,9 +59,9 @@ export function createParametersHeader(): HTMLElement {
 /**
  * Create the effect sliders (stubbed)
  */
-export function createEffectSliders(): HTMLElement {
+function createEffectSliders(): HTMLElement {
   const container = document.createElement("div");
-  container.className = "effect-sliders";
+  container.className = "effect-sliders panel-section";
 
   const sliders = [
     { name: "PIXELATION", value: 0 },
@@ -52,13 +86,13 @@ export function createEffectSliders(): HTMLElement {
 /**
  * Create the live readout display
  */
-export function createLiveReadout(): HTMLElement {
+function createLiveReadout(): HTMLElement {
   const container = document.createElement("div");
   container.className = "live-readout";
   container.innerHTML = `
     <div class="readout-row">
       <span class="readout-label">GSD</span>
-      <span class="readout-value" id="readout-gsd">-- m</span>
+      <span class="readout-value" id="readout-gsd">--m</span>
     </div>
     <div class="readout-row">
       <span class="readout-label">NIIRS</span>
@@ -66,25 +100,79 @@ export function createLiveReadout(): HTMLElement {
     </div>
     <div class="readout-row">
       <span class="readout-label">ALT</span>
-      <span class="readout-value" id="readout-alt">-- km</span>
+      <span class="readout-value" id="readout-alt">----m</span>
     </div>
     <div class="readout-row">
       <span class="readout-label">SUB</span>
-      <span class="readout-value" id="readout-sub">--°, --°</span>
+      <span class="readout-value" id="readout-sub">--° EL</span>
     </div>
   `;
   return container;
 }
 
 /**
- * Update the live readouts with camera data
+ * Subscribe to CesiumJS camera change events for live updates
+ */
+function subscribeToCameraChanges(viewer: Viewer): void {
+  // Use moveEnd for performance (fires when camera stops moving)
+  viewer.camera.moveEnd.addEventListener(() => {
+    updateReadoutsFromCamera(viewer);
+  });
+
+  // Also update during movement with throttling
+  let lastUpdate = 0;
+  const throttleMs = 100;
+
+  viewer.camera.changed.addEventListener(() => {
+    const now = Date.now();
+    if (now - lastUpdate > throttleMs) {
+      lastUpdate = now;
+      updateReadoutsFromCamera(viewer);
+    }
+  });
+}
+
+/**
+ * Update readouts from camera position
+ */
+function updateReadoutsFromCamera(viewer: Viewer): void {
+  const camera = viewer.camera;
+  
+  // Get camera position in cartographic coordinates
+  const cartographic = camera.positionCartographic;
+  if (!cartographic) return;
+
+  const altitude = cartographic.height;
+  
+  // Get camera pitch (negative because Cesium uses negative for looking down)
+  const pitchDegrees = Cesium.Math.toDegrees(camera.pitch);
+
+  // Calculate GSD (Ground Sample Distance)
+  // Simplified: GSD ≈ altitude * sensor_size / focal_length
+  // For a rough estimate: GSD ≈ altitude / 10000 (at nadir)
+  const gsd = Math.max(0.01, altitude / 10000);
+
+  // Calculate NIIRS (National Imagery Interpretability Rating Scale)
+  // Simplified formula: NIIRS ≈ 9 - log10(altitude/100), clamped 1-9
+  // This gives roughly: 100m alt = NIIRS 9, 1km = 8, 10km = 7, etc.
+  const niirs = Math.max(1, Math.min(9, 9 - Math.log10(altitude / 100)));
+
+  updateReadouts({
+    gsd,
+    niirs,
+    altitude,
+    pitch: pitchDegrees,
+  });
+}
+
+/**
+ * Update the live readouts with calculated data
  */
 export function updateReadouts(data: {
   gsd?: number;
   niirs?: number;
   altitude?: number;
-  lat?: number;
-  lng?: number;
+  pitch?: number;
 }): void {
   const gsdEl = document.getElementById("readout-gsd");
   const niirsEl = document.getElementById("readout-niirs");
@@ -92,16 +180,31 @@ export function updateReadouts(data: {
   const subEl = document.getElementById("readout-sub");
 
   if (gsdEl && data.gsd !== undefined) {
-    gsdEl.textContent = `${data.gsd.toFixed(2)} m`;
+    if (data.gsd >= 1000) {
+      gsdEl.textContent = `${(data.gsd / 1000).toFixed(1)}km`;
+    } else if (data.gsd >= 1) {
+      gsdEl.textContent = `${data.gsd.toFixed(1)}m`;
+    } else {
+      gsdEl.textContent = `${(data.gsd * 100).toFixed(1)}cm`;
+    }
   }
+
   if (niirsEl && data.niirs !== undefined) {
     niirsEl.textContent = data.niirs.toFixed(1);
   }
+
   if (altEl && data.altitude !== undefined) {
-    const altKm = data.altitude / 1000;
-    altEl.textContent = `${altKm.toFixed(1)} km`;
+    if (data.altitude >= 1000000) {
+      altEl.textContent = `${(data.altitude / 1000).toFixed(0)}km`;
+    } else if (data.altitude >= 1000) {
+      altEl.textContent = `${Math.round(data.altitude)}m`;
+    } else {
+      altEl.textContent = `${data.altitude.toFixed(1)}m`;
+    }
   }
-  if (subEl && data.lat !== undefined && data.lng !== undefined) {
-    subEl.textContent = `${data.lat.toFixed(4)}°, ${data.lng.toFixed(4)}°`;
+
+  if (subEl && data.pitch !== undefined) {
+    // Display elevation angle (pitch relative to horizon)
+    subEl.textContent = `${data.pitch.toFixed(1)}° EL`;
   }
 }
