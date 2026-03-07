@@ -135,6 +135,7 @@ export class SatelliteLayer {
   private orbitalPathEntity: Cesium.Entity | null = null;
   private followEntity: Cesium.Entity | null = null;
   private followPosition: Cesium.ConstantPositionProperty | null = null;
+  private followTickRemove: (() => void) | null = null;
   private satellitePositions: Map<string, Cesium.Cartesian3> = new Map();
   private hiddenCategories: Set<string> = new Set();
   private onExternalDeselect: (() => void) | null = null;
@@ -186,11 +187,6 @@ export class SatelliteLayer {
       const bb = this.billboardMap.get(record.noradId);
       if (bb) bb.position = cartesian;
       this.satellitePositions.set(record.noradId, cartesian);
-    }
-    // Keep the tracked entity in sync so the camera follows the updated position
-    if (this.followPosition && this.selectedNoradId) {
-      const pos = this.satellitePositions.get(this.selectedNoradId);
-      if (pos) this.followPosition.setValue(pos);
     }
     this.notifyVisibleCount();
   }
@@ -265,22 +261,46 @@ export class SatelliteLayer {
     if (!this.selectedNoradId) return;
     this.stopFollow();
 
-    const current = this.satellitePositions.get(this.selectedNoradId) ?? new Cesium.Cartesian3();
-    this.followPosition = new Cesium.ConstantPositionProperty(current);
-    this.followEntity = this.viewer.entities.add({
-      position: this.followPosition,
-    });
+    // Drive camera manually every render frame — reliable, no trackedEntity lag.
+    // Look straight down from ~2× the satellite's orbital altitude above it.
+    const listener = () => {
+      if (!this.selectedNoradId) return;
+      const pos = this.satellitePositions.get(this.selectedNoradId);
+      if (!pos) return;
 
-    this.viewer.trackedEntity = this.followEntity;
+      const carto = Cesium.Cartographic.fromCartesian(pos);
+      const orbitAltM = carto.height;               // satellite altitude in metres
+      const cameraAltM = orbitAltM + 2_500_000;     // 2 500 km above the satellite
+
+      this.viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromRadians(
+          carto.longitude,
+          carto.latitude,
+          cameraAltM,
+        ),
+        orientation: {
+          heading: 0,
+          pitch: -Cesium.Math.PI_OVER_TWO,   // straight down (nadir)
+          roll: 0,
+        },
+      });
+    };
+
+    this.viewer.scene.preRender.addEventListener(listener);
+    this.followTickRemove = () => this.viewer.scene.preRender.removeEventListener(listener);
   }
 
   stopFollow(): void {
-    if (!this.followEntity) return;
-    if (this.viewer.trackedEntity === this.followEntity) {
-      this.viewer.trackedEntity = undefined as unknown as Cesium.Entity;
+    this.followTickRemove?.();
+    this.followTickRemove = null;
+
+    if (this.followEntity) {
+      if (this.viewer.trackedEntity === this.followEntity) {
+        this.viewer.trackedEntity = undefined as unknown as Cesium.Entity;
+      }
+      this.viewer.entities.remove(this.followEntity);
+      this.followEntity = null;
     }
-    this.viewer.entities.remove(this.followEntity);
-    this.followEntity = null;
     this.followPosition = null;
   }
 
