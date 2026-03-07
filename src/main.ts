@@ -8,16 +8,36 @@ import { initShell } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 
 /**
+ * Check if the user is currently interacting with a form element
+ */
+function isUserTyping(event: KeyboardEvent): boolean {
+  const target = event.target;
+  
+  // Check for input elements where typing should be allowed
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  
+  // Check for contenteditable elements
+  if (target instanceof HTMLElement && target.isContentEditable) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Set up keyboard event listeners for POI navigation
  * Q = POI 1, W = POI 2, E = POI 3, R = POI 4, T = POI 5
  */
 function setupKeyboardNavigation(): void {
   document.addEventListener("keydown", (event: KeyboardEvent) => {
-    // Ignore if user is typing in an input field
-    if (
-      event.target instanceof HTMLInputElement ||
-      event.target instanceof HTMLTextAreaElement
-    ) {
+    // Ignore if user is typing in a form element
+    if (isUserTyping(event)) {
       return;
     }
 
