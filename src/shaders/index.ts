@@ -9,10 +9,14 @@ declare const Cesium: typeof import("cesium");
 import type { ViewMode, ShaderConfig, ShaderManagerInterface } from "./types.ts";
 import { createCRTConfig } from "./crt.ts";
 import { createNormalConfig } from "./normal.ts";
+import { createNVGConfig } from "./nvg.ts";
+import { createFLIRConfig } from "./flir.ts";
 
 // Re-export types
 export type { ViewMode, ShaderConfig, ShaderManagerInterface } from "./types.ts";
 export { CRT_DEFAULTS, createCRTConfig } from "./crt.ts";
+export { NVG_DEFAULTS, createNVGConfig } from "./nvg.ts";
+export { FLIR_DEFAULTS, createFLIRConfig } from "./flir.ts";
 
 type Viewer = import("cesium").Viewer;
 type PostProcessStage = import("cesium").PostProcessStage;
@@ -109,11 +113,13 @@ class ShaderManager implements ShaderManagerInterface {
     switch (mode) {
       case "CRT":
         return createCRTConfig();
+      case "NVG":
+        return createNVGConfig();
+      case "FLIR":
+        return createFLIRConfig();
       case "NORMAL":
         return createNormalConfig();
       // Placeholder for future modes
-      case "NVG":
-      case "FLIR":
       case "ANIME":
       case "NAVI":
         console.log(`Mode ${mode} not yet implemented, using NORMAL`);
