@@ -3,7 +3,8 @@
  * Initializes the globe and UI shell
  */
 
-import * as Cesium from "cesium";
+// Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
+declare const Cesium: typeof import("cesium");
 import { initGlobe } from "./globe.ts";
 import { initShell, updateSatelliteCount, addEscapeHandler } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";

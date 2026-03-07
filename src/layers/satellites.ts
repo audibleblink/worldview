@@ -1,5 +1,6 @@
 import * as satellite from "satellite.js";
-import * as Cesium from "cesium";
+// Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
+declare const Cesium: typeof import("cesium");
 
 export interface SatelliteRecord {
   name: string;

@@ -59,7 +59,16 @@
     </footer>
   </div>
 
-  <!-- CesiumJS Library -->
+  <!-- Import map: resolve bare specifiers for ES modules -->
+  <script type="importmap">
+  {
+    "imports": {
+      "satellite.js": "/satellite.js/satellite.es.js"
+    }
+  }
+  </script>
+
+  <!-- CesiumJS Library (UMD global) -->
   <script src="/cesium/Cesium.js"></script>
 
   <!-- WorldView Application -->

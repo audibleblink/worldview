@@ -8,6 +8,7 @@ import { join } from "node:path";
 const PORT = 3000;
 const ROOT = import.meta.dir + "/..";
 const CESIUM_PATH = join(ROOT, "node_modules/cesium/Build/Cesium");
+const SATELLITE_JS_PATH = join(ROOT, "node_modules/satellite.js/dist");
 const PUBLIC_PATH = join(ROOT, "public");
 const SRC_PATH = join(ROOT, "src");
 
@@ -45,6 +46,16 @@ Bun.serve({
       return new Response(file, {
         headers: { "Content-Type": "text/html" },
       });
+    }
+
+    // Serve satellite.js ES module from node_modules
+    if (pathname.startsWith("/satellite.js/")) {
+      const filePath = join(SATELLITE_JS_PATH, pathname.replace("/satellite.js/", ""));
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        return new Response(file, { headers: { "Content-Type": "application/javascript" } });
+      }
+      return new Response("satellite.js asset not found: " + pathname, { status: 404 });
     }
 
     // Serve Cesium assets from node_modules
