@@ -6,7 +6,7 @@ Photorealistic 3D globe. Live satellite tracking. Military and commercial flight
 
 > Inspired by [Bilawal Sidhu's WorldView project](https://www.spatialintelligence.ai/p/i-built-a-spy-satellite-simulator).
 
-Basically just told Claude to look at `./notes.txt` while enabling playright and yt-dlp. The said "make it"
+Basically just told Claude to look at `./spec/init.txt` while enabling playright and yt-dlp. The said "make it"
 
 
 ---
