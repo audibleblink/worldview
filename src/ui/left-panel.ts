@@ -3,7 +3,8 @@
  * City selector, POI navigation, and calibration controls
  */
 
-import type { Viewer } from "cesium";
+// Use global Cesium type
+type Viewer = import("cesium").Viewer;
 import {
   getCities,
   getCurrentCity,

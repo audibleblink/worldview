@@ -3,7 +3,8 @@
  * Style presets, mode switcher, city tabs, and location tooltip
  */
 
-import type { Viewer } from "cesium";
+// Use global Cesium type
+type Viewer = import("cesium").Viewer;
 import { getCities, setCurrentCity, getCurrentCity, getCurrentPOI } from "../pois.ts";
 import { getPOIDisplayUpdater } from "./left-panel.ts";
 

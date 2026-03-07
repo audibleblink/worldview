@@ -159,16 +159,16 @@ echo "=== Phase 2 PASSED ==="
 
 ### Checklist
 
-- [ ] Implement `src/globe.ts`:
+- [x] Implement `src/globe.ts`:
   - Initialize CesiumJS Viewer
   - Disable Cesium Ion (use custom tile endpoint)
   - Configure Google 3D Tiles tileset via proxy URL (`http://localhost:3001`)
   - Set default camera: altitude ~15,000km, centered on 0N 0E
   - Enable standard mouse/touch controls (orbit, zoom, pan)
-- [ ] Implement `src/main.ts`:
+- [x] Implement `src/main.ts`:
   - Import and initialize globe
   - Mount to DOM element
-- [ ] Update `public/index.html`:
+- [x] Update `public/index.html`:
   - Include Cesium CSS
   - Create container div for Cesium viewer
   - Load bundled JS
@@ -226,7 +226,7 @@ echo "=== Phase 3 PASSED ==="
 
 ### Checklist
 
-- [ ] Implement `src/pois.ts`:
+- [x] Implement `src/pois.ts`:
   - Define City interface with name and POI array
   - Define POI interface with name, lat, lng, altitude, pitch
   - Create data for all 8 cities:
@@ -241,9 +241,9 @@ echo "=== Phase 3 PASSED ==="
   - Implement `flyToPOI(viewer, poi)` function with 2s animation
   - Camera arrives at ~500m altitude, ~45 degree pitch
   - Implement city/POI state management (current city, current POI index)
-- [ ] Add keyboard event listeners in `src/main.ts`:
+- [x] Add keyboard event listeners in `src/main.ts`:
   - Q = POI 1, W = POI 2, E = POI 3, R = POI 4, T = POI 5
-- [ ] Export functions for UI integration:
+- [x] Export functions for UI integration:
   - `getCities()`, `getCurrentCity()`, `setCurrentCity()`
   - `getCurrentPOI()`, `nextPOI()`, `prevPOI()`
 
@@ -308,7 +308,7 @@ echo "=== Phase 4 PASSED ==="
 
 ### Checklist
 
-- [ ] Create `public/styles.css` with terminal aesthetic:
+- [x] Create `public/styles.css` with terminal aesthetic:
   - Black background (`#000`)
   - Primary cyan (`#00f0ff`)
   - Secondary teal (`#4a9e8a`)
@@ -316,13 +316,13 @@ echo "=== Phase 4 PASSED ==="
   - Monospace font (Courier New)
   - All text uppercase
   - CSS scanline texture overlay
-- [ ] Implement `src/ui/shell.ts`:
+- [x] Implement `src/ui/shell.ts`:
   - Create top bar (WORLDVIEW wordmark, tagline, mode indicator, REC + timestamp)
   - Add classification watermark (`TOP SECRET // SI-TK // NOFORN`)
   - Add circular vignette overlay (CSS radial-gradient)
   - Initialize left panel, right panel, bottom bar
   - Start live clock interval (updates every second)
-- [ ] Implement `src/ui/left-panel.ts`:
+- [x] Implement `src/ui/left-panel.ts`:
   - City selector dropdown (8 cities)
   - POI navigation (PREV/NEXT buttons, current POI display)
   - Stubbed toggles (COVERAGE ON, AUTO HOF SPY, PROJECTION IN)
@@ -331,18 +331,18 @@ echo "=== Phase 4 PASSED ==="
   - SAVE CAL / RESET CAL buttons (disabled)
   - CCTV placeholder ("NO FEED")
   - System log placeholder
-- [ ] Implement `src/ui/right-panel.ts`:
+- [x] Implement `src/ui/right-panel.ts`:
   - PARAMETERS header
   - 3 stubbed sliders (Pixelation, Distortion, Instability)
   - Live readout (GSD, NIIRS, ALT, SUB)
   - Subscribe to camera change events for live updates
-- [ ] Implement `src/ui/bottom-bar.ts`:
+- [x] Implement `src/ui/bottom-bar.ts`:
   - STYLE PRESETS label
   - Mode switcher buttons (NORMAL, CRT, NVG, FLIR, ANIME, NAVI)
   - Toggle active state on click (visual only)
   - City quick-jump tabs
   - Location tooltip (current POI + city)
-- [ ] Wire up all event handlers:
+- [x] Wire up all event handlers:
   - City dropdown change -> fly to city
   - PREV/NEXT -> navigate POIs
   - Mode buttons -> toggle visual state
@@ -425,12 +425,12 @@ echo "=== Phase 5 PASSED ==="
 
 ### Checklist
 
-- [ ] Integration testing:
+- [x] Integration testing:
   - Start dev server (`bun run dev`)
   - Verify no console errors on load
   - Verify no TypeScript errors
   - Verify no network errors (except expected when API key missing)
-- [ ] Verify all acceptance criteria (AC1-AC14):
+- [x] Verify all acceptance criteria (AC1-AC14):
   - AC1: `bun run dev` starts successfully
   - AC2: Google 3D Tiles render Earth
   - AC3: Zooming shows photorealistic buildings
@@ -445,12 +445,12 @@ echo "=== Phase 5 PASSED ==="
   - AC12: Live REC timestamp
   - AC13: API key not in bundle
   - AC14: No console errors
-- [ ] Polish and edge cases:
+- [x] Polish and edge cases:
   - Handle missing API key gracefully (show error message)
   - Handle tile loading errors
   - Ensure keyboard shortcuts don't interfere with browser defaults
   - Test in Chrome and Firefox
-- [ ] Update README with:
+- [x] Update README with:
   - Setup instructions
   - API key configuration
   - Development commands

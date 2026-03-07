@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --hot src/server.ts & bun run --hot src/proxy.ts",
+    "dev": "bun run --hot src/server.ts",
     "proxy": "bun run --hot src/proxy.ts",
     "build": "bun run scripts/build.ts",
     "typecheck": "tsc --noEmit"

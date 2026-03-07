@@ -3,8 +3,9 @@
  * City and POI data with navigation functions
  */
 
-import * as Cesium from "cesium";
-import type { Viewer } from "cesium";
+// Use global Cesium from script tag
+declare const Cesium: typeof import("cesium");
+type Viewer = import("cesium").Viewer;
 
 export interface POI {
   name: string;

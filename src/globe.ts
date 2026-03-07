@@ -3,7 +3,8 @@
  * Handles CesiumJS viewer initialization and 3D tile configuration
  */
 
-import * as Cesium from "cesium";
+// Use global Cesium from script tag - declare the types
+declare const Cesium: typeof import("cesium");
 
 // Disable Cesium Ion - we're using Google 3D Tiles directly
 Cesium.Ion.defaultAccessToken = "";

@@ -3,8 +3,9 @@
  * Parameters, sliders, and live readouts
  */
 
-import * as Cesium from "cesium";
-import type { Viewer } from "cesium";
+// Use global Cesium from script tag
+declare const Cesium: typeof import("cesium");
+type Viewer = import("cesium").Viewer;
 
 /**
  * Initialize the right panel

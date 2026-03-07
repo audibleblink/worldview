@@ -3,7 +3,8 @@
  * Main UI container with top bar, panels, and overlays
  */
 
-import type { Viewer } from "cesium";
+// Use global Cesium type
+type Viewer = import("cesium").Viewer;
 import { initLeftPanel } from "./left-panel.ts";
 import { initRightPanel } from "./right-panel.ts";
 import { initBottomBar } from "./bottom-bar.ts";
