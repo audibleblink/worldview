@@ -7,8 +7,9 @@
 type Viewer = import("cesium").Viewer;
 import { getCities, setCurrentCity, getCurrentCity, getCurrentPOI } from "../pois.ts";
 import { getPOIDisplayUpdater } from "./left-panel.ts";
+import { shaderManager, type ViewMode } from "../shaders/index.ts";
 
-export type ViewMode = "NORMAL" | "CRT" | "NVG" | "FLIR" | "ANIME" | "NAVI";
+export type { ViewMode } from "../shaders/index.ts";
 
 let currentMode: ViewMode = "CRT";
 
@@ -131,6 +132,9 @@ export function setMode(mode: ViewMode): void {
   if (modeIndicator) {
     modeIndicator.textContent = mode;
   }
+
+  // Apply shader effect
+  shaderManager.setMode(mode);
 
   console.log(`Mode changed to: ${mode}`);
 }

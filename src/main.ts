@@ -6,6 +6,7 @@
 import { initGlobe } from "./globe.ts";
 import { initShell } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
+import { shaderManager } from "./shaders/index.ts";
 
 /**
  * Check if the user is currently interacting with a form element
@@ -54,6 +55,12 @@ export async function init(): Promise<void> {
 
     // Set up keyboard shortcuts for POI navigation
     setupKeyboardNavigation();
+
+    // Initialize shader manager
+    shaderManager.init(viewer);
+
+    // Expose shaderManager for testing
+    (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
 
     console.log("WorldView initialized");
   } catch (error) {
