@@ -47,7 +47,7 @@ export const DEFAULT_CCTV_CONFIG: CCTVManagerConfig = {
   maxBillboards: 4,
   thumbnailRefreshMs: 1000,   // 1fps for thumbnails
   billboardRefreshMs: 66,     // ~15fps for billboards
-  billboardWidth: 8,          // meters
-  billboardHeight: 6,         // meters (4:3 aspect)
+  billboardWidth: 200,        // pixels (will scale with distance)
+  billboardHeight: 150,       // pixels (4:3 aspect)
   billboardAltitude: 15,      // meters above ground
 };
