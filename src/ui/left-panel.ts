@@ -18,9 +18,10 @@ import {
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 import type { FlightLayer } from "../layers/flights.ts";
-import { CCTVManager, CCTVPanel, type BBox } from "../ground/cctv/index.ts";
+import { CCTVManager, CCTVPanel } from "../ground/cctv/index.ts";
 import { GroundLayer } from "../ground/index.ts";
 import type { StyleMode } from "../ground/traffic/particleStyles.ts";
+import { getViewportBBox, getCameraAltitude, type BBox } from "../camera.ts";
 
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
@@ -458,73 +459,26 @@ function createCalibrationButtons(): HTMLElement {
   return container;
 }
 
+/** Austin fallback bbox for when camera is looking at sky */
+const AUSTIN_BBOX: BBox = { west: -97.85, south: 30.15, east: -97.65, north: 30.40 };
+
 /** Get the current viewport bounding box from Cesium camera */
-function getViewportBBox(): BBox | null {
+function getViewportBBoxForCCTV(): BBox | null {
   if (!cctv.viewer) return null;
-
-  const camera = cctv.viewer.camera;
-  const canvas = cctv.viewer.scene.canvas;
-  
-  try {
-    // Get corners of viewport in cartographic coordinates
-    const corners = [
-      camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
-    ];
-
-    // Filter out null values (when camera is looking at sky)
-    const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
-    
-    if (validCorners.length < 2) {
-      // Fall back to Austin bbox when camera is looking at sky
-      return { west: -97.85, south: 30.15, east: -97.65, north: 30.40 };
-    }
-
-    // Convert to cartographic and find bounds
-    let west = 180, south = 90, east = -180, north = -90;
-    
-    for (const corner of validCorners) {
-      const carto = Cesium.Cartographic.fromCartesian(corner);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      
-      west = Math.min(west, lon);
-      east = Math.max(east, lon);
-      south = Math.min(south, lat);
-      north = Math.max(north, lat);
-    }
-
-    // Expand bounds slightly to ensure we capture edge cameras
-    const lonPadding = (east - west) * 0.1;
-    const latPadding = (north - south) * 0.1;
-    
-    return {
-      west: west - lonPadding,
-      south: south - latPadding,
-      east: east + lonPadding,
-      north: north + latPadding,
-    };
-  } catch (error) {
-    console.error("[CCTV] Error calculating viewport bbox:", error);
-    return { west: -97.85, south: 30.15, east: -97.65, north: 30.40 };
-  }
+  return getViewportBBox(cctv.viewer, { padding: 0.1, fallback: AUSTIN_BBOX });
 }
 
 /** Get current camera altitude in meters */
-function getCameraAltitude(): number {
+function getCCTVCameraAltitude(): number {
   if (!cctv.viewer) return Infinity;
-  
-  const cartographic = cctv.viewer.camera.positionCartographic;
-  return cartographic?.height ?? Infinity;
+  return getCameraAltitude(cctv.viewer);
 }
 
 /** Update CCTV cameras for current viewport */
 async function updateCCTVCamerasForViewport(): Promise<void> {
   if (!cctv.panel) return;
   
-  const altitude = getCameraAltitude();
+  const altitude = getCCTVCameraAltitude();
   cctv.lastAltitude = altitude;
   
   // Check if we're above the altitude threshold
@@ -540,7 +494,7 @@ async function updateCCTVCamerasForViewport(): Promise<void> {
   
   cctv.isAboveAltitudeThreshold = false;
   
-  const bbox = getViewportBBox();
+  const bbox = getViewportBBoxForCCTV();
   if (!bbox) return;
   
   await cctv.panel.updateViewport(bbox);

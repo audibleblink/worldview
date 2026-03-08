@@ -131,3 +131,79 @@ export function getCameraCenter(viewer: Viewer): { lat: number; lon: number } | 
     lon: Cesium.Math.toDegrees(cartographic.longitude),
   };
 }
+
+/** Bounding box in degrees */
+export interface BBox {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+export interface ViewportBBoxOptions {
+  /** Padding as a fraction of bounds (default: 0.1 = 10%) */
+  padding?: number;
+  /** Fallback bbox when camera is looking at sky */
+  fallback?: BBox;
+}
+
+/**
+ * Get the current viewport bounding box from camera.
+ * Returns null if camera is looking at sky (unless fallback provided).
+ */
+export function getViewportBBox(
+  viewer: Viewer,
+  options: ViewportBBoxOptions = {}
+): BBox | null {
+  const { padding = 0.1, fallback } = options;
+  
+  const camera = viewer.camera;
+  const canvas = viewer.scene.canvas;
+  
+  try {
+    // Get corners of viewport in cartographic coordinates
+    const corners = [
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
+    ];
+
+    // Filter out undefined values (when camera is looking at sky)
+    const validCorners = corners.filter(
+      (c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined
+    );
+    
+    if (validCorners.length < 2) {
+      return fallback ?? null;
+    }
+
+    // Convert to cartographic and find bounds
+    let west = 180, south = 90, east = -180, north = -90;
+    
+    for (const corner of validCorners) {
+      const carto = Cesium.Cartographic.fromCartesian(corner);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      
+      west = Math.min(west, lon);
+      east = Math.max(east, lon);
+      south = Math.min(south, lat);
+      north = Math.max(north, lat);
+    }
+
+    // Apply padding
+    const lonPadding = (east - west) * padding;
+    const latPadding = (north - south) * padding;
+    
+    return {
+      west: west - lonPadding,
+      south: south - latPadding,
+      east: east + lonPadding,
+      north: north + latPadding,
+    };
+  } catch (error) {
+    console.error("[Camera] Error calculating viewport bbox:", error);
+    return fallback ?? null;
+  }
+}

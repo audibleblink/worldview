@@ -31,6 +31,7 @@ import { RoadNetwork } from "./traffic/RoadNetwork.ts";
 import { CCTVManager } from "./cctv/CCTVManager.ts";
 import { EarthquakeLayer } from "./seismic/EarthquakeLayer.ts";
 import { flyTo } from "../globe.ts";
+import { getViewportBBox, type BBox } from "../camera.ts";
 
 /** Minimum viewport size for traffic loading (degrees) */
 const MIN_VIEWPORT_SIZE = 0.01;
@@ -180,56 +181,9 @@ export class GroundLayer {
   /**
    * Get the current viewport bounding box from camera
    */
-  private getViewportBbox(): { south: number; west: number; north: number; east: number } | null {
+  private getViewportBbox(): BBox | null {
     if (!this.viewer) return null;
-
-    const camera = this.viewer.camera;
-    const canvas = this.viewer.scene.canvas;
-    
-    try {
-      // Get corners of viewport in cartographic coordinates
-      const corners = [
-        camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
-        camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
-        camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
-        camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
-      ];
-
-      // Filter out undefined values (when camera is looking at sky)
-      const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
-      
-      if (validCorners.length < 2) {
-        return null; // Camera looking at sky
-      }
-
-      // Convert to cartographic and find bounds
-      let west = 180, south = 90, east = -180, north = -90;
-      
-      for (const corner of validCorners) {
-        const carto = Cesium.Cartographic.fromCartesian(corner);
-        const lon = Cesium.Math.toDegrees(carto.longitude);
-        const lat = Cesium.Math.toDegrees(carto.latitude);
-        
-        west = Math.min(west, lon);
-        east = Math.max(east, lon);
-        south = Math.min(south, lat);
-        north = Math.max(north, lat);
-      }
-
-      // Expand bounds slightly for better coverage
-      const lonPadding = (east - west) * 0.15;
-      const latPadding = (north - south) * 0.15;
-      
-      return {
-        west: west - lonPadding,
-        south: south - latPadding,
-        east: east + lonPadding,
-        north: north + latPadding,
-      };
-    } catch (error) {
-      console.error("[GroundLayer] Error calculating viewport bbox:", error);
-      return null;
-    }
+    return getViewportBBox(this.viewer, { padding: 0.15 });
   }
   
   /**

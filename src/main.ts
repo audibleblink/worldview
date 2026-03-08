@@ -29,6 +29,78 @@ function setupKeyboardNavigation(): void {
   });
 }
 
+/** Extract entity ID from Cesium pick result */
+function extractEntityId(picked: any): string | null {
+  const entityId = picked?.id?.id ?? (typeof picked?.id === "string" ? picked.id : null);
+  return typeof entityId === "string" ? entityId : null;
+}
+
+/** Click handler context for layer interactions */
+interface ClickContext {
+  groundLayer: GroundLayer;
+  flightLayer: FlightLayer;
+  satelliteLayer: SatelliteLayer;
+  viewer: import("cesium").Viewer;
+}
+
+/** Handle CCTV camera/marker clicks */
+function handleCCTVClick(
+  entityId: string,
+  clickPosition: { x: number; y: number },
+  ctx: ClickContext
+): boolean {
+  const cctvManager = ctx.groundLayer.getCCTVManager();
+  
+  if (!cctvManager.isCCTVBillboard(entityId)) return false;
+
+  // Camera marker (icon on map) - project and open center-stage
+  if (cctvManager.isCameraMarker(entityId)) {
+    const cameraId = cctvManager.getCameraIdFromMarker(entityId);
+    const camera = cameraId ? cctvManager.getCamera(cameraId) : null;
+    if (camera) {
+      cctvManager.projectCamera(camera).then(() => {
+        cctvManager.enterCenterStage(cameraId!);
+      });
+    }
+    return true;
+  }
+
+  // Billboard close button
+  if (cctvManager.handleBillboardClick(entityId, clickPosition, ctx.viewer)) {
+    return true;
+  }
+
+  // Toggle center-stage mode
+  cctvManager.toggleCenterStage(entityId);
+  return true;
+}
+
+/** Handle flight clicks */
+function handleFlightClick(entityId: string, ctx: ClickContext): boolean {
+  if (!ctx.flightLayer.hasIcao(entityId)) return false;
+
+  ctx.flightLayer.selectFlight(entityId, async (record) => {
+    const meta = await fetchAircraftMeta(entityId);
+    showFlightInfoPanel(record, meta, ctx.flightLayer);
+  });
+  return true;
+}
+
+/** Handle satellite clicks */
+function handleSatelliteClick(entityId: string, ctx: ClickContext): boolean {
+  ctx.satelliteLayer.selectSatellite(entityId, (record, velocity) => {
+    showSatelliteInfoPanel(record, velocity, ctx.satelliteLayer);
+  });
+  return true;
+}
+
+/** Handle click on empty space - deselect all */
+function handleEmptyClick(ctx: ClickContext): void {
+  ctx.satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
+  ctx.flightLayer.deselectFlight(hideFlightInfoPanel);
+  ctx.groundLayer.getCCTVManager().exitCenterStage();
+}
+
 export async function init(): Promise<void> {
   const container = document.getElementById("cesium-container");
   if (!container) {
@@ -79,62 +151,26 @@ export async function init(): Promise<void> {
     shaderManager.init(viewer);
     (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
 
-    // Click-to-select: billboard id is set to noradId/icao24/cameraId string at creation time
-    viewer.screenSpaceEventHandler.setInputAction((click: { position: { x: number; y: number } }) => {
-      const picked = viewer.scene.pick((click as any).position);
+    // Click-to-select handler
+    const clickCtx: ClickContext = { groundLayer, flightLayer, satelliteLayer, viewer };
 
-      // Extract entity ID - Cesium returns entity object in picked.id, string ID is in picked.id.id
-      const entityId = picked?.id?.id ?? (typeof picked?.id === "string" ? picked.id : null);
+    viewer.screenSpaceEventHandler.setInputAction(
+      (click: { position: { x: number; y: number } }) => {
+        const picked = viewer.scene.pick((click as any).position);
+        const entityId = extractEntityId(picked);
 
-      if (entityId && typeof entityId === "string") {
-        // Check if it's a CCTV billboard or camera marker
-        const cctvManager = groundLayer.getCCTVManager();
-        if (cctvManager.isCCTVBillboard(entityId)) {
-          // Check if it's a camera marker (icon on map)
-          if (cctvManager.isCameraMarker(entityId)) {
-            const cameraId = cctvManager.getCameraIdFromMarker(entityId);
-            if (cameraId) {
-              // Project the camera and open center-stage
-              const camera = cctvManager.getCamera(cameraId);
-              if (camera) {
-                cctvManager.projectCamera(camera).then(() => {
-                  cctvManager.enterCenterStage(cameraId);
-                });
-              }
-            }
-            return;
-          }
-          
-          // Check if click hit the close button on the billboard
-          if (cctvManager.handleBillboardClick(entityId, click.position, viewer)) {
-            return; // Close button was clicked, billboard removed
-          }
-          // Toggle center-stage mode for this camera
-          cctvManager.toggleCenterStage(entityId);
+        if (!entityId) {
+          handleEmptyClick(clickCtx);
           return;
         }
 
-        // Check if it's a flight (FlightLayer tracks its own icao24 set)
-        if (flightLayer.hasIcao(entityId)) {
-          flightLayer.selectFlight(entityId, async (record) => {
-            const meta = await fetchAircraftMeta(entityId);
-            showFlightInfoPanel(record, meta, flightLayer);
-          });
-          return;
-        }
-
-        // Otherwise handle as satellite
-        satelliteLayer.selectSatellite(entityId, (record, velocity) => {
-          showSatelliteInfoPanel(record, velocity, satelliteLayer);
-        });
-        return;
-      }
-
-      // Clicked empty space — deselect both and exit center-stage
-      satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
-      flightLayer.deselectFlight(hideFlightInfoPanel);
-      groundLayer.getCCTVManager().exitCenterStage();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        // Try each handler in order - first match wins
+        if (handleCCTVClick(entityId, click.position, clickCtx)) return;
+        if (handleFlightClick(entityId, clickCtx)) return;
+        handleSatelliteClick(entityId, clickCtx);
+      },
+      Cesium.ScreenSpaceEventType.LEFT_CLICK
+    );
 
     console.log("WorldView initialized");
   } catch (error) {

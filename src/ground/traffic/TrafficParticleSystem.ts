@@ -7,7 +7,7 @@ declare const Cesium: typeof import("cesium");
 
 import { RoadNetwork, type RoadSegment } from "./RoadNetwork.ts";
 import { type StyleMode, getRoadColor, toCesiumColor, ROAD_CONFIG } from "./particleStyles.ts";
-import { onCameraChange } from "../../camera.ts";
+import { onCameraChange, getViewportBBox, type BBox } from "../../camera.ts";
 
 /** State of a single traffic particle */
 export interface ParticleState {
@@ -140,20 +140,9 @@ export class TrafficParticleSystem {
     
     this.visibleSegmentIndices.clear();
     
-    const camera = this.viewer.camera;
-    const canvas = this.viewer.scene.canvas;
+    const bbox = getViewportBBox(this.viewer, { padding: CULLING_CONFIG.frustumPadding });
     
-    // Get viewport bounds
-    const corners = [
-      camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
-      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
-    ];
-    
-    const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
-    
-    if (validCorners.length < 2) {
+    if (!bbox) {
       // Camera looking at sky - show all segments
       for (let i = 0; i < this.network.segments.length; i++) {
         this.visibleSegmentIndices.add(i);
@@ -161,26 +150,7 @@ export class TrafficParticleSystem {
       return;
     }
     
-    // Calculate bounds
-    let west = 180, south = 90, east = -180, north = -90;
-    
-    for (const corner of validCorners) {
-      const carto = Cesium.Cartographic.fromCartesian(corner);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      
-      west = Math.min(west, lon);
-      east = Math.max(east, lon);
-      south = Math.min(south, lat);
-      north = Math.max(north, lat);
-    }
-    
-    // Add padding
-    const padding = CULLING_CONFIG.frustumPadding;
-    west -= padding;
-    east += padding;
-    south -= padding;
-    north += padding;
+    const { west, east, south, north } = bbox;
     
     // Check which segments are in bounds
     for (let i = 0; i < this.network.segments.length; i++) {
