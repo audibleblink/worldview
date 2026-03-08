@@ -9,6 +9,7 @@
  * - CCTV cameras
  * - Geocoding
  * - OSM road data
+ * - AISStream ship tracking
  */
 
 import { corsResponse, jsonResponse } from "./types.ts";
@@ -18,6 +19,7 @@ import { cctvProxyManager } from "./cctv.ts";
 import { handleGeocode } from "./geocode.ts";
 import { handleTLE } from "./tle.ts";
 import { handleOSM } from "./osm.ts";
+import { initAISStreamClient, getAISStreamClient, type BoundingBox } from "./aisstream.ts";
 
 const PROXY_PORT = 3001;
 const GOOGLE_TILES_URL = "https://tile.googleapis.com";
@@ -33,6 +35,9 @@ if (!apiKey) {
 
 // Initialize CCTV camera caches
 cctvProxyManager.initialize();
+
+// Initialize AISStream client for ship tracking
+initAISStreamClient();
 
 console.log(`Starting proxy server on port ${PROXY_PORT}...`);
 
@@ -56,6 +61,37 @@ Bun.serve({
     // OpenSky flights
     if (url.pathname === "/flights") {
       return openSkyClient.fetchStates();
+    }
+
+    // AISStream ships
+    if (url.pathname === "/ships") {
+      const aisClient = getAISStreamClient();
+      
+      if (!aisClient) {
+        return jsonResponse({ 
+          error: "Ship tracking unavailable - AISSTREAM_API_KEY not configured",
+          ships: [],
+          count: 0,
+          truncated: false,
+          totalInBbox: 0,
+        }, 503);
+      }
+
+      // Parse bounding box query params
+      const minLat = parseFloat(url.searchParams.get("minLat") || "-90");
+      const maxLat = parseFloat(url.searchParams.get("maxLat") || "90");
+      const minLon = parseFloat(url.searchParams.get("minLon") || "-180");
+      const maxLon = parseFloat(url.searchParams.get("maxLon") || "180");
+
+      // Validate bbox parameters
+      if (isNaN(minLat) || isNaN(maxLat) || isNaN(minLon) || isNaN(maxLon)) {
+        return jsonResponse({ error: "Invalid bounding box parameters" }, 400);
+      }
+
+      const bbox: BoundingBox = { minLat, maxLat, minLon, maxLon };
+      const response = aisClient.getShips(bbox);
+
+      return jsonResponse(response);
     }
 
     // FlightAware route lookup

@@ -1,369 +1,493 @@
-# Execution Plan: Unified `:follow` Command
+# Execution Plan: Ship Tracking Layer
 
-> Generated from PRD: Unified `:follow` Command  
+> Generated from PRD: Ship Tracking Layer  
 > Plan Created: 2026-03-08
 
 ---
 
 ## Overview
 
-This execution plan implements the `:follow <identifier>` command for WorldView, enabling keyboard-driven following of satellites (by NORAD ID) and flights (by callsign). The plan is organized into 5 phases, each leaving a complete, tested component.
+This execution plan implements real-time ship tracking for WorldView using AIS (Automatic Identification System) data via the AISStream WebSocket API. The plan is organized into 5 phases, each leaving a complete, tested component.
 
 ---
 
 ## Phase Dependencies
 
 ```
-Phase 1 (Foundation)
+Phase 1 (Proxy + WebSocket Buffer)
     ↓
-Phase 2 (Satellite Follow) ←─── Phase 3 (Flight Follow)
-    ↓                               ↓
-    └───────────┬───────────────────┘
-                ↓
-         Phase 4 (Integration)
-                ↓
-         Phase 5 (Polish)
+Phase 2 (Ship Layer + Visualization)
+    ↓
+Phase 3 (UI Integration - Toggle + Click)
+    ↓
+Phase 4 (Info Panel + Follow Mode)
+    ↓
+Phase 5 (Polish + Error Handling)
 ```
 
-- **Phase 1**: No dependencies (foundation)
-- **Phase 2**: Depends on Phase 1
-- **Phase 3**: Depends on Phase 1 (can run parallel with Phase 2)
-- **Phase 4**: Depends on Phases 2 and 3
-- **Phase 5**: Depends on Phase 4
+- **Phase 1**: No dependencies (foundation - server-side)
+- **Phase 2**: Depends on Phase 1 (needs `/ships` endpoint)
+- **Phase 3**: Depends on Phase 2 (needs ShipLayer class)
+- **Phase 4**: Depends on Phase 3 (needs ship selection working)
+- **Phase 5**: Depends on Phase 4 (polish and edge cases)
 
 ---
 
-## Phase 1: Foundation — Command Parsing & Detection
+## Phase 1: Proxy Server + WebSocket Buffer
 
-**Goal**: Add `:follow` command parsing with identifier type detection (satellite vs flight).
+**Goal**: Establish persistent WebSocket connection to AISStream and expose buffered ship data via HTTP endpoint.
 
 ### Tasks
 
-- [x] Add `follow` to `COMMANDS` table in `src/ui/command-parser.ts`
-- [x] Implement `detectIdentifierType()` function with regex pattern `/^\d{1,5}$/`
-- [x] Create `IATA_TO_ICAO` lookup table (50 carriers) as a new utility
-- [x] Implement `convertIataToIcao()` function for callsign normalization
-- [x] Add `handleFollow()` stub in `src/ui/command-bar.ts` (returns early with TODO)
-- [x] Write unit tests for all new functions
+- [x] Create `src/proxy/aisstream.ts` with AISStreamClient class:
+  - [x] WebSocket connection to `wss://stream.aisstream.io/v0/stream`
+  - [x] API key authentication from `process.env.AISSTREAM_API_KEY`
+  - [x] In-memory ship buffer using `Map<string, ShipRecord>` keyed by MMSI
+  - [x] Parse `PositionReport` messages and update buffer
+  - [x] Buffer eviction: remove ships not seen in 5 minutes
+  - [x] Reconnection with exponential backoff (1s, 2s, 4s, 8s, 30s)
+- [x] Define `ShipRecord` interface matching PRD spec
+- [x] Implement `shipTypeToCategory()` helper function
+- [x] Implement `navStatusToString()` helper function
+- [x] Add `/ships` endpoint to `src/proxy/index.ts`:
+  - [x] Accept bbox query params: `minLat`, `maxLat`, `minLon`, `maxLon`
+  - [x] Filter ships within bounding box
+  - [x] Sort by distance from bbox center
+  - [x] Limit to 100 ships, return `truncated: true` if more
+- [ ] Write unit tests for message parsing and bbox filtering
 
-### Files to Modify/Create
+### Files to Create
 
-| File | Action |
-|------|--------|
-| `src/ui/command-parser.ts` | Modify: add `follow` command |
-| `src/utils/airline-codes.ts` | Create: IATA→ICAO mapping + conversion |
-| `src/ui/command-bar.ts` | Modify: add `handleFollow()` stub |
-| `test/command-parser.test.ts` | Modify: add follow command tests |
-| `test/airline-codes.test.ts` | Create: IATA conversion tests |
+| File | Purpose |
+|------|---------|
+| `src/proxy/aisstream.ts` | AISStream WebSocket client + ship buffer |
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/proxy/index.ts` | Add `/ships` endpoint, initialize AISStream client |
+| `src/proxy/types.ts` | Add ShipRecord type export (if needed) |
 
 ### Verification (Autonomous Feedback Loop)
 
 ```bash
-# Run test suite - all tests must pass
-bun test test/command-parser.test.ts test/airline-codes.test.ts
+# Start proxy server
+bun run src/proxy/index.ts &
+PROXY_PID=$!
 
-# Expected: All tests pass
-# - parseCommand("follow 25544") → { type: "follow", args: "25544" }
-# - detectIdentifierType("25544") → "satellite"
-# - detectIdentifierType("UAL123") → "flight"
-# - convertIataToIcao("UA100") → "UAL100"
-# - convertIataToIcao("AAL100") → "AAL100" (no change)
+# Wait for WebSocket to connect
+sleep 5
+
+# Test health endpoint
+curl -s http://localhost:3001/health | jq .
+
+# Test ships endpoint (Austin area bbox)
+curl -s "http://localhost:3001/ships?minLat=27&maxLat=31&minLon=-98&maxLon=-94" | jq .
+
+# Check for ships (may be empty if no ships in area - use global bbox as fallback)
+curl -s "http://localhost:3001/ships?minLat=-90&maxLat=90&minLon=-180&maxLon=180" | jq '.count'
+
+# Cleanup
+kill $PROXY_PID
 ```
+
+**Success Criteria**:
+- Proxy starts without error
+- WebSocket connects to AISStream (check console logs)
+- `/ships` endpoint returns JSON with `ships` array and `count`
+- Ships have all required fields (mmsi, name, latitude, longitude, etc.)
 
 ### Checklist
 
-- [ ] `parseCommand("follow 25544")` returns `{ type: "follow", args: "25544" }`
-- [ ] `parseCommand("follow UA100")` returns `{ type: "follow", args: "UA100" }`
-- [ ] `detectIdentifierType("25544")` returns `"satellite"`
-- [ ] `detectIdentifierType("123456")` returns `"flight"` (>5 digits)
-- [ ] `detectIdentifierType("UAL123")` returns `"flight"`
-- [ ] All 50 IATA codes convert correctly to ICAO
-- [ ] Already-ICAO codes pass through unchanged
-- [ ] `bun test` passes with 0 failures
+- [x] AISStreamClient connects to WebSocket on startup
+- [x] PositionReport messages are parsed correctly
+- [x] Ship buffer updates with new positions
+- [x] 5-minute eviction removes stale ships
+- [x] Reconnection works after disconnect (test by stopping/starting network)
+- [x] `/ships` accepts bbox query parameters
+- [x] `/ships` returns max 100 ships with `truncated` flag
+- [x] `shipTypeToCategory()` maps all type codes correctly
+- [x] `navStatusToString()` maps all status codes correctly
+- [ ] Unit tests pass: `bun test test/aisstream.test.ts`
 
 ### Exit Criteria
 
+- Proxy server exposes `/ships` endpoint with live AIS data
+- Ships appear in response within 30 seconds of starting server
 - All unit tests pass
-- Command parser recognizes `:follow` command
-- Type detection correctly categorizes all identifier formats
 
 ---
 
-## Phase 2: Satellite Search & Follow
+## Phase 2: Ship Layer + Visualization
 
-**Depends on**: Phase 1
-
-**Goal**: Implement satellite search from loaded data and follow/unfollow toggle.
+**Goal**: Create ShipLayer class that renders ships on the 3D globe with type-specific icons and colors.
 
 ### Tasks
 
-- [x] Add `findByNoradId(noradId: number): SatelliteRecord | null` to `SatelliteLayer`
-- [x] Implement satellite branch in `handleFollow()`:
-  - Search loaded satellites across all categories
-  - Call existing `startFollow()` / `stopFollow()` based on current state
-  - Show success/error feedback
-- [x] Handle edge cases: NORAD ID = 0, not found
-- [x] Write integration tests
+- [ ] Create `src/layers/ships.ts` with ShipLayer class following flight layer pattern:
+  - [ ] `entityMap: Map<string, Cesium.Entity>` for ship entities
+  - [ ] `recordMap: Map<string, ShipRecord>` for ship data
+  - [ ] `show()` method: fetch ships, create entities, start polling
+  - [ ] `hide()` method: remove entities, stop polling
+  - [ ] `refreshShips()` method: update positions every 8 seconds
+  - [ ] Bounding box calculation from camera viewport
+  - [ ] Fallback bbox when viewport is invalid (camera center + 45°)
+- [ ] Create ship billboards with:
+  - [ ] Ship type icon (5 categories: cargo, tanker, passenger, fishing, other)
+  - [ ] Color tint by ship type
+  - [ ] Rotation to match heading (trueHeading or cog)
+  - [ ] Label with vessel name, speed, course
+- [ ] Implement dead-reckoning interpolation:
+  - [ ] Use `preRender` listener like flights
+  - [ ] Interpolate up to 60 ships between polls
+  - [ ] Cap extrapolation at 60 seconds
+- [ ] Implement `hasMMSI()`, `getRecord()`, `getEntity()` methods
+- [ ] Create placeholder ship icons (simple colored rectangles) in `src/assets/ships/`
 
-### Files to Modify
+### Files to Create
 
-| File | Action |
-|------|--------|
-| `src/layers/satellites.ts` | Add `findByNoradId()` method |
-| `src/ui/command-bar.ts` | Implement satellite follow logic |
-| `test/satellite-follow.test.ts` | Create: satellite search/follow tests |
+| File | Purpose |
+|------|---------|
+| `src/layers/ships.ts` | ShipLayer class |
+| `src/assets/ships/cargo.png` | Cargo ship icon |
+| `src/assets/ships/tanker.png` | Tanker icon |
+| `src/assets/ships/passenger.png` | Passenger ship icon |
+| `src/assets/ships/fishing.png` | Fishing vessel icon |
+| `src/assets/ships/other.png` | Generic ship icon |
 
 ### Verification (Autonomous Feedback Loop)
 
 ```bash
-# Unit tests for satellite search
-bun test test/satellite-follow.test.ts
+# Start full application
+bun run src/server.ts &
+SERVER_PID=$!
 
-# Manual verification script (runs in headless mode)
-bun run scripts/verify-phase2.ts
+# Wait for startup
+sleep 3
+
+# Use Playwright to verify ships appear on globe
+bun run scripts/verify-phase2-ships.ts
+
+# Cleanup
+kill $SERVER_PID
 ```
 
-**Verification Script** (`scripts/verify-phase2.ts`):
+**Verification Script** (`scripts/verify-phase2-ships.ts`):
 ```typescript
-// Tests to run:
-// 1. findByNoradId(25544) returns ISS record (if loaded)
-// 2. findByNoradId(99999999) returns null
-// 3. Toggle behavior: follow → unfollow → follow
+// 1. Navigate to globe
+// 2. Manually call shipLayer.show()
+// 3. Wait 10 seconds
+// 4. Count ship entities on globe
+// 5. Verify ships have correct visual properties
+// 6. Call shipLayer.hide()
+// 7. Verify all entities removed
 ```
 
 ### Checklist
 
-- [x] `findByNoradId()` searches all satellite categories
-- [x] Following satellite shows success message: "Following {name}"
-- [x] Unfollowing shows: "Stopped following {name}"
-- [x] Unknown NORAD ID shows: "Satellite {id} not found"
-- [x] NORAD ID = 0 shows: "Invalid NORAD ID"
-- [x] Toggle: calling follow on followed satellite unfollows it
-- [x] Camera behavior matches existing click-to-follow
-- [x] `bun test` passes
+- [ ] ShipLayer follows established class pattern (matches FlightLayer)
+- [ ] Ships appear on globe when `show()` is called
+- [ ] Ships have correct icon based on type category
+- [ ] Ships have correct color tint
+- [ ] Ships rotate to match heading
+- [ ] Labels show vessel name, speed, and course
+- [ ] Ships update position every 8 seconds
+- [ ] Dead-reckoning smooths movement between polls
+- [ ] `hide()` removes all ships and stops polling
+- [ ] No memory leaks (entities properly cleaned up)
 
 ### Exit Criteria
 
-- Can follow any loaded satellite by NORAD ID via command
-- Toggle behavior works correctly
-- All error cases handled with appropriate messages
+- Ships render on globe with correct visualization
+- Positions update via polling
+- Dead-reckoning provides smooth movement
 
 ---
 
-## Phase 3: Flight Search & Follow
+## Phase 3: UI Integration — Toggle + Click Handler
 
-**Depends on**: Phase 1 (can run parallel with Phase 2)
-
-**Goal**: Implement flight search with IATA conversion and follow/unfollow toggle.
+**Goal**: Add ship layer toggle to left panel and wire up click handling in main.ts.
 
 ### Tasks
 
-- [x] Add `findByCallsign(callsign: string): FlightRecord | null` to `FlightLayer`
-- [x] Implement flight branch in `handleFollow()`:
-  - Apply IATA→ICAO conversion before search
-  - Search loaded flights by exact callsign match
-  - Call existing `startFollow()` / `stopFollow()`
-  - Show success/error feedback
-- [x] Write integration tests
+- [ ] Add ship layer state to `src/ui/left-panel.ts`:
+  ```typescript
+  const ship = {
+    layer: null as ShipLayer | null,
+    active: false,
+  };
+  ```
+- [ ] Add "SHIPS" toggle row to `createToggles()` HTML
+- [ ] Create `wireUpShipToggle()` using existing `handleLayerToggle()` pattern
+- [ ] Update `initLeftPanel()` to accept `shipLayer` option
+- [ ] Update `src/ui/shell.ts` to pass ship layer to left panel
+- [ ] Add `ShipLayer` to ClickContext in `src/main.ts`
+- [ ] Create `handleShipClick()` function in `src/main.ts`
+- [ ] Add ship click handler to click chain (after CCTV, before satellites)
+- [ ] Implement ship selection highlight (yellow silhouette, scale increase)
+- [ ] Add ship deselection to `handleEmptyClick()`
 
 ### Files to Modify
 
-| File | Action |
-|------|--------|
-| `src/layers/flights.ts` | Add `findByCallsign()` method |
-| `src/ui/command-bar.ts` | Implement flight follow logic |
-| `test/flight-follow.test.ts` | Create: flight search/follow tests |
+| File | Changes |
+|------|---------|
+| `src/ui/left-panel.ts` | Add ship state, toggle, wireUp function |
+| `src/ui/shell.ts` | Pass shipLayer to left panel |
+| `src/main.ts` | Add shipLayer to context, add click handler |
+| `src/layers/ships.ts` | Add selectShip(), deselectShip() methods |
 
 ### Verification (Autonomous Feedback Loop)
 
 ```bash
-# Unit tests
-bun test test/flight-follow.test.ts
+# Start application
+bun run src/server.ts &
+SERVER_PID=$!
+sleep 3
 
-# Test IATA conversion integration
-bun test test/airline-codes.test.ts test/flight-follow.test.ts
+# Use Playwright to test toggle and click
+bun run scripts/verify-phase3-ships.ts
+
+kill $SERVER_PID
 ```
 
-### Checklist
-
-- [x] `findByCallsign("UAL123")` finds flight with callsign "UAL123"
-- [x] `:follow UA123` converts to search for "UAL123"
-- [x] `:follow AAL789` (already ICAO) searches for "AAL789"
-- [x] Unknown callsign shows: "Flight {callsign} not found"
-- [x] Toggle behavior works for flights
-- [x] `bun test` passes
-
-### Exit Criteria
-
-- Can follow any loaded flight by callsign via command
-- IATA codes automatically converted to ICAO before search
-- Toggle behavior works correctly
-
----
-
-## Phase 4: On-Demand Satellite Fetch (CelesTrak)
-
-**Depends on**: Phases 2 and 3
-
-**Goal**: Fetch satellite TLE from CelesTrak when not found in loaded data.
-
-### Tasks
-
-- [x] Add single-satellite endpoint to `src/proxy/tle.ts`:
-  - `GET /tle?catnr={noradId}` → CelesTrak single fetch
-  - Parse TLE response and return satellite data
-- [x] Add rate limiter state to `SatelliteLayer`:
-  - `lastCelestrakFetch: number`
-  - `CELESTRAK_COOLDOWN_MS = 5000`
-- [x] Implement `fetchAndAddSatellite(noradId: number)` in `SatelliteLayer`:
-  - Check rate limit
-  - Fetch from proxy
-  - Parse TLE
-  - Add to loaded collection
-  - Create billboard entity
-- [x] Update `handleFollow()` to use on-demand fetch:
-  - If satellite not in loaded data, call `fetchAndAddSatellite()`
-  - Show loading spinner during fetch
-  - Handle fetch errors (404, timeout, network)
-- [x] Write tests with mocked fetch
-
-### Files to Modify
-
-| File | Action |
-|------|--------|
-| `src/proxy/tle.ts` | Add `?catnr=` endpoint |
-| `src/proxy/index.ts` | Wire up new endpoint |
-| `src/layers/satellites.ts` | Add fetch + rate limiting |
-| `src/ui/command-bar.ts` | Handle async fetch flow |
-| `test/satellite-fetch.test.ts` | Create: CelesTrak fetch tests |
-
-### Verification (Autonomous Feedback Loop)
-
-```bash
-# Unit tests with mocked responses
-bun test test/satellite-fetch.test.ts
-
-# Integration test against real CelesTrak (rate-limited)
-bun run scripts/verify-phase4.ts
-```
-
-**Verification Script** (`scripts/verify-phase4.ts`):
+**Verification Script** (`scripts/verify-phase3-ships.ts`):
 ```typescript
-// 1. Fetch ISS (25544) from CelesTrak
-// 2. Verify TLE parsing works
-// 3. Verify rate limit blocks rapid requests
-// 4. Verify 404 handling for invalid NORAD ID
+// 1. Navigate to globe
+// 2. Click SHIPS toggle button
+// 3. Verify button shows "LOADING" then "ON"
+// 4. Wait for ships to appear
+// 5. Click on a ship entity
+// 6. Verify ship is highlighted (visual check or entity property)
+// 7. Click empty space
+// 8. Verify ship is deselected
+// 9. Click SHIPS toggle again
+// 10. Verify button shows "OFF" and ships disappear
 ```
 
 ### Checklist
 
-- [x] `/tle?catnr=25544` returns valid TLE data
-- [x] Rate limiter blocks requests within 5 seconds
-- [x] Rate limit error shows: "Please wait before fetching another satellite"
-- [x] CelesTrak 404 shows: "Satellite {id} not found"
-- [x] Timeout shows: "Failed to fetch satellite data"
-- [x] Fetched satellite appears on globe
-- [x] Fetched satellite position updates over time
-- [x] `bun test` passes
+- [ ] "SHIPS" toggle appears in left panel
+- [ ] Toggle follows OFF → LOADING → ON pattern
+- [ ] Toggle shows "ERR" on failure
+- [ ] Ships appear when toggle is ON
+- [ ] Ships disappear when toggle is OFF
+- [ ] Clicking ship highlights it (yellow silhouette, larger scale)
+- [ ] Clicking empty space deselects ship
+- [ ] Ship layer count badge updates in shell
+- [ ] Log entries appear: "[SHIPS] Layer active", "[SHIPS] Layer disabled"
 
 ### Exit Criteria
 
-- Can follow any satellite by NORAD ID (loaded or fetched)
-- Rate limiting prevents CelesTrak abuse
-- All error cases handled gracefully
+- Users can toggle ship layer via UI
+- Users can select/deselect ships by clicking
+- Layer integrates with existing toggle pattern
 
 ---
 
-## Phase 5: Polish & Help Text
+## Phase 4: Info Panel + Follow Mode
 
-**Depends on**: Phase 4
-
-**Goal**: Finalize UX, update help text, comprehensive testing.
+**Goal**: Show ship details panel on selection and implement camera follow mode.
 
 ### Tasks
 
-- [x] Update `:help` output in `handleHelp()`:
-  ```
-  :follow <id>    Follow satellite (NORAD ID) or flight (callsign)
-                  Examples: :follow 25544, :follow UAL123, :follow AA100
-  ```
-- [x] Verify all user feedback messages match PRD spec
-- [x] Handle edge case: empty identifier → "Usage: :follow <id>"
-- [x] Handle edge case: already following different target → switch seamlessly
-- [x] Run full test suite
-- [x] Manual end-to-end testing checklist
+- [ ] Create `src/ui/ship-info-panel.ts` following flight-info-panel pattern:
+  - [ ] Panel HTML with ship-specific fields
+  - [ ] `showShipInfoPanel(record, layer)` function
+  - [ ] `hideShipInfoPanel()` function
+  - [ ] FOLLOW/UNFOLLOW button with toggle logic
+  - [ ] Close button
+  - [ ] MarineTraffic external link
+- [ ] Implement ship follow mode in ShipLayer:
+  - [ ] `startFollow()` using preRender listener pattern
+  - [ ] `stopFollow()` with camera unlock
+  - [ ] `isFollowing()` state check
+  - [ ] `getCurrentPosition()` for smooth tracking
+- [ ] Wire up info panel to click handler:
+  - [ ] Show panel on ship select
+  - [ ] Hide panel on ship deselect
+- [ ] Add escape handler for ship follow mode in main.ts
+- [ ] Add `resetShipFollowButton()` export
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/ui/ship-info-panel.ts` | Ship selection details panel |
 
 ### Files to Modify
 
-| File | Action |
-|------|--------|
-| `src/ui/command-bar.ts` | Update help text, polish messages |
-| `test/follow-integration.test.ts` | Create: end-to-end tests |
+| File | Changes |
+|------|---------|
+| `src/layers/ships.ts` | Add follow mode methods |
+| `src/main.ts` | Wire up info panel, escape handler |
+| `public/styles.css` | Add ship-info-panel styles (reuse sat-info-* classes) |
 
 ### Verification (Autonomous Feedback Loop)
 
 ```bash
-# Full test suite
+# Start application
+bun run src/server.ts &
+SERVER_PID=$!
+sleep 3
+
+# Use Playwright to test info panel and follow
+bun run scripts/verify-phase4-ships.ts
+
+kill $SERVER_PID
+```
+
+**Verification Script** (`scripts/verify-phase4-ships.ts`):
+```typescript
+// 1. Enable ships layer
+// 2. Click on a ship
+// 3. Verify info panel appears with ship data
+// 4. Verify all fields populated (MMSI, Type, Speed, etc.)
+// 5. Click FOLLOW button
+// 6. Verify button text changes to UNFOLLOW
+// 7. Verify camera tracks ship position
+// 8. Press Escape
+// 9. Verify follow mode stops, button resets
+// 10. Verify MarineTraffic link is correct
+// 11. Click close button
+// 12. Verify panel hides
+```
+
+### Checklist
+
+- [ ] Info panel shows on ship selection
+- [ ] Panel displays: vessel name, MMSI, type, position, speed, course, heading, status
+- [ ] Navigation status displays human-readable text
+- [ ] FOLLOW button starts camera tracking
+- [ ] UNFOLLOW button stops tracking
+- [ ] Escape key exits follow mode
+- [ ] MarineTraffic link opens correct vessel page
+- [ ] Close button hides panel and deselects ship
+- [ ] Panel styling matches flight-info-panel
+
+### Exit Criteria
+
+- Complete ship info panel with all fields
+- Working follow mode with smooth camera tracking
+- All panel interactions functional
+
+---
+
+## Phase 5: Polish + Error Handling
+
+**Goal**: Handle edge cases, improve error resilience, final testing.
+
+### Tasks
+
+- [ ] Implement WebSocket reconnection error handling:
+  - [ ] Log reconnection attempts
+  - [ ] Continue serving cached data during reconnection
+  - [ ] Show log entry on reconnection failure
+- [ ] Handle API key invalid case:
+  - [ ] Return 503 from `/ships` endpoint
+  - [ ] Show "ERR" on toggle button
+  - [ ] Log: "[SHIPS] AISStream authentication failed"
+- [ ] Implement rate limiting graceful degradation:
+  - [ ] Reduce polling to 15 seconds when rate limited
+  - [ ] Display warning in log
+  - [ ] Resume normal polling after 60 seconds
+- [ ] Handle empty viewport fallback:
+  - [ ] Detect when camera viewport fails
+  - [ ] Fall back to camera center + 20° bbox
+- [ ] Add ship sprites (replace placeholder rectangles):
+  - [ ] Create 5 ship silhouette icons (32x32 PNG)
+  - [ ] White/light color for programmatic tinting
+  - [ ] Facing "up" (north) in default orientation
+- [ ] Write integration tests for error scenarios
+- [ ] Performance testing with 100 ships
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/proxy/aisstream.ts` | Enhanced error handling |
+| `src/layers/ships.ts` | Viewport fallback, polling rate adjustment |
+| `src/assets/ships/*.png` | Replace with proper ship icons |
+| `test/ships-integration.test.ts` | Create integration tests |
+
+### Verification (Autonomous Feedback Loop)
+
+```bash
+# Run full test suite
 bun test
 
-# Smoke test script
-bun run scripts/smoke-test-follow.ts
+# Performance test
+bun run scripts/perf-test-ships.ts
+
+# Error handling tests
+bun run scripts/error-test-ships.ts
 ```
 
-**Smoke Test Script** (`scripts/smoke-test-follow.ts`):
+**Performance Test Script** (`scripts/perf-test-ships.ts`):
 ```typescript
-// End-to-end scenarios:
-// 1. :follow 25544 → follows ISS
-// 2. :follow 25544 again → unfollows ISS
-// 3. :follow UA100 → follows UAL100 flight
-// 4. :follow 99999 → fetches from CelesTrak (or shows not found)
-// 5. :help → shows follow command documentation
-// 6. :follow → shows usage error
+// 1. Enable ships layer
+// 2. Navigate to high-traffic area (e.g., English Channel)
+// 3. Wait for 100 ships to load
+// 4. Measure frame rate for 30 seconds
+// 5. Verify FPS > 30
+// 6. Monitor memory usage
+// 7. Verify no memory leaks over time
+```
+
+**Error Test Script** (`scripts/error-test-ships.ts`):
+```typescript
+// 1. Test with invalid API key
+// 2. Test with network disconnect
+// 3. Test with rate limiting response
+// 4. Verify graceful degradation in all cases
 ```
 
 ### Checklist
 
-- [x] Help text updated with follow command
-- [x] Empty identifier shows usage message
-- [x] Switching targets works smoothly
-- [x] All PRD feedback messages implemented
-- [x] Full test suite passes
-- [x] Performance: feedback appears within 100ms
-- [x] Performance: CelesTrak fetch completes in <3 seconds
+- [ ] WebSocket reconnects automatically on disconnect
+- [ ] Invalid API key shows appropriate error
+- [ ] Rate limiting triggers polling slowdown
+- [ ] Viewport fallback works when camera is at edge of globe
+- [ ] Ship icons are proper silhouettes (not rectangles)
+- [ ] 100 ships render at > 30 FPS
+- [ ] Memory stable over 10 minutes of polling
+- [ ] Buffer eviction prevents memory growth
+- [ ] All integration tests pass
 
 ### Exit Criteria
 
 - All PRD requirements implemented
-- All tests pass
-- Manual testing checklist complete
+- All error cases handled gracefully
+- Performance meets targets
+- Full test suite passes
 
 ---
 
 ## Test Summary
 
-### Unit Tests (Phases 1-3)
+### Unit Tests
 
 | Test File | Coverage |
 |-----------|----------|
-| `test/command-parser.test.ts` | Command parsing |
-| `test/airline-codes.test.ts` | IATA→ICAO conversion |
-| `test/satellite-follow.test.ts` | Satellite search + follow |
-| `test/flight-follow.test.ts` | Flight search + follow |
+| `test/aisstream.test.ts` | AISStream message parsing, bbox filtering |
+| `test/ships-layer.test.ts` | ShipLayer class methods |
 
-### Integration Tests (Phases 4-5)
+### Integration Tests
 
 | Test File | Coverage |
 |-----------|----------|
-| `test/satellite-fetch.test.ts` | CelesTrak fetch + rate limiting |
-| `test/follow-integration.test.ts` | End-to-end follow scenarios |
+| `test/ships-integration.test.ts` | End-to-end ship tracking |
+| `test/ships-errors.test.ts` | Error handling scenarios |
 
 ### Verification Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/verify-phase2.ts` | Satellite follow verification |
-| `scripts/verify-phase4.ts` | CelesTrak fetch verification |
-| `scripts/smoke-test-follow.ts` | Full feature smoke test |
+| `scripts/verify-phase2-ships.ts` | Ship visualization verification |
+| `scripts/verify-phase3-ships.ts` | Toggle and click verification |
+| `scripts/verify-phase4-ships.ts` | Info panel and follow verification |
+| `scripts/perf-test-ships.ts` | Performance benchmarking |
+| `scripts/error-test-ships.ts` | Error handling verification |
 
 ### Run All Tests
 
@@ -371,12 +495,10 @@ bun run scripts/smoke-test-follow.ts
 # Run full test suite
 bun test
 
-# Run specific phase tests
-bun test test/command-parser.test.ts      # Phase 1
-bun test test/satellite-follow.test.ts    # Phase 2
-bun test test/flight-follow.test.ts       # Phase 3
-bun test test/satellite-fetch.test.ts     # Phase 4
-bun test test/follow-integration.test.ts  # Phase 5
+# Run ship-specific tests
+bun test test/aisstream.test.ts
+bun test test/ships-layer.test.ts
+bun test test/ships-integration.test.ts
 ```
 
 ---
@@ -385,12 +507,12 @@ bun test test/follow-integration.test.ts  # Phase 5
 
 | Phase | Estimated Time |
 |-------|----------------|
-| Phase 1: Foundation | 1.5 hours |
-| Phase 2: Satellite Follow | 1 hour |
-| Phase 3: Flight Follow | 1 hour |
-| Phase 4: CelesTrak Fetch | 2 hours |
-| Phase 5: Polish | 1 hour |
-| **Total** | **6.5 hours** |
+| Phase 1: Proxy + Buffer | 2-3 hours |
+| Phase 2: Ship Layer + Viz | 3-4 hours |
+| Phase 3: UI Integration | 2 hours |
+| Phase 4: Info Panel + Follow | 2-3 hours |
+| Phase 5: Polish + Errors | 2 hours |
+| **Total** | **11-14 hours** |
 
 ---
 
@@ -398,10 +520,11 @@ bun test test/follow-integration.test.ts  # Phase 5
 
 | Risk | Mitigation |
 |------|------------|
-| CelesTrak API changes | Proxy layer isolates changes; mock tests for reliability |
-| Rate limiting too aggressive | Configurable cooldown; can adjust based on usage |
-| Flight data not loaded | Clear error message; flights require prior OpenSky load |
-| Camera follow jank | Reuse existing proven follow mechanisms |
+| AISStream API changes | WebSocket protocol is stable; proxy layer isolates changes |
+| High ship density areas | Limit to 100 ships; sort by distance to camera center |
+| WebSocket connection instability | Exponential backoff reconnection; serve cached data |
+| Missing ship names | Fall back to MMSI as identifier; common in AIS |
+| Ship sprite rendering issues | Test with simple colored rectangles first; iterate |
 
 ---
 
@@ -409,25 +532,107 @@ bun test test/follow-integration.test.ts  # Phase 5
 
 ### New Files
 
-- `src/utils/airline-codes.ts` — IATA→ICAO mapping
-- `test/airline-codes.test.ts` — IATA conversion tests
-- `test/satellite-follow.test.ts` — Satellite follow tests
-- `test/flight-follow.test.ts` — Flight follow tests
-- `test/satellite-fetch.test.ts` — CelesTrak fetch tests
-- `test/follow-integration.test.ts` — E2E follow tests
-- `scripts/verify-phase2.ts` — Phase 2 verification
-- `scripts/verify-phase4.ts` — Phase 4 verification
-- `scripts/smoke-test-follow.ts` — Full smoke test
+- `src/proxy/aisstream.ts` — AISStream WebSocket client + buffer
+- `src/layers/ships.ts` — ShipLayer class
+- `src/ui/ship-info-panel.ts` — Ship info panel
+- `src/assets/ships/cargo.png` — Cargo ship icon
+- `src/assets/ships/tanker.png` — Tanker icon
+- `src/assets/ships/passenger.png` — Passenger ship icon
+- `src/assets/ships/fishing.png` — Fishing vessel icon
+- `src/assets/ships/other.png` — Generic ship icon
+- `test/aisstream.test.ts` — AISStream unit tests
+- `test/ships-layer.test.ts` — ShipLayer unit tests
+- `test/ships-integration.test.ts` — Integration tests
+- `scripts/verify-phase2-ships.ts` — Phase 2 verification
+- `scripts/verify-phase3-ships.ts` — Phase 3 verification
+- `scripts/verify-phase4-ships.ts` — Phase 4 verification
+- `scripts/perf-test-ships.ts` — Performance test
+- `scripts/error-test-ships.ts` — Error handling test
 
 ### Modified Files
 
-- `src/ui/command-parser.ts` — Add follow command
-- `src/ui/command-bar.ts` — Add handleFollow(), update help
-- `src/layers/satellites.ts` — Add findByNoradId(), fetchAndAddSatellite()
-- `src/layers/flights.ts` — Add findByCallsign()
-- `src/proxy/tle.ts` — Add single-satellite endpoint
-- `src/proxy/index.ts` — Wire up new endpoint
-- `test/command-parser.test.ts` — Add follow command tests
+- `src/proxy/index.ts` — Add `/ships` endpoint, initialize AISStream
+- `src/ui/left-panel.ts` — Add ship toggle state and handler
+- `src/ui/shell.ts` — Pass shipLayer to left panel
+- `src/main.ts` — Add ship layer, click handler, escape handler
+- `public/styles.css` — Ship info panel styles (if not reusing existing)
+
+---
+
+## Data Structures Reference
+
+### ShipRecord Interface
+
+```typescript
+interface ShipRecord {
+  mmsi: string;           // Maritime Mobile Service Identity
+  name: string;           // Vessel name from AIS
+  shipType: number;       // AIS ship type code (0-99)
+  shipTypeCategory: ShipTypeCategory;
+  latitude: number;
+  longitude: number;
+  cog: number;            // Course over ground (degrees)
+  sog: number;            // Speed over ground (knots)
+  trueHeading: number;    // True heading (degrees), 511 = not available
+  navStatus: number;      // Navigation status code (0-15)
+  timestamp: number;      // Last update epoch (ms)
+}
+
+type ShipTypeCategory = 'cargo' | 'tanker' | 'passenger' | 'fishing' | 'other';
+```
+
+### Ship Type Mapping
+
+| AIS Type Code | Category | Color |
+|---------------|----------|-------|
+| 70-79 | cargo | #3B82F6 (Blue) |
+| 80-89 | tanker | #EF4444 (Red) |
+| 60-69 | passenger | #22C55E (Green) |
+| 30 | fishing | #F97316 (Orange) |
+| All other | other | #9CA3AF (Gray) |
+
+### Navigation Status Codes
+
+| Code | Status |
+|------|--------|
+| 0 | Under way using engine |
+| 1 | At anchor |
+| 2 | Not under command |
+| 3 | Restricted maneuverability |
+| 4 | Constrained by draught |
+| 5 | Moored |
+| 6 | Aground |
+| 7 | Engaged in fishing |
+| 8 | Under way sailing |
+| 11-13 | Reserved |
+| 14 | AIS-SART active |
+| 15 | Not defined |
+
+---
+
+## AISStream Message Format
+
+```json
+{
+  "MessageType": "PositionReport",
+  "MetaData": {
+    "MMSI": 123456789,
+    "ShipName": "EVER GIVEN",
+    "latitude": 29.9187,
+    "longitude": 32.5794,
+    "time_utc": "2024-03-08T12:00:00Z"
+  },
+  "Message": {
+    "PositionReport": {
+      "Cog": 145.2,
+      "Sog": 12.5,
+      "TrueHeading": 143,
+      "NavigationalStatus": 0,
+      "ShipType": 70
+    }
+  }
+}
+```
 
 ---
 
