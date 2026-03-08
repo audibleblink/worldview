@@ -11,11 +11,12 @@ import { logError } from "../errors.ts";
 
 // Constants
 const FLIGHT_UPDATE_INTERVAL = 10_000;
-const FLIGHT_ICON_SIZE = 14;
-const FLIGHT_ICON_SIZE_SELECTED = 24;
+const FLIGHT_ICON_SIZE = 28;
+const FLIGHT_ICON_SIZE_SELECTED = 40;
 const FLIGHT_INTERP_CAP = 30;       // seconds max dead-reckoning
 const FLIGHT_FOLLOW_RANGE = 50_000; // meters
 const FLIGHT_FOLLOW_PITCH = -30;    // degrees
+const FLIGHT_LABEL_VISIBLE_DISTANCE = 200_000; // meters - labels hidden beyond this
 
 export interface FlightRecord {
   icao24: string;
@@ -184,7 +185,9 @@ export function createAircraftTexture(): string {
 export class FlightLayer {
   private viewer: Cesium.Viewer;
   private billboards: Cesium.BillboardCollection | null = null;
+  private labels: Cesium.LabelCollection | null = null;
   private billboardMap: Map<string, Cesium.Billboard> = new Map();
+  private labelMap: Map<string, Cesium.Label> = new Map();
   private recordMap: Map<string, FlightRecord> = new Map();
   private interpolatedPositions: Map<string, Cesium.Cartesian3> = new Map();
   private updateInterval: ReturnType<typeof setInterval> | null = null;
@@ -217,7 +220,11 @@ export class FlightLayer {
     this.billboards = new Cesium.BillboardCollection({ scene: this.viewer.scene });
     this.viewer.scene.primitives.add(this.billboards);
 
-    // Add billboard for each aircraft
+    // Create label collection for callsign/altitude/heading labels
+    this.labels = new Cesium.LabelCollection({ scene: this.viewer.scene });
+    this.viewer.scene.primitives.add(this.labels);
+
+    // Add billboard and label for each aircraft
     for (const record of records) {
       this.addBillboard(record);
     }
@@ -260,8 +267,15 @@ export class FlightLayer {
       this.billboards = null;
     }
 
+    // Remove label collection from scene
+    if (this.labels) {
+      this.viewer.scene.primitives.remove(this.labels);
+      this.labels = null;
+    }
+
     // Clear maps
     this.billboardMap.clear();
+    this.labelMap.clear();
     this.recordMap.clear();
     this.interpolatedPositions.clear();
     this.selectedIcao24 = null;
@@ -278,30 +292,46 @@ export class FlightLayer {
       const records = await fetchFlights();
       const currentIcaos = new Set(records.map((r) => r.icao24));
 
-      // Update or add billboards
+      // Update or add billboards and labels
       for (const record of records) {
         const existingBillboard = this.billboardMap.get(record.icao24);
         if (existingBillboard) {
           // Update existing billboard
-          existingBillboard.position = Cesium.Cartesian3.fromDegrees(
+          const position = Cesium.Cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
             record.altitude
           );
+          existingBillboard.position = position;
           existingBillboard.rotation = -Cesium.Math.toRadians(record.heading);
+          
+          // Update existing label
+          const existingLabel = this.labelMap.get(record.icao24);
+          if (existingLabel) {
+            existingLabel.position = position;
+            existingLabel.text = this.formatLabelText(record);
+          }
+          
           // Update stored record
           this.recordMap.set(record.icao24, record);
         } else {
-          // Add new billboard
+          // Add new billboard and label
           this.addBillboard(record);
         }
       }
 
-      // Remove billboards for aircraft no longer in response
+      // Remove billboards and labels for aircraft no longer in response
       for (const [icao24, billboard] of this.billboardMap) {
         if (!currentIcaos.has(icao24)) {
           this.billboards?.remove(billboard);
           this.billboardMap.delete(icao24);
+          
+          const label = this.labelMap.get(icao24);
+          if (label) {
+            this.labels?.remove(label);
+            this.labelMap.delete(icao24);
+          }
+          
           this.recordMap.delete(icao24);
         }
       }
@@ -314,13 +344,26 @@ export class FlightLayer {
   }
 
   /**
-   * Add a billboard for an aircraft
+   * Format a flight record into a label string
+   */
+  private formatLabelText(record: FlightRecord): string {
+    const callsign = record.callsign.trim() || record.icao24.toUpperCase();
+    const altFt = Math.round(record.altitude * 3.28084).toLocaleString();
+    const heading = Math.round(record.heading);
+    return `${callsign} | ${altFt}ft | ${heading}°`;
+  }
+
+  /**
+   * Add a billboard and label for an aircraft
    */
   private addBillboard(record: FlightRecord): void {
     if (!this.billboards || !this.aircraftTexture) return;
 
+    const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
+
+    // Add billboard with zoom-responsive scaling
     const billboard = this.billboards.add({
-      position: Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude),
+      position,
       image: this.aircraftTexture,
       width: FLIGHT_ICON_SIZE,
       height: FLIGHT_ICON_SIZE,
@@ -328,10 +371,31 @@ export class FlightLayer {
       rotation: -Cesium.Math.toRadians(record.heading),
       alignedAxis: Cesium.Cartesian3.UNIT_Z,
       id: record.icao24,
+      scaleByDistance: new Cesium.NearFarScalar(5000, 1.2, 500000, 0.6),
     });
 
     this.billboardMap.set(record.icao24, billboard);
     this.recordMap.set(record.icao24, record);
+
+    // Add label with callsign | altitude | heading (above the plane)
+    if (this.labels) {
+      const label = this.labels.add({
+        position,
+        text: this.formatLabelText(record),
+        font: "bold 15px Courier New",
+        fillColor: Cesium.Color.CYAN,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -22),
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        scaleByDistance: new Cesium.NearFarScalar(5000, 1.0, 200000, 0.7),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, FLIGHT_LABEL_VISIBLE_DISTANCE),
+        id: `label-${record.icao24}`,
+      });
+      this.labelMap.set(record.icao24, label);
+    }
   }
 
   /**
@@ -434,6 +498,12 @@ export class FlightLayer {
       const pos = Cesium.Cartesian3.fromDegrees(newLon, newLat, record.altitude);
       billboard.position = pos;
       this.interpolatedPositions.set(icao24, pos);
+
+      // Update label position to match
+      const label = this.labelMap.get(icao24);
+      if (label) {
+        label.position = pos;
+      }
     }
   }
 

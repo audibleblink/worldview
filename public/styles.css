@@ -904,6 +904,18 @@ select:disabled {
   display: none;
 }
 
+.flight-info-link {
+  color: var(--color-highlight);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.flight-info-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
 /* ============================================
    CCTV Panel
    ============================================ */

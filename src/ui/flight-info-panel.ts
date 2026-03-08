@@ -23,7 +23,7 @@ function getOrCreatePanel(): HTMLElement {
     <div class="sat-info-body">
       <div class="sat-info-row">
         <span class="sat-info-label">CALLSIGN</span>
-        <span class="sat-info-value" id="flight-info-callsign">—</span>
+        <a class="sat-info-value flight-info-link" id="flight-info-callsign" href="#" target="_blank" rel="noopener">—</a>
       </div>
       <div class="sat-info-row">
         <span class="sat-info-label">ALTITUDE</span>
@@ -126,7 +126,20 @@ export function showFlightInfoPanel(
 
   // Populate fields
   const callsign = record.callsign.trim();
-  setField("flight-info-callsign", callsign || "—");
+  
+  // Set callsign as a clickable FlightAware link
+  const callsignEl = document.getElementById("flight-info-callsign") as HTMLAnchorElement | null;
+  if (callsignEl) {
+    if (callsign) {
+      callsignEl.textContent = callsign;
+      callsignEl.href = `https://www.flightaware.com/live/flight/${callsign}`;
+      callsignEl.style.pointerEvents = "auto";
+    } else {
+      callsignEl.textContent = "—";
+      callsignEl.href = "#";
+      callsignEl.style.pointerEvents = "none";
+    }
+  }
   setField("flight-info-altitude", `${Math.round(record.altitude * 3.28084).toLocaleString()} ft`);
   setField("flight-info-speed", `${Math.round(record.velocity * 1.94384)} kts`);
   setField("flight-info-heading", `${Math.round(record.heading)}°`);
