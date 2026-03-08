@@ -105,3 +105,128 @@ export function lookupAirport(
 
   return null;
 }
+
+/**
+ * Map Google Geocoding API types to our GeoResult types
+ */
+function mapGoogleTypeToGeoType(types: string[]): GeoResult["type"] {
+  for (const type of types) {
+    switch (type) {
+      case "country":
+        return "country";
+      case "administrative_area_level_1":
+        return "region";
+      case "locality":
+      case "postal_code":
+      case "sublocality":
+        return "city";
+      case "street_address":
+      case "route":
+      case "premise":
+        return "address";
+      case "point_of_interest":
+      case "establishment":
+        return "poi";
+    }
+  }
+  // Default fallback
+  return "city";
+}
+
+/**
+ * Return camera altitude in meters based on location type
+ */
+export function getAltitudeForType(type: GeoResult["type"]): number {
+  switch (type) {
+    case "country":
+    case "region":
+      return 500_000; // 500 km
+    case "city":
+      return 50_000; // 50 km
+    case "address":
+    case "poi":
+      return 1_000; // 1 km
+    case "coords":
+      return 10_000; // 10 km
+    case "airport":
+      return 5_000; // 5 km
+    default:
+      return 50_000; // Default to city altitude
+  }
+}
+
+/**
+ * Full geocoding flow:
+ * 1. Try parseCoordinates() first (instant, no API call)
+ * 2. Try lookupAirport() for 3-letter codes (instant, no API call)
+ * 3. Fall back to Google Geocoding API via proxy
+ */
+export async function geocode(query: string): Promise<GeoResult | null> {
+  const trimmed = query.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  // 1. Try parseCoordinates first (instant, no API call)
+  const coords = parseCoordinates(trimmed);
+  if (coords) {
+    return {
+      lat: coords.lat,
+      lng: coords.lng,
+      name: trimmed,
+      type: "coords",
+    };
+  }
+
+  // 2. Check if query is 3 letters (airport code)
+  if (/^[a-zA-Z]{3}$/.test(trimmed)) {
+    const airport = lookupAirport(trimmed);
+    if (airport) {
+      return {
+        lat: airport.lat,
+        lng: airport.lng,
+        name: airport.name,
+        type: "airport",
+      };
+    }
+  }
+
+  // 3. Fall back to Google Geocoding API via proxy
+  try {
+    const encodedQuery = encodeURIComponent(trimmed);
+    const response = await fetch(
+      `http://localhost:3001/geocode?address=${encodedQuery}`
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Check for valid response with results
+    if (data.status !== "OK" || !data.results || data.results.length === 0) {
+      return null;
+    }
+
+    const result = data.results[0];
+    const location = result.geometry?.location;
+
+    if (!location || typeof location.lat !== "number" || typeof location.lng !== "number") {
+      return null;
+    }
+
+    const geoType = mapGoogleTypeToGeoType(result.types || []);
+
+    return {
+      lat: location.lat,
+      lng: location.lng,
+      name: result.formatted_address || trimmed,
+      type: geoType,
+    };
+  } catch {
+    // Network error or other failure - return null
+    return null;
+  }
+}

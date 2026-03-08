@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { parseCoordinates, lookupAirport } from "../src/geocoder";
+import { parseCoordinates, lookupAirport, geocode, getAltitudeForType } from "../src/geocoder";
 
 // Test parseCoordinates
 test("parseCoordinates - decimal with comma", () => {
@@ -173,4 +173,83 @@ test("lookupAirport - international GRU (Sao Paulo)", () => {
   const result = lookupAirport("GRU");
   expect(result).not.toBeNull();
   expect(result?.name).toContain("Sao Paulo");
+});
+
+// Test getAltitudeForType
+test("getAltitudeForType - country", () => {
+  expect(getAltitudeForType("country")).toBe(500000);
+});
+
+test("getAltitudeForType - region", () => {
+  expect(getAltitudeForType("region")).toBe(500000);
+});
+
+test("getAltitudeForType - city", () => {
+  expect(getAltitudeForType("city")).toBe(50000);
+});
+
+test("getAltitudeForType - address", () => {
+  expect(getAltitudeForType("address")).toBe(1000);
+});
+
+test("getAltitudeForType - poi", () => {
+  expect(getAltitudeForType("poi")).toBe(1000);
+});
+
+test("getAltitudeForType - coords", () => {
+  expect(getAltitudeForType("coords")).toBe(10000);
+});
+
+test("getAltitudeForType - airport", () => {
+  expect(getAltitudeForType("airport")).toBe(5000);
+});
+
+// Test geocode with coordinates (no API call)
+test("geocode - coordinates bypass API", async () => {
+  const result = await geocode("30.2672, -97.7431");
+  expect(result).not.toBeNull();
+  expect(result?.type).toBe("coords");
+  expect(result?.lat).toBeCloseTo(30.2672);
+  expect(result?.lng).toBeCloseTo(-97.7431);
+});
+
+test("geocode - coordinates with direction bypass API", async () => {
+  const result = await geocode("30.2672N, 97.7431W");
+  expect(result).not.toBeNull();
+  expect(result?.type).toBe("coords");
+  expect(result?.lat).toBeCloseTo(30.2672);
+  expect(result?.lng).toBeCloseTo(-97.7431);
+});
+
+// Test geocode with airport code (no API call)
+test("geocode - airport code bypass API", async () => {
+  const result = await geocode("LAX");
+  expect(result).not.toBeNull();
+  expect(result?.type).toBe("airport");
+  expect(result?.name).toContain("Los Angeles");
+});
+
+test("geocode - airport code lowercase bypass API", async () => {
+  const result = await geocode("jfk");
+  expect(result).not.toBeNull();
+  expect(result?.type).toBe("airport");
+  expect(result?.name).toContain("Kennedy");
+});
+
+test("geocode - empty string returns null", async () => {
+  const result = await geocode("");
+  expect(result).toBeNull();
+});
+
+test("geocode - whitespace only returns null", async () => {
+  const result = await geocode("   ");
+  expect(result).toBeNull();
+});
+
+test("geocode - invalid 3-letter code falls back to API", async () => {
+  // XXX is not a valid airport code, so it should try the API
+  // Since we can't guarantee the API is running, we just check it doesn't throw
+  const result = await geocode("XXX");
+  // May be null (if API not running) or a result (if API returns something)
+  expect(result === null || typeof result === "object").toBe(true);
 });

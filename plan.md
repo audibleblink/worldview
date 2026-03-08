@@ -82,13 +82,13 @@ pkill -f "bun run src/proxy.ts"
 
 ### Tasks
 
-- [ ] Add to `src/geocoder.ts`:
-  - [ ] `geocode(query: string): Promise<GeoResult | null>` - Full geocoding flow:
+- [x] Add to `src/geocoder.ts`:
+  - [x] `geocode(query: string): Promise<GeoResult | null>` - Full geocoding flow:
     1. Try `parseCoordinates()` first (instant, no API call)
     2. Try `lookupAirport()` for 3-letter codes (instant, no API call)
     3. Fall back to Google Geocoding API via proxy
-  - [ ] `getAltitudeForType(type: GeoResult['type']): number` - Return camera altitude based on location type
-  - [ ] Parse Google's `types` field to determine location type (country, city, address, etc.)
+  - [x] `getAltitudeForType(type: GeoResult['type']): number` - Return camera altitude based on location type
+  - [x] Parse Google's `types` field to determine location type (country, city, address, etc.)
 
 ### Verification
 
