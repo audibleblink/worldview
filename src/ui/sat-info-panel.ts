@@ -27,7 +27,7 @@ function getOrCreatePanel(): HTMLElement {
       </div>
       <div class="sat-info-row">
         <span class="sat-info-label">NORAD</span>
-        <span class="sat-info-value" id="sat-info-norad">—</span>
+        <a class="sat-info-value sat-info-link" id="sat-info-norad" href="#" target="_blank" rel="noopener">—</a>
       </div>
       <div class="sat-info-row">
         <span class="sat-info-label">VEL</span>
@@ -81,9 +81,22 @@ export function showSatelliteInfoPanel(
   const panel = getOrCreatePanel();
 
   setField("sat-info-name", record.name);
-  setField("sat-info-norad", record.noradId);
   setField("sat-info-vel", `${velocityKmS.toFixed(3)} KM/S`);
   setField("sat-info-cat", record.category.toUpperCase());
+
+  // Set NORAD ID as a clickable satcat.com link
+  const noradEl = document.getElementById("sat-info-norad") as HTMLAnchorElement | null;
+  if (noradEl) {
+    if (record.noradId) {
+      noradEl.textContent = record.noradId;
+      noradEl.href = `https://www.satcat.com/sats/${record.noradId}`;
+      noradEl.style.pointerEvents = "auto";
+    } else {
+      noradEl.textContent = "—";
+      noradEl.href = "#";
+      noradEl.style.pointerEvents = "none";
+    }
+  }
 
   // Re-wire close button (clone clears stale listeners)
   const closeBtn = replaceWithClone("sat-info-close");

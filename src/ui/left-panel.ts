@@ -1,6 +1,6 @@
 /**
  * WorldView - Left Panel
- * City selector, POI navigation, and calibration controls
+ * City selector, POI navigation, layer toggles, and CCTV panel
  */
 
 declare const Cesium: typeof import("cesium");
@@ -107,16 +107,8 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   leftPanel.appendChild(createPOINavigation());
   leftPanel.appendChild(createToggles());
   leftPanel.appendChild(createActionButtons());
-
-  const calibrationHeader = document.createElement("div");
-  calibrationHeader.className = "panel-header";
-  calibrationHeader.textContent = "CALIBRATION";
-  leftPanel.appendChild(calibrationHeader);
-
-  leftPanel.appendChild(createCalibrationSliders());
-  leftPanel.appendChild(createCalibrationButtons());
   
-  // Create CCTV panel instead of placeholder
+  // Create CCTV panel
   cctv.panel = new CCTVPanel(cctv.manager);
   leftPanel.appendChild(cctv.panel.getElement());
   
@@ -417,44 +409,6 @@ function createActionButtons(): HTMLElement {
   container.innerHTML = `
     <button class="action-btn" disabled>AUTO CAL</button>
     <button class="action-btn" disabled>ALIGN - DRAPE</button>
-  `;
-  return container;
-}
-
-function createCalibrationSliders(): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "calibration-sliders";
-
-  const sliders = [
-    { name: "AZIMUTH", value: 0, unit: "°" },
-    { name: "PITCH",   value: 0, unit: "°" },
-    { name: "FOC",     value: 50, unit: "" },
-    { name: "RANGE",   value: 100, unit: "%" },
-    { name: "HEIGHT",  value: 0, unit: "m" },
-    { name: "NORTH",   value: 0, unit: "m" },
-    { name: "EAST",    value: 0, unit: "m" },
-  ];
-
-  for (const { name, value, unit } of sliders) {
-    const row = document.createElement("div");
-    row.className = "slider-row";
-    row.innerHTML = `
-      <label>${name}</label>
-      <input type="range" min="0" max="100" value="${value}" disabled>
-      <span class="slider-value">${value}${unit}</span>
-    `;
-    container.appendChild(row);
-  }
-
-  return container;
-}
-
-function createCalibrationButtons(): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "calibration-buttons panel-section";
-  container.innerHTML = `
-    <button disabled>SAVE CAL</button>
-    <button disabled>RESET CAL</button>
   `;
   return container;
 }

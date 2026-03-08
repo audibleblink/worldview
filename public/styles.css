@@ -883,6 +883,18 @@ select:disabled {
   color: var(--color-bg);
 }
 
+.sat-info-link {
+  color: var(--color-highlight);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.sat-info-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
 /* ============================================
    Flight Info Panel
    ============================================ */
