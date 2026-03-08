@@ -408,7 +408,7 @@ class ShaderManager implements ShaderManagerInterface {
     
     // Update the current stage's uniform if we have one
     if (this.currentStage) {
-      const uniforms = (this.currentStage as any).uniforms;
+      const uniforms = this.currentStage.uniforms as Record<string, unknown> | undefined;
       if (uniforms && param in uniforms) {
         // The uniform getter will now return the updated value
         // Since we're storing references, we need to update the stage

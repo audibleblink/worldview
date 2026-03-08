@@ -306,12 +306,9 @@ export class FlightLayer {
       }
 
       // Remove billboards for aircraft no longer in response
-      for (const icao24 of this.billboardMap.keys()) {
+      for (const [icao24, billboard] of this.billboardMap) {
         if (!currentIcaos.has(icao24)) {
-          const billboard = this.billboardMap.get(icao24);
-          if (billboard && this.billboards) {
-            this.billboards.remove(billboard);
-          }
+          this.billboards?.remove(billboard);
           this.billboardMap.delete(icao24);
           this.recordMap.delete(icao24);
         }

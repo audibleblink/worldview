@@ -1284,3 +1284,24 @@ select:disabled {
   0% { border-color: var(--color-highlight); box-shadow: 0 0 10px var(--color-highlight); }
   100% { border-color: var(--color-border); box-shadow: none; }
 }
+
+/* ============================================
+   Globe Error Overlay
+   ============================================ */
+.globe-error-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  font-family: 'IBM Plex Mono', var(--font-mono);
+  font-size: var(--font-size-md);
+  white-space: pre-wrap;
+  text-align: center;
+  z-index: 1000;
+  max-width: 400px;
+  line-height: 1.6;
+}

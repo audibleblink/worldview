@@ -257,23 +257,7 @@ function showErrorOverlay(message: string): void {
 
   const overlay = document.createElement("div");
   overlay.id = "globe-error-overlay";
-  overlay.style.cssText = `
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.9);
-    border: 1px solid #ff4444;
-    color: #ff4444;
-    padding: 24px 32px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
-    white-space: pre-wrap;
-    text-align: center;
-    z-index: 1000;
-    max-width: 400px;
-    line-height: 1.6;
-  `;
+  overlay.className = "globe-error-overlay";
   overlay.textContent = message;
 
   const container = document.getElementById("cesium-container");

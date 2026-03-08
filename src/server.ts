@@ -10,7 +10,6 @@ const ROOT = import.meta.dir + "/..";
 const CESIUM_PATH = join(ROOT, "node_modules/cesium/Build/Cesium");
 const SATELLITE_JS_PATH = join(ROOT, "node_modules/satellite.js/dist");
 const PUBLIC_PATH = join(ROOT, "public");
-const SRC_PATH = join(ROOT, "src");
 
 console.log(`Starting WorldView dev server on port ${PORT}...`);
 
@@ -29,28 +28,32 @@ const CONTENT_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-function getContentType(path: string): string {
-  const ext = path.slice(path.lastIndexOf("."));
-  return CONTENT_TYPES[ext] ?? "application/octet-stream";
-}
+const getContentType = (path: string): string => 
+  CONTENT_TYPES[path.slice(path.lastIndexOf("."))] ?? "application/octet-stream";
 
 /** Serve a static file with appropriate content type */
-async function serveFile(filePath: string, notFoundMsg: string): Promise<Response> {
+const serveFile = async (filePath: string, notFoundMsg: string): Promise<Response> => {
   const file = Bun.file(filePath);
-  if (await file.exists()) {
-    return new Response(file, { headers: { "Content-Type": getContentType(filePath) } });
-  }
-  return new Response(notFoundMsg, { status: 404 });
-}
+  return (await file.exists())
+    ? new Response(file, { headers: { "Content-Type": getContentType(filePath) } })
+    : new Response(notFoundMsg, { status: 404 });
+};
 
 /** Transpile TypeScript file on the fly */
-async function serveTranspiledTS(filePath: string): Promise<Response | null> {
+const serveTranspiledTS = async (filePath: string): Promise<Response | null> => {
   const file = Bun.file(filePath);
   if (!(await file.exists())) return null;
   const transpiler = new Bun.Transpiler({ loader: "ts" });
-  const result = transpiler.transformSync(await file.text());
-  return new Response(result, { headers: { "Content-Type": "application/javascript" } });
-}
+  return new Response(transpiler.transformSync(await file.text()), {
+    headers: { "Content-Type": "application/javascript" },
+  });
+};
+
+// Route handlers for different path prefixes
+const routeHandlers: Record<string, (pathname: string) => Promise<Response>> = {
+  "/satellite.js/": (p) => serveFile(join(SATELLITE_JS_PATH, p.slice(14)), `satellite.js asset not found: ${p}`),
+  "/cesium/": (p) => serveFile(join(CESIUM_PATH, p.slice(8)), `Cesium asset not found: ${p}`),
+};
 
 Bun.serve({
   port: PORT,
@@ -64,16 +67,9 @@ Bun.serve({
       });
     }
 
-    // Serve satellite.js ES module from node_modules
-    if (pathname.startsWith("/satellite.js/")) {
-      const filePath = join(SATELLITE_JS_PATH, pathname.slice(14));
-      return serveFile(filePath, `satellite.js asset not found: ${pathname}`);
-    }
-
-    // Serve Cesium assets from node_modules
-    if (pathname.startsWith("/cesium/")) {
-      const filePath = join(CESIUM_PATH, pathname.slice(8));
-      return serveFile(filePath, `Cesium asset not found: ${pathname}`);
+    // Check prefix-based route handlers
+    for (const [prefix, handler] of Object.entries(routeHandlers)) {
+      if (pathname.startsWith(prefix)) return handler(pathname);
     }
 
     // Transpile TypeScript files from src/
@@ -84,8 +80,7 @@ Bun.serve({
 
     // Serve JSON files from src/
     if (pathname.startsWith("/src/") && pathname.endsWith(".json")) {
-      const filePath = join(ROOT, pathname);
-      return serveFile(filePath, `JSON file not found: ${pathname}`);
+      return serveFile(join(ROOT, pathname), `JSON file not found: ${pathname}`);
     }
 
     // Serve public assets
