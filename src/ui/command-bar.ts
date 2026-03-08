@@ -8,6 +8,7 @@ import { flyTo } from "../globe.ts";
 import { addLogEntry } from "./left-panel.ts";
 import { parseCommand, detectIdentifierType } from "./command-parser.ts";
 import { convertIataToIcao } from "../utils/airline-codes.ts";
+import type { SatelliteLayer } from "../layers/satellites.ts";
 
 // Re-export for convenience
 export { parseCommand, detectIdentifierType, type ParsedCommand, type IdentifierType } from "./command-parser.ts";
@@ -22,6 +23,7 @@ export class CommandBar {
   private onExecute: ((command: string) => void) | null = null;
   private isExecuting: boolean = false;
   private abortController: AbortController | null = null;
+  private satelliteLayer: SatelliteLayer | null = null;
 
   constructor() {
     // Create DOM structure
@@ -172,6 +174,13 @@ export class CommandBar {
   }
 
   /**
+   * Set the satellite layer for follow commands
+   */
+  setSatelliteLayer(layer: SatelliteLayer): void {
+    this.satelliteLayer = layer;
+  }
+
+  /**
    * Execute a parsed command
    */
   async executeCommand(input: string): Promise<void> {
@@ -301,17 +310,50 @@ export class CommandBar {
 
   /**
    * Handle follow command - follow satellite or flight
-   * TODO: Implement satellite/flight search and follow logic in Phase 2/3
    */
   private async handleFollow(identifier: string): Promise<void> {
     // Detect identifier type (satellite vs flight)
     const idType = detectIdentifierType(identifier);
 
     if (idType === "satellite") {
-      // TODO: Phase 2 - Search loaded satellites by NORAD ID
-      // TODO: Phase 2 - If not found, fetch from CelesTrak
-      // TODO: Phase 2 - Call startFollow() or stopFollow() based on current state
-      addLogEntry(`[FOLLOW] Satellite ${identifier} (stub)`, "info");
+      const noradId = parseInt(identifier, 10);
+
+      // Validate NORAD ID
+      if (noradId === 0) {
+        this.showError("Invalid NORAD ID");
+        addLogEntry(`[FOLLOW] Invalid NORAD ID: 0`, "error");
+        return;
+      }
+
+      // Check if satellite layer is available
+      if (!this.satelliteLayer) {
+        this.showError("Satellites not loaded");
+        addLogEntry(`[FOLLOW] Satellites not loaded`, "error");
+        return;
+      }
+
+      // Search for satellite by NORAD ID
+      const satellite = this.satelliteLayer.findByNoradId(noradId);
+
+      if (!satellite) {
+        this.showError(`Satellite ${noradId} not found`);
+        addLogEntry(`[FOLLOW] Satellite ${noradId} not found`, "error");
+        return;
+      }
+
+      // Check if currently following this satellite - toggle behavior
+      if (this.satelliteLayer.isFollowing(satellite.noradId)) {
+        this.satelliteLayer.stopFollow();
+        addLogEntry(`[FOLLOW] Stopped following ${satellite.name}`, "info");
+        this.showSuccess();
+        return;
+      }
+
+      // Select and follow the satellite
+      this.satelliteLayer.selectSatellite(satellite.noradId, () => {});
+      this.satelliteLayer.startFollow();
+      addLogEntry(`[FOLLOW] Following ${satellite.name}`, "success");
+      this.showSuccess();
     } else {
       // Convert IATA to ICAO if needed
       const icaoCallsign = convertIataToIcao(identifier);
@@ -319,10 +361,8 @@ export class CommandBar {
       // TODO: Phase 3 - Search loaded flights by callsign
       // TODO: Phase 3 - Call startFollow() or stopFollow() based on current state
       addLogEntry(`[FOLLOW] Flight ${icaoCallsign} (stub)`, "info");
+      this.showSuccess();
     }
-
-    // Stub: just show success for now
-    this.showSuccess();
   }
 
   /**

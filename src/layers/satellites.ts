@@ -283,6 +283,36 @@ export class SatelliteLayer {
     return this.selectedNoradId;
   }
 
+  /**
+   * Find a satellite by its NORAD ID across all loaded categories
+   * @param noradId - NORAD catalog number (1-5 digits)
+   * @returns The satellite record if found, null otherwise
+   */
+  findByNoradId(noradId: number): SatelliteRecord | null {
+    const noradIdStr = String(noradId);
+    for (const record of this.records) {
+      if (record.noradId === noradIdStr) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a satellite is currently being followed
+   */
+  isFollowing(noradId: string): boolean {
+    return this.selectedNoradId === noradId && this.followTickRemove !== null;
+  }
+
+  /**
+   * Get the currently followed satellite record (if any)
+   */
+  getFollowedSatellite(): SatelliteRecord | null {
+    if (!this.selectedNoradId || !this.followTickRemove) return null;
+    return this.records.find((r) => r.noradId === this.selectedNoradId) ?? null;
+  }
+
   selectSatellite(noradId: string, onSelect: (record: SatelliteRecord, velocityKmS: number) => void): void {
     this.deselectSatellite();
 

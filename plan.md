@@ -97,13 +97,13 @@ bun test test/command-parser.test.ts test/airline-codes.test.ts
 
 ### Tasks
 
-- [ ] Add `findByNoradId(noradId: number): SatelliteRecord | null` to `SatelliteLayer`
-- [ ] Implement satellite branch in `handleFollow()`:
+- [x] Add `findByNoradId(noradId: number): SatelliteRecord | null` to `SatelliteLayer`
+- [x] Implement satellite branch in `handleFollow()`:
   - Search loaded satellites across all categories
   - Call existing `startFollow()` / `stopFollow()` based on current state
   - Show success/error feedback
-- [ ] Handle edge cases: NORAD ID = 0, not found
-- [ ] Write integration tests
+- [x] Handle edge cases: NORAD ID = 0, not found
+- [x] Write integration tests
 
 ### Files to Modify
 
@@ -133,14 +133,14 @@ bun run scripts/verify-phase2.ts
 
 ### Checklist
 
-- [ ] `findByNoradId()` searches all satellite categories
-- [ ] Following satellite shows success message: "Following {name}"
-- [ ] Unfollowing shows: "Stopped following {name}"
-- [ ] Unknown NORAD ID shows: "Satellite {id} not found"
-- [ ] NORAD ID = 0 shows: "Invalid NORAD ID"
-- [ ] Toggle: calling follow on followed satellite unfollows it
-- [ ] Camera behavior matches existing click-to-follow
-- [ ] `bun test` passes
+- [x] `findByNoradId()` searches all satellite categories
+- [x] Following satellite shows success message: "Following {name}"
+- [x] Unfollowing shows: "Stopped following {name}"
+- [x] Unknown NORAD ID shows: "Satellite {id} not found"
+- [x] NORAD ID = 0 shows: "Invalid NORAD ID"
+- [x] Toggle: calling follow on followed satellite unfollows it
+- [x] Camera behavior matches existing click-to-follow
+- [x] `bun test` passes
 
 ### Exit Criteria
 

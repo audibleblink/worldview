@@ -9,6 +9,7 @@ import { initRightPanel } from "./right-panel.ts";
 import { initBottomBar, setMode, type ViewMode } from "./bottom-bar.ts";
 import { CommandBar } from "./command-bar.ts";
 import { PerformanceMonitor } from "./performance-monitor.ts";
+import type { SatelliteLayer } from "../layers/satellites.ts";
 
 // Performance monitoring state
 let performanceMonitor: PerformanceMonitor | null = null;
@@ -41,6 +42,11 @@ export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): 
   // Initialize command bar
   commandBar = new CommandBar();
   commandBar.init();
+  
+  // Wire up satellite layer for follow commands
+  if (leftPanelOptions?.satelliteLayer) {
+    commandBar.setSatelliteLayer(leftPanelOptions.satelliteLayer);
+  }
 
   console.log("UI shell initialized");
 }
