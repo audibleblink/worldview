@@ -115,22 +115,22 @@ bun test test/geocoder.test.ts
 
 ### Tasks
 
-- [ ] Create `src/ui/command-bar.ts`:
-  - [ ] `CommandBar` class with DOM structure
-  - [ ] `show()` / `hide()` methods
-  - [ ] Input field with `:` prefix
-  - [ ] Loading state indicator
-  - [ ] Error message display area
-  - [ ] Success flash animation
-- [ ] Add CSS styles to `public/styles.css`:
-  - [ ] `.command-bar` - Base container (400px wide, centered, 16px above bottom bar)
-  - [ ] `.command-bar.loading` - Pulsing border
-  - [ ] `.command-bar.error` - Red border and error text
-  - [ ] `.command-bar.success` - Green flash
-- [ ] Wire up basic keyboard handlers:
-  - [ ] Escape → close
-  - [ ] Click outside → close
-  - [ ] Enter → (placeholder for execution)
+- [x] Create `src/ui/command-bar.ts`:
+  - [x] `CommandBar` class with DOM structure
+  - [x] `show()` / `hide()` methods
+  - [x] Input field with `:` prefix
+  - [x] Loading state indicator
+  - [x] Error message display area
+  - [x] Success flash animation
+- [x] Add CSS styles to `public/styles.css`:
+  - [x] `.command-bar` - Base container (400px wide, centered, 16px above bottom bar)
+  - [x] `.command-bar.loading` - Pulsing border
+  - [x] `.command-bar.error` - Red border and error text
+  - [x] `.command-bar.success` - Green flash
+- [x] Wire up basic keyboard handlers:
+  - [x] Escape → close
+  - [x] Click outside → close
+  - [x] Enter → (placeholder for execution)
 
 ### Verification
 
