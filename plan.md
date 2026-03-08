@@ -44,13 +44,13 @@ bun test test/geocoder.test.ts
 
 ### Tasks
 
-- [ ] Add Google Geocoding API key to `.env` (may reuse existing `GOOGLE_MAPS_TILE_API_KEY`)
-- [ ] Add `/geocode?address=<query>` endpoint to `src/proxy.ts`:
-  - [ ] URL-decode the query parameter
-  - [ ] Proxy to `https://maps.googleapis.com/maps/api/geocode/json?address=<query>&key=<API_KEY>`
-  - [ ] Transform response to match PRD format: `{ ok: true, results: [...] }` or `{ ok: false, error: "..." }`
-  - [ ] Handle timeout (5 second limit)
-  - [ ] Return CORS headers
+- [x] Add Google Geocoding API key to `.env` (may reuse existing `GOOGLE_MAPS_TILE_API_KEY`)
+- [x] Add `/geocode?address=<query>` endpoint to `src/proxy.ts`:
+  - [x] URL-decode the query parameter
+  - [x] Proxy to `https://maps.googleapis.com/maps/api/geocode/json?address=<query>&key=<API_KEY>`
+  - [x] Transform response to match PRD format: `{ ok: true, results: [...] }` or `{ ok: false, error: "..." }`
+  - [x] Handle timeout (5 second limit)
+  - [x] Return CORS headers
 
 ### Verification
 

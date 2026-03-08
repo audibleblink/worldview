@@ -7,8 +7,12 @@
 
 const PROXY_PORT = 3001;
 const GOOGLE_TILES_URL = "https://tile.googleapis.com";
+const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const OPENSKY_API_URL = "https://opensky-network.org/api";
 const OVERPASS_API_URL = "https://overpass-api.de/api/interpreter";
+
+// Timeout for geocoding requests (5 seconds)
+const GEOCODE_TIMEOUT_MS = 5000;
 
 // ============================================================================
 // CCTV Camera Configuration
@@ -800,6 +804,83 @@ Bun.serve({
       } catch (error) {
         console.error("[OSM Proxy] Error:", error);
         return jsonResponse({ error: "OSM proxy error" }, 502);
+      }
+    }
+
+    // ========================================================================
+    // Geocoding Endpoint
+    // ========================================================================
+
+    // GET /geocode?address=<query> - Proxy to Google Geocoding API
+    if (url.pathname === "/geocode") {
+      const address = url.searchParams.get("address");
+
+      // Check for missing address parameter
+      if (!address) {
+        return jsonResponse({ ok: false, error: "MISSING_ADDRESS" }, 400);
+      }
+
+      // URL-decode the address (searchParams already decodes, but be explicit)
+      const decodedAddress = decodeURIComponent(address);
+      console.log(`[Geocode] Looking up: "${decodedAddress}"`);
+
+      try {
+        // Build Google Geocoding API URL
+        const geocodeUrl = new URL(GOOGLE_GEOCODE_URL);
+        geocodeUrl.searchParams.set("address", decodedAddress);
+        geocodeUrl.searchParams.set("key", apiKey);
+
+        // Fetch with timeout using AbortController
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GEOCODE_TIMEOUT_MS);
+
+        const response = await fetch(geocodeUrl.toString(), {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          console.error(`[Geocode] Google API HTTP error: ${response.status}`);
+          return jsonResponse({ ok: false, error: "NETWORK_ERROR" }, 502);
+        }
+
+        const data = await response.json();
+
+        // Handle Google's status codes
+        if (data.status === "ZERO_RESULTS") {
+          console.log(`[Geocode] No results for: "${decodedAddress}"`);
+          return jsonResponse({ ok: false, error: "ZERO_RESULTS" });
+        }
+
+        if (data.status !== "OK") {
+          console.error(`[Geocode] Google API status: ${data.status}`);
+          return jsonResponse({ ok: false, error: data.status || "UNKNOWN_ERROR" });
+        }
+
+        // Transform response to our format
+        const results = data.results.map((result: any) => ({
+          formatted_address: result.formatted_address,
+          geometry: {
+            location: {
+              lat: result.geometry.location.lat,
+              lng: result.geometry.location.lng,
+            },
+          },
+          types: result.types,
+        }));
+
+        console.log(`[Geocode] Found ${results.length} result(s) for: "${decodedAddress}"`);
+        return jsonResponse({ ok: true, results });
+      } catch (error: any) {
+        // Handle timeout specifically
+        if (error.name === "AbortError") {
+          console.error(`[Geocode] Request timed out for: "${decodedAddress}"`);
+          return jsonResponse({ ok: false, error: "TIMEOUT" }, 504);
+        }
+
+        console.error("[Geocode] Error:", error);
+        return jsonResponse({ ok: false, error: "NETWORK_ERROR" }, 502);
       }
     }
 
