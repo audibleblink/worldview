@@ -158,15 +158,15 @@ bun --hot src/server.ts &
 
 ### Tasks
 
-- [ ] Add to `src/ui/command-bar.ts`:
-  - [ ] `parseCommand(input: string): { type: 'goto' | 'home' | 'help'; args?: string } | null`
-  - [ ] `executeCommand(cmd)` - Dispatch to appropriate handler
-  - [ ] `handleGoto(location: string)` - Use geocoder, fly camera
-  - [ ] `handleHome()` - Call `resetCamera()` from globe.ts
-  - [ ] `handleHelp()` - Display help text inline
-- [ ] Import and use `flyTo`, `resetCamera` from `src/globe.ts`
-- [ ] Import and use `geocode`, `getAltitudeForType` from `src/geocoder.ts`
-- [ ] Add navigation log entry to system log: `[NAV] Flying to <location>`
+- [x] Add to `src/ui/command-bar.ts`:
+  - [x] `parseCommand(input: string): { type: 'goto' | 'home' | 'help'; args?: string } | null`
+  - [x] `executeCommand(cmd)` - Dispatch to appropriate handler
+  - [x] `handleGoto(location: string)` - Use geocoder, fly camera
+  - [x] `handleHome()` - Call `flyTo()` from globe.ts (reset to 0°, 0°)
+  - [x] `handleHelp()` - Display help text inline
+- [x] Import and use `flyTo` from `src/globe.ts`
+- [x] Import and use `geocode`, `getAltitudeForType` from `src/geocoder.ts`
+- [x] Add navigation log entry to system log: `[NAV] Flying to <location>`
 
 ### Verification
 

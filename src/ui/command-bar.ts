@@ -3,6 +3,14 @@
  * Vim-style command input bar for executing commands
  */
 
+import { geocode, getAltitudeForType } from "../geocoder";
+import { flyTo } from "../globe";
+import { addLogEntry } from "./left-panel";
+import { parseCommand } from "./command-parser";
+
+// Re-export for convenience
+export { parseCommand, type ParsedCommand } from "./command-parser";
+
 export class CommandBar {
   private container: HTMLElement;
   private input: HTMLInputElement;
@@ -134,5 +142,110 @@ export class CommandBar {
   /** Get the current input value */
   getValue(): string {
     return this.input.value;
+  }
+
+  /**
+   * Initialize the command bar with default command execution
+   * Call this after construction to wire up command handling
+   */
+  init(): void {
+    this.setOnExecute((command) => this.executeCommand(command));
+  }
+
+  /**
+   * Execute a parsed command
+   */
+  async executeCommand(input: string): Promise<void> {
+    if (!input.trim()) return; // Empty input, do nothing
+
+    const cmd = parseCommand(input);
+
+    if (!cmd) {
+      this.showError("Unknown command. Type :help");
+      return;
+    }
+
+    switch (cmd.type) {
+      case "goto":
+        await this.handleGoto(cmd.args || "");
+        break;
+      case "home":
+        this.handleHome();
+        break;
+      case "help":
+        this.handleHelp();
+        break;
+    }
+  }
+
+  /**
+   * Handle goto command - geocode location and fly to it
+   */
+  private async handleGoto(location: string): Promise<void> {
+    if (!location) {
+      this.showError("Usage: goto <location>");
+      return;
+    }
+
+    this.setLoading(true);
+
+    try {
+      const result = await geocode(location);
+
+      if (!result) {
+        this.showError("Location not found");
+        this.setLoading(false);
+        return;
+      }
+
+      const altitude = getAltitudeForType(result.type);
+
+      // Log to system log
+      this.logNavigation(result.name);
+
+      // Fly to location (note: flyTo takes longitude first, then latitude)
+      flyTo(result.lng, result.lat, altitude);
+
+      this.showSuccess();
+    } catch (error) {
+      this.showError("Network error");
+      this.setLoading(false);
+    }
+  }
+
+  /**
+   * Handle home command - reset to default view
+   */
+  private handleHome(): void {
+    // Reset to default view: 0°, 0°, 15,000km
+    flyTo(0, 0, 15_000_000); // 15,000 km in meters
+    this.logNavigation("Home (0°, 0°)");
+    this.showSuccess();
+  }
+
+  /**
+   * Handle help command - show available commands
+   */
+  private handleHelp(): void {
+    // Show help in error display area (repurposed for info)
+    this.showHelpText();
+  }
+
+  /**
+   * Log navigation to system log
+   */
+  private logNavigation(locationName: string): void {
+    addLogEntry(`[NAV] Flying to ${locationName}`);
+  }
+
+  /**
+   * Display help text in the command bar
+   */
+  private showHelpText(): void {
+    // Show help in the error display area
+    this.errorDisplay.textContent =
+      "Commands: goto <location>, home, help";
+    this.container.classList.remove("error", "loading", "success");
+    // Don't auto-hide - let user read and dismiss with Escape
   }
 }
