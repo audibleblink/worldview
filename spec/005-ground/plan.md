@@ -149,21 +149,23 @@ verify().catch(console.error);
 
 ### Tasks
 
-- [ ] **2.1 Research Austin CCTV data source**
+- [x] **2.1 Research Austin CCTV data source**
   - Check Austin Open Data Portal for traffic camera endpoints
   - Document camera catalog format (JSON with coordinates, stream URLs)
   - Identify MJPEG stream URL pattern
   - **Fallback:** Use static camera list with known working streams
+  - *Implemented: Static list of 12 Austin traffic cameras in proxy.ts*
 
-- [ ] **2.2 Create CCTV proxy endpoints**
+- [x] **2.2 Create CCTV proxy endpoints**
   - Add to `src/proxy.ts`:
     - `GET /api/cctv/cameras?bbox=` — return cameras in viewport
     - `GET /api/cctv/thumbnail/:id` — return latest JPEG frame
     - `GET /api/cctv/stream/:id` — relay MJPEG stream
   - Implement frame sampling (1fps for thumbnails)
   - Cache camera catalog in memory
+  - *Implemented: PNG frame generation with terminal aesthetic*
 
-- [ ] **2.3 Create CCTV types and manager**
+- [x] **2.3 Create CCTV types and manager**
   - Create `src/ground/cctv/types.ts`:
     ```typescript
     interface Camera {
@@ -181,7 +183,7 @@ verify().catch(console.error);
     - `projectCamera(camera: Camera): void`
     - `removeProjection(cameraId: string): void`
 
-- [ ] **2.4 Create CCTV Panel UI**
+- [x] **2.4 Create CCTV Panel UI**
   - Create `src/ground/cctv/CCTVPanel.ts`:
     - Viewport-filtered camera list
     - Thumbnail images (1fps refresh)
@@ -190,7 +192,7 @@ verify().catch(console.error);
   - Style with terminal aesthetic (`.cctv-panel`, `.cctv-item`, `.cctv-thumb`)
   - Add to `public/styles.css`
 
-- [ ] **2.5 Implement 3D billboard projection**
+- [x] **2.5 Implement 3D billboard projection**
   - Create `src/ground/cctv/CCTVBillboard.ts`:
     - Create Cesium Entity with billboard + label
     - Position at camera GPS coords, 15m above ground
@@ -199,7 +201,7 @@ verify().catch(console.error);
   - Implement canvas-to-texture pipeline
   - Add terminal green border styling
 
-- [ ] **2.6 Wire up panel to left panel**
+- [x] **2.6 Wire up panel to left panel**
   - Replace CCTV placeholder in `src/ui/left-panel.ts`
   - Add viewport change listener to refresh camera list
   - Connect click handlers to CCTVManager

@@ -3,6 +3,8 @@
  * City selector, POI navigation, and calibration controls
  */
 
+declare const Cesium: typeof import("cesium");
+
 type Viewer = import("cesium").Viewer;
 import {
   getCities,
@@ -16,6 +18,7 @@ import {
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 import type { FlightLayer } from "../layers/flights.ts";
+import { CCTVManager, CCTVPanel, type BBox } from "../ground/cctv/index.ts";
 
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
@@ -31,13 +34,21 @@ const flight = {
   active: false,
 };
 
+// CCTV state
+const cctv = {
+  manager: null as CCTVManager | null,
+  panel: null as CCTVPanel | null,
+  viewer: null as Viewer | null,
+  viewportDebounce: null as number | null,
+};
+
 export interface LeftPanelOptions {
   satelliteLayer?: SatelliteLayer;
   loadAllTLEs?: () => Promise<SatelliteRecord[]>;
   flightLayer?: FlightLayer;
 }
 
-export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void {
+export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void {
   sat.layer = options?.satelliteLayer ?? null;
   sat.loadTLEs = options?.loadAllTLEs ?? null;
   sat.cachedRecords = null;
@@ -45,6 +56,11 @@ export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void
 
   flight.layer = options?.flightLayer ?? null;
   flight.active = false;
+
+  // Initialize CCTV manager
+  cctv.viewer = viewer;
+  cctv.manager = new CCTVManager();
+  cctv.manager.initialize(viewer);
 
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
@@ -65,16 +81,24 @@ export function initLeftPanel(_viewer: Viewer, options?: LeftPanelOptions): void
 
   leftPanel.appendChild(createCalibrationSliders());
   leftPanel.appendChild(createCalibrationButtons());
-  leftPanel.appendChild(createCCTVPlaceholder());
+  
+  // Create CCTV panel instead of placeholder
+  cctv.panel = new CCTVPanel(cctv.manager);
+  leftPanel.appendChild(cctv.panel.getElement());
+  
   leftPanel.appendChild(createSystemLog());
 
   wireUpCitySelector();
   wireUpPOINavigation();
   wireUpSatelliteToggle();
   wireUpFlightToggle();
+  wireUpViewportChangeListener(viewer);
 
   updatePOIDisplayState();
   updateTooltipFromCurrentPOI();
+
+  // Initial camera load for current viewport
+  setTimeout(() => updateCCTVCamerasForViewport(), 500);
 
   console.log("Left panel initialized");
 }
@@ -291,14 +315,87 @@ function createCalibrationButtons(): HTMLElement {
   return container;
 }
 
-function createCCTVPlaceholder(): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "cctv-placeholder";
-  container.innerHTML = `
-    <div class="cctv-header">CCTV FEED</div>
-    <div class="cctv-content">NO FEED</div>
-  `;
-  return container;
+/** Get the current viewport bounding box from Cesium camera */
+function getViewportBBox(): BBox | null {
+  if (!cctv.viewer) return null;
+
+  const camera = cctv.viewer.camera;
+  const canvas = cctv.viewer.scene.canvas;
+  
+  try {
+    // Get corners of viewport in cartographic coordinates
+    const corners = [
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
+    ];
+
+    // Filter out null values (when camera is looking at sky)
+    const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
+    
+    if (validCorners.length < 2) {
+      // Fall back to Austin bbox when camera is looking at sky
+      return { west: -97.85, south: 30.15, east: -97.65, north: 30.40 };
+    }
+
+    // Convert to cartographic and find bounds
+    let west = 180, south = 90, east = -180, north = -90;
+    
+    for (const corner of validCorners) {
+      const carto = Cesium.Cartographic.fromCartesian(corner);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      
+      west = Math.min(west, lon);
+      east = Math.max(east, lon);
+      south = Math.min(south, lat);
+      north = Math.max(north, lat);
+    }
+
+    // Expand bounds slightly to ensure we capture edge cameras
+    const lonPadding = (east - west) * 0.1;
+    const latPadding = (north - south) * 0.1;
+    
+    return {
+      west: west - lonPadding,
+      south: south - latPadding,
+      east: east + lonPadding,
+      north: north + latPadding,
+    };
+  } catch (error) {
+    console.error("[CCTV] Error calculating viewport bbox:", error);
+    return { west: -97.85, south: 30.15, east: -97.65, north: 30.40 };
+  }
+}
+
+/** Update CCTV cameras for current viewport */
+async function updateCCTVCamerasForViewport(): Promise<void> {
+  const bbox = getViewportBBox();
+  if (!bbox || !cctv.panel) return;
+  
+  await cctv.panel.updateViewport(bbox);
+  addLogEntry(`[CCTV] Found ${cctv.panel.getCameraCount()} cameras`);
+}
+
+/** Wire up viewport change listener */
+function wireUpViewportChangeListener(viewer: Viewer): void {
+  // Debounce viewport changes to avoid excessive API calls
+  const handleViewportChange = () => {
+    if (cctv.viewportDebounce !== null) {
+      clearTimeout(cctv.viewportDebounce);
+    }
+    
+    cctv.viewportDebounce = window.setTimeout(() => {
+      updateCCTVCamerasForViewport();
+    }, 500);
+  };
+
+  // Listen for camera move end
+  viewer.camera.moveEnd.addEventListener(handleViewportChange);
+  
+  // Also update on zoom
+  viewer.camera.changed.addEventListener(handleViewportChange);
 }
 
 function createSystemLog(): HTMLElement {

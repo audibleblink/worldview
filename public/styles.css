@@ -818,6 +818,150 @@ select:disabled {
 }
 
 /* ============================================
+   CCTV Panel
+   ============================================ */
+.cctv-panel {
+  border: 1px solid var(--color-border);
+  background: rgba(0, 10, 10, 0.5);
+  margin-bottom: var(--spacing-md);
+}
+
+.cctv-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 9px;
+  color: var(--color-text-dim);
+}
+
+.cctv-panel-title {
+  letter-spacing: 1px;
+}
+
+.cctv-panel-count {
+  color: var(--color-highlight);
+  font-weight: bold;
+}
+
+.cctv-camera-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cctv-loading,
+.cctv-empty {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--color-text-dim);
+  font-size: var(--font-size-xs);
+}
+
+.cctv-item {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs);
+  border-bottom: 1px solid rgba(74, 158, 138, 0.2);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.cctv-item:hover {
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.cctv-item:last-child {
+  border-bottom: none;
+}
+
+.cctv-item.projected {
+  background: rgba(0, 255, 136, 0.1);
+  border-left: 2px solid var(--color-highlight);
+}
+
+.cctv-item.error {
+  animation: cctv-error-flash 0.5s ease;
+}
+
+@keyframes cctv-error-flash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(255, 51, 51, 0.2); }
+}
+
+.cctv-thumb-container {
+  position: relative;
+  width: 64px;
+  height: 48px;
+  flex-shrink: 0;
+  background: #000;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.cctv-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cctv-status {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 7px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cctv-status.live {
+  background: rgba(0, 255, 136, 0.8);
+  color: #000;
+}
+
+.cctv-status.offline {
+  background: rgba(255, 51, 51, 0.8);
+  color: #fff;
+}
+
+.cctv-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cctv-name {
+  font-size: 9px;
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.5px;
+}
+
+.cctv-coords {
+  font-size: 8px;
+  color: var(--color-text-dim);
+}
+
+.cctv-project-btn {
+  font-size: 8px;
+  padding: 2px 6px;
+  min-width: unset;
+  margin-top: 2px;
+}
+
+.cctv-project-btn.active {
+  background: var(--color-highlight);
+  color: var(--color-bg);
+  border-color: var(--color-highlight);
+}
+
+/* ============================================
    Scrollbar Styling
    ============================================ */
 ::-webkit-scrollbar {
