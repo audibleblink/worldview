@@ -7,6 +7,7 @@ declare const Cesium: typeof import("cesium");
 
 import { RoadNetwork, type RoadSegment } from "./RoadNetwork.ts";
 import { type StyleMode, getRoadColor, toCesiumColor, ROAD_CONFIG } from "./particleStyles.ts";
+import { onCameraChange } from "../../camera.ts";
 
 /** State of a single traffic particle */
 export interface ParticleState {
@@ -58,7 +59,7 @@ export class TrafficParticleSystem {
   // LOD state
   private currentLODLevel = 0;           // 0 = full detail, 1 = minimum detail
   private lodEnabled = true;
-  private cameraChangeHandler: (() => void) | null = null;
+  private removeCameraListener: (() => void) | null = null;
   
   // Culling state
   private cullingEnabled = true;
@@ -94,16 +95,10 @@ export class TrafficParticleSystem {
   private setupCameraListener(): void {
     if (!this.viewer) return;
     
-    this.cameraChangeHandler = () => {
-      if (this.lodEnabled) {
-        this.updateLODFromCamera();
-      }
-      if (this.cullingEnabled) {
-        this.updateVisibleSegments();
-      }
-    };
-    
-    this.viewer.camera.changed.addEventListener(this.cameraChangeHandler);
+    this.removeCameraListener = onCameraChange(this.viewer, () => {
+      if (this.lodEnabled) this.updateLODFromCamera();
+      if (this.cullingEnabled) this.updateVisibleSegments();
+    });
   }
   
   /** Calculate LOD level from current camera altitude */
@@ -374,55 +369,48 @@ export class TrafficParticleSystem {
     this.animationFrameId = requestAnimationFrame(this.animationLoop);
   };
 
+  /** Check if a particle should be skipped in update */
+  private shouldSkipParticle(particle: ParticleState): boolean {
+    return !particle.visible || 
+      (this.cullingEnabled && !this.visibleSegmentIndices.has(particle.segmentIndex));
+  }
+
+  /** Update a single particle's physics and handle transitions */
+  private updateParticlePhysics(particle: ParticleState, deltaTime: number): void {
+    if (!this.network) return;
+    
+    const segment = this.network.segments[particle.segmentIndex];
+    if (!segment) return;
+
+    particle.progress += particle.speed * deltaTime * particle.direction;
+
+    // Handle segment boundary transitions
+    if (particle.progress >= 1) {
+      this.transitionParticle(particle, segment, 1);
+    } else if (particle.progress <= 0) {
+      this.transitionParticle(particle, segment, -1);
+    }
+
+    this.updateParticlePosition(particle);
+  }
+
   /** Update all particles (with batching support) */
   update(deltaTime: number): void {
     if (!this.network || !this.pointCollection) return;
 
     const startTime = performance.now();
-    
-    // Determine batch size based on total particles
     const batchSize = LOD_CONFIG.updateBatchSize;
     const totalParticles = this.particles.length;
+    const adjustedDeltaTime = deltaTime * (totalParticles / batchSize);
     
-    // Process a batch of particles
     let processed = 0;
     while (processed < batchSize && processed < totalParticles) {
-      const i = this.batchIndex;
-      const particle = this.particles[i];
-      
-      // Advance batch index with wrap-around
+      const particle = this.particles[this.batchIndex];
       this.batchIndex = (this.batchIndex + 1) % totalParticles;
       processed++;
       
-      if (!particle) continue;
-      
-      // Skip hidden particles (LOD)
-      if (!particle.visible) continue;
-      
-      // Skip particles on culled segments
-      if (this.cullingEnabled && !this.visibleSegmentIndices.has(particle.segmentIndex)) {
-        continue;
-      }
-      
-      const segment = this.network.segments[particle.segmentIndex];
-      if (!segment) continue;
-
-      // Advance particle along segment (compensate for batch delay)
-      const adjustedDeltaTime = deltaTime * (totalParticles / batchSize);
-      const movement = particle.speed * adjustedDeltaTime * particle.direction;
-      particle.progress += movement;
-
-      // Handle segment transitions
-      if (particle.progress >= 1) {
-        // Reached end of segment - try to continue to next segment
-        this.transitionParticle(particle, segment, 1);
-      } else if (particle.progress <= 0) {
-        // Reached start of segment (reverse direction)
-        this.transitionParticle(particle, segment, -1);
-      }
-
-      // Update visual position
-      this.updateParticlePosition(particle);
+      if (!particle || this.shouldSkipParticle(particle)) continue;
+      this.updateParticlePhysics(particle, adjustedDeltaTime);
     }
     
     // Track frame time for performance monitoring
@@ -431,7 +419,6 @@ export class TrafficParticleSystem {
     this.frameCount++;
     this.lastFrameTime = frameTime;
     
-    // Log warning if particle update takes too long
     if (frameTime > 2) {
       console.warn(`[TrafficParticleSystem] Particle update took ${frameTime.toFixed(1)}ms (> 2ms budget)`);
     }
@@ -652,11 +639,8 @@ export class TrafficParticleSystem {
   destroy(): void {
     this.stop();
     
-    // Remove camera listener
-    if (this.viewer && this.cameraChangeHandler) {
-      this.viewer.camera.changed.removeEventListener(this.cameraChangeHandler);
-      this.cameraChangeHandler = null;
-    }
+    this.removeCameraListener?.();
+    this.removeCameraListener = null;
     
     if (this.pointCollection && this.viewer) {
       this.viewer.scene.primitives.remove(this.pointCollection);

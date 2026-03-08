@@ -7,6 +7,7 @@
 declare const Cesium: typeof import("cesium");
 
 import { lookAtTarget, unlockCamera } from "../camera.ts";
+import { logError } from "../errors.ts";
 
 // Constants
 const FLIGHT_UPDATE_INTERVAL = 10_000;
@@ -35,49 +36,40 @@ export interface FlightMetadata {
   registration: string;
 }
 
-/**
- * OpenSky states array indices:
- * 0  = icao24
- * 1  = callsign
- * 5  = longitude
- * 6  = latitude
- * 7  = baro_altitude
- * 8  = on_ground
- * 9  = velocity
- * 10 = true_track (heading)
- * 11 = vertical_rate
- */
+/** OpenSky state array index constants */
+const OPENSKY = {
+  ICAO24: 0,
+  CALLSIGN: 1,
+  LONGITUDE: 5,
+  LATITUDE: 6,
+  BARO_ALTITUDE: 7,
+  ON_GROUND: 8,
+  VELOCITY: 9,
+  TRUE_TRACK: 10,
+  VERTICAL_RATE: 11,
+} as const;
+
 function parseOpenSkyState(state: unknown[]): FlightRecord | null {
-  const icao24 = state[0] as string | null;
-  const callsign = state[1] as string | null;
-  const longitude = state[5] as number | null;
-  const latitude = state[6] as number | null;
-  const baroAltitude = state[7] as number | null;
-  const onGround = state[8] as boolean;
-  const velocity = state[9] as number | null;
-  const trueTrack = state[10] as number | null;
-  const verticalRate = state[11] as number | null;
+  const icao24 = state[OPENSKY.ICAO24] as string | null;
+  const longitude = state[OPENSKY.LONGITUDE] as number | null;
+  const latitude = state[OPENSKY.LATITUDE] as number | null;
+  const onGround = state[OPENSKY.ON_GROUND] as boolean;
 
-  // Filter out records with missing critical data
-  if (!icao24 || longitude === null || latitude === null) {
-    return null;
-  }
-
-  // Filter out aircraft on ground
-  if (onGround === true) {
+  // Filter out records with missing critical data or on ground
+  if (!icao24 || longitude === null || latitude === null || onGround) {
     return null;
   }
 
   return {
-    icao24: icao24,
-    callsign: callsign?.trim() ?? "",
-    longitude: longitude,
-    latitude: latitude,
-    altitude: baroAltitude ?? 0, // Use 0 if altitude is null
-    velocity: velocity ?? 0,
-    heading: trueTrack ?? 0,
-    verticalRate: verticalRate ?? 0,
-    onGround: onGround,
+    icao24,
+    callsign: (state[OPENSKY.CALLSIGN] as string | null)?.trim() ?? "",
+    longitude,
+    latitude,
+    altitude: (state[OPENSKY.BARO_ALTITUDE] as number | null) ?? 0,
+    velocity: (state[OPENSKY.VELOCITY] as number | null) ?? 0,
+    heading: (state[OPENSKY.TRUE_TRACK] as number | null) ?? 0,
+    verticalRate: (state[OPENSKY.VERTICAL_RATE] as number | null) ?? 0,
+    onGround,
     lastUpdate: Date.now(),
   };
 }
@@ -113,16 +105,16 @@ export async function fetchFlights(): Promise<FlightRecord[]> {
 export async function fetchAircraftMeta(icao24: string): Promise<FlightMetadata | null> {
   try {
     const response = await fetch(`http://localhost:3001/aircraft-meta/${icao24}`);
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
+    
     const data = await response.json();
     return {
       typecode: data.typecode ?? "",
       model: data.model ?? "",
       registration: data.registration ?? "",
     };
-  } catch {
+  } catch (error) {
+    logError("FLIGHTS", `Failed to fetch metadata for ${icao24}`, error);
     return null;
   }
 }
@@ -317,7 +309,7 @@ export class FlightLayer {
       // Notify count
       this.onCountUpdate?.(this.billboardMap.size);
     } catch (error) {
-      console.error("[FLIGHTS] Refresh error:", error);
+      logError("FLIGHTS", "Refresh error", error);
     }
   }
 

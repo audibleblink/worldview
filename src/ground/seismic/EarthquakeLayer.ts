@@ -7,6 +7,7 @@ declare const Cesium: typeof import("cesium");
 
 import { USGSFetcher, type EarthquakeData } from "./USGSFetcher.ts";
 import { RingAnimation } from "./RingAnimation.ts";
+import { onCameraChange, getCameraCenter } from "../../camera.ts";
 
 /** Demo fallback configuration */
 const DEMO_CONFIG = {
@@ -47,7 +48,7 @@ export class EarthquakeLayer {
   
   // Viewport tracking
   private viewportCenter: { lat: number; lon: number } | null = null;
-  private viewportChangeHandler: (() => void) | null = null;
+  private removeCameraListener: (() => void) | null = null;
 
   constructor() {
     this.fetcher = new USGSFetcher();
@@ -78,28 +79,14 @@ export class EarthquakeLayer {
     if (!this.viewer) return;
 
     const updateViewportCenter = () => {
-      if (!this.viewer) return;
-      
-      const camera = this.viewer.camera;
-      const ellipsoid = this.viewer.scene.globe.ellipsoid;
-      
-      // Get camera position in cartographic
-      const cartographic = ellipsoid.cartesianToCartographic(camera.position);
-      
-      if (cartographic) {
-        const lat = Cesium.Math.toDegrees(cartographic.latitude);
-        const lon = Cesium.Math.toDegrees(cartographic.longitude);
-        
-        this.viewportCenter = { lat, lon };
-        this.fetcher.setViewportCenter(lat, lon);
+      const center = getCameraCenter(this.viewer!);
+      if (center) {
+        this.viewportCenter = center;
+        this.fetcher.setViewportCenter(center.lat, center.lon);
       }
     };
 
-    // Update on camera move
-    this.viewportChangeHandler = () => updateViewportCenter();
-    this.viewer.camera.changed.addEventListener(this.viewportChangeHandler);
-    
-    // Initial update
+    this.removeCameraListener = onCameraChange(this.viewer, updateViewportCenter);
     updateViewportCenter();
   }
 
@@ -278,11 +265,8 @@ export class EarthquakeLayer {
   destroy(): void {
     this.hide();
     
-    // Remove viewport change listener
-    if (this.viewer && this.viewportChangeHandler) {
-      this.viewer.camera.changed.removeEventListener(this.viewportChangeHandler);
-      this.viewportChangeHandler = null;
-    }
+    this.removeCameraListener?.();
+    this.removeCameraListener = null;
     
     this.fetcher.destroy();
     this.ringAnimation.destroy();

@@ -6,8 +6,28 @@ declare const Cesium: typeof import("cesium");
 
 import type { Camera, BBox, CCTVBillboard, CCTVManagerConfig } from "./types.ts";
 import { DEFAULT_CCTV_CONFIG } from "./types.ts";
+import { logError, logInfo, logWarn } from "../../errors.ts";
 
 const PROXY_BASE = "http://localhost:3001";
+
+/** Create center-stage overlay HTML */
+function createCenterStageHTML(cameraName: string): string {
+  return `
+    <div class="cctv-center-stage-container">
+      <div class="cctv-center-stage-header">
+        <span class="cctv-center-stage-title">${cameraName}</span>
+        <div class="cctv-center-stage-controls">
+          <button class="cctv-center-stage-btn" id="cctv-refresh-btn">REFRESH</button>
+          <button class="cctv-center-stage-btn" id="cctv-unproject-btn">UNPROJECT</button>
+          <button class="cctv-center-stage-btn cctv-close-btn" id="cctv-close-btn">CLOSE</button>
+        </div>
+      </div>
+      <div class="cctv-center-stage-feed">
+        <canvas id="cctv-center-stage-canvas" width="640" height="480"></canvas>
+      </div>
+    </div>
+  `;
+}
 
 /** Texture pool entry */
 interface TexturePoolEntry {
@@ -79,7 +99,7 @@ export class CCTVManager {
       const ctx = canvas.getContext("2d");
       
       if (!ctx) {
-        console.error("[CCTVManager] Failed to create canvas context for pool");
+        logError("CCTV", "Failed to create canvas context for pool");
         return null;
       }
       
@@ -95,7 +115,7 @@ export class CCTVManager {
     }
     
     // Pool exhausted - find oldest unused entry and force reuse
-    console.warn("[CCTVManager] Texture pool exhausted, forcing reuse");
+    logWarn("CCTV", "Texture pool exhausted, forcing reuse");
     let oldest: TexturePoolEntry | null = null;
     for (const entry of this.texturePool) {
       if (!oldest || entry.lastUsed < oldest.lastUsed) {
@@ -165,7 +185,7 @@ export class CCTVManager {
     this.retryState.set(cameraId, state);
     this.failedStreams.add(cameraId);
     
-    console.log(`[CCTVManager] Stream failure for ${cameraId}, retry ${state.retries}/${RETRY_CONFIG.maxRetries} in ${delay}ms`);
+    logInfo("CCTV", `Stream failure for ${cameraId}, retry ${state.retries}/${RETRY_CONFIG.maxRetries} in ${delay}ms`);
   }
   
   /** Record a successful stream connection (resets retry state) */
@@ -196,7 +216,7 @@ export class CCTVManager {
     // Create camera icon texture
     this.cameraMarkerTexture = this.createCameraIconTexture();
     
-    console.log("[CCTVManager] Initialized");
+    logInfo("CCTV", "Initialized");
   }
   
   /** Create a camera icon texture for map markers */
@@ -312,7 +332,7 @@ export class CCTVManager {
   enterCenterStage(cameraId: string): void {
     const billboard = this.activeBillboards.get(cameraId);
     if (!billboard) {
-      console.warn(`[CCTVManager] Cannot center-stage non-projected camera: ${cameraId}`);
+      logWarn("CCTV", `Cannot center-stage non-projected camera: ${cameraId}`);
       return;
     }
 
@@ -331,7 +351,7 @@ export class CCTVManager {
     this.createCenterStageOverlay(billboard);
     
     this.onCenterStageChange?.(cameraId);
-    console.log(`[CCTVManager] Entered center-stage: ${cameraId}`);
+    logInfo("CCTV", `Entered center-stage: ${cameraId}`);
   }
 
   /** Exit center-stage mode */
@@ -349,73 +369,54 @@ export class CCTVManager {
     this.centerStageCameraId = null;
     
     this.onCenterStageChange?.(null);
-    console.log(`[CCTVManager] Exited center-stage: ${previousId}`);
+    logInfo("CCTV", `Exited center-stage: ${previousId}`);
   }
 
   /** Create the center-stage overlay DOM element */
   private createCenterStageOverlay(billboard: CCTVBillboard): void {
     this.removeCenterStageOverlay();
 
-    const camera = this.getCamera(billboard.cameraId);
-    const cameraName = camera?.name ?? billboard.cameraId;
+    const cameraName = this.getCamera(billboard.cameraId)?.name ?? billboard.cameraId;
 
     const overlay = document.createElement("div");
     overlay.id = "cctv-center-stage";
     overlay.className = "cctv-center-stage";
-    overlay.innerHTML = `
-      <div class="cctv-center-stage-container">
-        <div class="cctv-center-stage-header">
-          <span class="cctv-center-stage-title">${cameraName}</span>
-          <div class="cctv-center-stage-controls">
-            <button class="cctv-center-stage-btn" id="cctv-refresh-btn">REFRESH</button>
-            <button class="cctv-center-stage-btn" id="cctv-unproject-btn">UNPROJECT</button>
-            <button class="cctv-center-stage-btn cctv-close-btn" id="cctv-close-btn">CLOSE</button>
-          </div>
-        </div>
-        <div class="cctv-center-stage-feed">
-          <canvas id="cctv-center-stage-canvas" width="640" height="480"></canvas>
-        </div>
-      </div>
-    `;
+    overlay.innerHTML = createCenterStageHTML(cameraName);
 
-    // Add click handlers
-    const closeBtn = overlay.querySelector("#cctv-close-btn");
-    closeBtn?.addEventListener("click", () => this.exitCenterStage());
-
-    const refreshBtn = overlay.querySelector("#cctv-refresh-btn");
-    refreshBtn?.addEventListener("click", () => {
-      const cameraId = this.centerStageCameraId;
-      if (cameraId) {
-        const cam = this.getCamera(cameraId);
-        const bill = this.activeBillboards.get(cameraId);
-        if (cam && bill) {
-          this.updateBillboardFrame(bill, cam);
-        }
-      }
-    });
-
-    const unprojectBtn = overlay.querySelector("#cctv-unproject-btn");
-    unprojectBtn?.addEventListener("click", () => {
-      const cameraId = this.centerStageCameraId;
-      this.exitCenterStage();
-      if (cameraId) {
-        this.removeProjection(cameraId);
-      }
-    });
-
-    // Click on backdrop to close
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        this.exitCenterStage();
-      }
-    });
+    // Wire up button handlers
+    this.wireUpCenterStageButtons(overlay);
 
     const container = document.getElementById("cesium-container") ?? document.body;
     container.appendChild(overlay);
     this.centerStageOverlay = overlay;
 
-    // Start rendering to the center-stage canvas
     this.startCenterStageRendering(billboard);
+  }
+
+  /** Wire up center-stage overlay button handlers */
+  private wireUpCenterStageButtons(overlay: HTMLElement): void {
+    overlay.querySelector("#cctv-close-btn")?.addEventListener("click", () => 
+      this.exitCenterStage()
+    );
+
+    overlay.querySelector("#cctv-refresh-btn")?.addEventListener("click", () => {
+      const cameraId = this.centerStageCameraId;
+      if (!cameraId) return;
+      const cam = this.getCamera(cameraId);
+      const bill = this.activeBillboards.get(cameraId);
+      if (cam && bill) this.updateBillboardFrame(bill, cam);
+    });
+
+    overlay.querySelector("#cctv-unproject-btn")?.addEventListener("click", () => {
+      const cameraId = this.centerStageCameraId;
+      this.exitCenterStage();
+      if (cameraId) this.removeProjection(cameraId);
+    });
+
+    // Click backdrop to close
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) this.exitCenterStage();
+    });
   }
 
   /** Remove the center-stage overlay */
@@ -463,7 +464,7 @@ export class CCTVManager {
       const response = await fetch(`${PROXY_BASE}/api/cctv/cameras?${params}`);
       
       if (!response.ok) {
-        console.error(`[CCTVManager] Failed to fetch cameras: ${response.status}`);
+        logError("CCTV", `Failed to fetch cameras: ${response.status}`);
         return [];
       }
 
@@ -471,7 +472,7 @@ export class CCTVManager {
       this.updateCameraMarkers();
       return this.cameras;
     } catch (error) {
-      console.error("[CCTVManager] Error fetching cameras:", error);
+      logError("CCTV", "Error fetching cameras", error);
       return [];
     }
   }
@@ -550,26 +551,26 @@ export class CCTVManager {
   /** Project a camera feed into the 3D scene as a billboard */
   async projectCamera(camera: Camera): Promise<boolean> {
     if (!this.viewer) {
-      console.error("[CCTVManager] Viewer not initialized");
+      logError("CCTV", "Viewer not initialized");
       return false;
     }
 
     // Check max billboard limit
     if (this.activeBillboards.size >= this.config.maxBillboards) {
-      console.warn(`[CCTVManager] Max billboards (${this.config.maxBillboards}) reached`);
+      logWarn("CCTV", `Max billboards (${this.config.maxBillboards}) reached`);
       return false;
     }
 
     // Don't project if already active
     if (this.activeBillboards.has(camera.id)) {
-      console.log(`[CCTVManager] Camera ${camera.id} already projected`);
+      logInfo("CCTV", `Camera ${camera.id} already projected`);
       return false;
     }
 
     // Acquire texture from pool
     const texture = this.acquireTexture();
     if (!texture) {
-      console.error("[CCTVManager] Failed to acquire texture from pool");
+      logError("CCTV", "Failed to acquire texture from pool");
       return false;
     }
     
@@ -630,7 +631,7 @@ export class CCTVManager {
     this.activeBillboards.set(camera.id, billboard);
     this.onBillboardChange?.();
 
-    console.log(`[CCTVManager] Projected camera: ${camera.name}`);
+    logInfo("CCTV", `Projected camera: ${camera.name}`);
     return true;
   }
 
@@ -661,7 +662,7 @@ export class CCTVManager {
     this.activeBillboards.delete(cameraId);
     this.onBillboardChange?.();
 
-    console.log(`[CCTVManager] Removed projection: ${cameraId}`);
+    logInfo("CCTV", `Removed projection: ${cameraId}`);
   }
 
   /** Toggle a camera projection, optionally flying to the camera */
@@ -861,7 +862,7 @@ export class CCTVManager {
     ) {
       // Close button clicked - remove the billboard
       this.removeProjection(cameraId);
-      console.log(`[CCTVManager] Close button clicked, removed billboard: ${cameraId}`);
+      logInfo("CCTV", `Close button clicked, removed billboard: ${cameraId}`);
       return true;
     }
 
@@ -926,7 +927,7 @@ export class CCTVManager {
     this.cameras = [];
     this.viewer = null;
 
-    console.log("[CCTVManager] Destroyed");
+    logInfo("CCTV", "Destroyed");
   }
   
   /** Reset retry state for a specific camera */

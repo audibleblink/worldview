@@ -211,39 +211,24 @@ export async function geocode(query: string): Promise<GeoResult | null> {
 
   // 3. Fall back to Google Geocoding API via proxy
   try {
-    const encodedQuery = encodeURIComponent(trimmed);
     const response = await fetch(
-      `http://localhost:3001/geocode?address=${encodedQuery}`
+      `http://localhost:3001/geocode?address=${encodeURIComponent(trimmed)}`
     );
-
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const data = await response.json();
-
-    // Check for valid response with results
-    if (data.status !== "OK" || !data.results || data.results.length === 0) {
-      return null;
-    }
-
-    const result = data.results[0];
-    const location = result.geometry?.location;
-
-    if (!location || typeof location.lat !== "number" || typeof location.lng !== "number") {
-      return null;
-    }
-
-    const geoType = mapGoogleTypeToGeoType(result.types || []);
+    const result = data.results?.[0];
+    const location = result?.geometry?.location;
+    
+    if (data.status !== "OK" || !location?.lat || !location?.lng) return null;
 
     return {
       lat: location.lat,
       lng: location.lng,
       name: result.formatted_address || trimmed,
-      type: geoType,
+      type: mapGoogleTypeToGeoType(result.types || []),
     };
   } catch {
-    // Network error or other failure - return null
     return null;
   }
 }

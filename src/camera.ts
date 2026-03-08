@@ -77,3 +77,57 @@ export function lookAtTarget(
 export function unlockCamera(viewer: Viewer): void {
   viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 }
+
+/**
+ * Camera change listener with optional debouncing.
+ * Returns a cleanup function to remove the listener.
+ */
+export function onCameraChange(
+  viewer: Viewer,
+  callback: () => void,
+  options: { debounceMs?: number } = {}
+): () => void {
+  const { debounceMs } = options;
+  
+  let handler: () => void;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  
+  if (debounceMs && debounceMs > 0) {
+    handler = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(callback, debounceMs);
+    };
+  } else {
+    handler = callback;
+  }
+  
+  viewer.camera.changed.addEventListener(handler);
+  
+  return () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    viewer.camera.changed.removeEventListener(handler);
+  };
+}
+
+/**
+ * Get current camera altitude in meters.
+ */
+export function getCameraAltitude(viewer: Viewer): number {
+  const cartographic = viewer.camera.positionCartographic;
+  return cartographic?.height ?? Infinity;
+}
+
+/**
+ * Get current camera center position (lat/lon).
+ */
+export function getCameraCenter(viewer: Viewer): { lat: number; lon: number } | null {
+  const ellipsoid = viewer.scene.globe.ellipsoid;
+  const cartographic = ellipsoid.cartesianToCartographic(viewer.camera.position);
+  
+  if (!cartographic) return null;
+  
+  return {
+    lat: Cesium.Math.toDegrees(cartographic.latitude),
+    lon: Cesium.Math.toDegrees(cartographic.longitude),
+  };
+}

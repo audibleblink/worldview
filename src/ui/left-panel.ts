@@ -208,44 +208,71 @@ function createToggles(): HTMLElement {
   return container;
 }
 
+/** Generic async toggle handler for layer buttons */
+async function handleLayerToggle<T>(
+  btn: HTMLButtonElement,
+  state: { active: boolean },
+  layer: { show: (...args: T[]) => Promise<void>; hide: () => void },
+  options: {
+    logPrefix: string;
+    onShow?: () => Promise<T[] | void>;
+    onEnabled?: () => void;
+    onDisabled?: () => void;
+  }
+): Promise<void> {
+  if (state.active) {
+    layer.hide();
+    state.active = false;
+    btn.textContent = "OFF";
+    btn.classList.remove("on");
+    options.onDisabled?.();
+    addLogEntry(`[${options.logPrefix}] Layer disabled`);
+    return;
+  }
+
+  btn.textContent = "LOADING";
+  btn.disabled = true;
+  try {
+    const args = await options.onShow?.();
+    if (args !== undefined) {
+      await layer.show(...(args as T[]));
+    } else {
+      await layer.show();
+    }
+    state.active = true;
+    btn.textContent = "ON";
+    btn.classList.add("on");
+    options.onEnabled?.();
+    addLogEntry(`[${options.logPrefix}] Layer active`, "success");
+  } catch (err) {
+    addLogEntry(`[${options.logPrefix}] Failed to load: ${err}`, "error");
+    btn.textContent = "ERR";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function wireUpSatelliteToggle(): void {
   const btn = document.getElementById("satellite-toggle") as HTMLButtonElement | null;
   const filterRow = document.getElementById("sat-filter-row");
   if (!btn || !sat.layer || !sat.loadTLEs) return;
 
-  btn.addEventListener("click", async () => {
-    if (sat.active) {
-      sat.layer!.hide();
-      sat.active = false;
-      btn.textContent = "OFF";
-      btn.classList.remove("on");
-      filterRow?.classList.add("hidden");
-      addLogEntry("[SAT] Satellite layer disabled");
-      return;
-    }
-
-    btn.textContent = "LOADING";
-    btn.disabled = true;
-    try {
+  btn.addEventListener("click", () => handleLayerToggle(btn, sat, sat.layer!, {
+    logPrefix: "SAT",
+    onShow: async () => {
       if (!sat.cachedRecords) {
         addLogEntry("[SAT] Fetching TLE data...");
         sat.cachedRecords = await sat.loadTLEs!();
         addLogEntry(`[SAT] Loaded ${sat.cachedRecords.length} records`, "success");
       }
-      await sat.layer!.show(sat.cachedRecords);
-      sat.active = true;
-      btn.textContent = "ON";
-      btn.classList.add("on");
+      return [sat.cachedRecords];
+    },
+    onEnabled: () => {
       filterRow?.classList.remove("hidden");
       resetFilterButtons();
-      addLogEntry("[SAT] Satellite layer active", "success");
-    } catch (err) {
-      addLogEntry(`[SAT] Failed to load TLEs: ${err}`, "error");
-      btn.textContent = "ERR";
-    } finally {
-      btn.disabled = false;
-    }
-  });
+    },
+    onDisabled: () => filterRow?.classList.add("hidden"),
+  }));
 
   wireUpCategoryFilters();
 }
@@ -288,31 +315,9 @@ function wireUpFlightToggle(): void {
   const btn = document.getElementById("flight-toggle") as HTMLButtonElement | null;
   if (!btn || !flight.layer) return;
 
-  btn.addEventListener("click", async () => {
-    if (flight.active) {
-      flight.layer!.hide();
-      flight.active = false;
-      btn.textContent = "OFF";
-      btn.classList.remove("on");
-      addLogEntry("[FLIGHTS] Layer disabled");
-      return;
-    }
-
-    btn.textContent = "LOADING";
-    btn.disabled = true;
-    try {
-      await flight.layer!.show();
-      flight.active = true;
-      btn.textContent = "ON";
-      btn.classList.add("on");
-      addLogEntry("[FLIGHTS] Layer active", "success");
-    } catch (err) {
-      addLogEntry(`[FLIGHTS] Failed to load flights: ${err}`, "error");
-      btn.textContent = "ERR";
-    } finally {
-      btn.disabled = false;
-    }
-  });
+  btn.addEventListener("click", () => handleLayerToggle(btn, flight, flight.layer!, {
+    logPrefix: "FLIGHTS",
+  }));
 }
 
 function wireUpGroundToggle(): void {
@@ -322,38 +327,19 @@ function wireUpGroundToggle(): void {
   if (!btn) return;
 
   // Main ground toggle
-  btn.addEventListener("click", async () => {
+  btn.addEventListener("click", () => {
     if (!ground.layer) {
       addLogEntry("[GROUND] Layer not available", "error");
       return;
     }
-
-    if (ground.active) {
-      ground.layer.hide();
-      ground.active = false;
-      btn.textContent = "OFF";
-      btn.classList.remove("on");
-      optionsRow?.classList.add("hidden");
-      addLogEntry("[GROUND] Layer disabled");
-      return;
-    }
-
-    btn.textContent = "LOADING";
-    btn.disabled = true;
-    try {
-      await ground.layer.show();
-      ground.active = true;
-      btn.textContent = "ON";
-      btn.classList.add("on");
-      optionsRow?.classList.remove("hidden");
-      updateGroundSubToggles();
-      addLogEntry("[GROUND] Layer active", "success");
-    } catch (err) {
-      addLogEntry(`[GROUND] Failed to load: ${err}`, "error");
-      btn.textContent = "ERR";
-    } finally {
-      btn.disabled = false;
-    }
+    handleLayerToggle(btn, ground, ground.layer, {
+      logPrefix: "GROUND",
+      onEnabled: () => {
+        optionsRow?.classList.remove("hidden");
+        updateGroundSubToggles();
+      },
+      onDisabled: () => optionsRow?.classList.add("hidden"),
+    });
   });
 
   // Traffic sub-toggle

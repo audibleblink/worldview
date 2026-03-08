@@ -221,6 +221,22 @@ class ShaderManager implements ShaderManagerInterface {
   }
 
   /**
+   * Create a fadeable post-process stage for transitions
+   */
+  private createFadeableStage(
+    config: ShaderConfig,
+    getIntensity: () => number
+  ): PostProcessStage {
+    return new Cesium.PostProcessStage({
+      fragmentShader: this.createFadeableShader(config.fragmentShader),
+      uniforms: {
+        ...config.uniforms,
+        u_fadeIntensity: getIntensity,
+      },
+    });
+  }
+
+  /**
    * Start a crossfade transition between two modes
    */
   private startTransition(
@@ -232,60 +248,38 @@ class ShaderManager implements ShaderManagerInterface {
     if (!this.viewer) return;
 
     const startTime = performance.now();
-    
-    // Create blend factor that we'll animate
     let blendFactor = 0;
 
-    // Create the "from" stage with fading intensity
-    let fromStage: PostProcessStage | null = null;
-    if (fromConfig && fromMode !== "NORMAL") {
-      // Create a modified version of the from shader that fades out
-      fromStage = new Cesium.PostProcessStage({
-        fragmentShader: this.createFadeableShader(fromConfig.fragmentShader),
-        uniforms: {
-          ...fromConfig.uniforms,
-          u_fadeIntensity: () => 1 - blendFactor,
-        },
-      });
-      this.viewer.scene.postProcessStages.add(fromStage);
-    }
+    // Create fade stages for non-NORMAL modes
+    const fromStage = fromConfig && fromMode !== "NORMAL"
+      ? this.createFadeableStage(fromConfig, () => 1 - blendFactor)
+      : null;
+    const toStage = toConfig && toMode !== "NORMAL"
+      ? this.createFadeableStage(toConfig, () => blendFactor)
+      : null;
 
-    // Create the "to" stage with fading in intensity
-    let toStage: PostProcessStage | null = null;
-    if (toConfig && toMode !== "NORMAL") {
-      toStage = new Cesium.PostProcessStage({
-        fragmentShader: this.createFadeableShader(toConfig.fragmentShader),
-        uniforms: {
-          ...toConfig.uniforms,
-          u_fadeIntensity: () => blendFactor,
-        },
-      });
-      this.viewer.scene.postProcessStages.add(toStage);
-    }
+    // Add stages to scene
+    if (fromStage) this.viewer.scene.postProcessStages.add(fromStage);
+    if (toStage) this.viewer.scene.postProcessStages.add(toStage);
 
-    // Remove the old current stage
     this.removeCurrentStage();
 
-    // Animation loop
+    // Animation loop with easing
     const animate = () => {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(elapsed / TRANSITION_DURATION, 1);
+      const progress = Math.min((performance.now() - startTime) / TRANSITION_DURATION, 1);
       
-      // Smooth easing (ease-in-out)
+      // Ease-in-out quadratic
       blendFactor = progress < 0.5
         ? 2 * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-      // Request next frame if not done
       if (progress < 1) {
         this.transition!.rafId = requestAnimationFrame(animate);
       } else {
-        // Transition complete
         this.completeTransition();
       }
     };
 
-    // Store transition state
     this.transition = {
       fromMode,
       toMode,
@@ -295,7 +289,6 @@ class ShaderManager implements ShaderManagerInterface {
       toStage,
     };
 
-    // Update current mode immediately for getMode()
     this.currentMode = toMode;
     this.saveState();
   }
