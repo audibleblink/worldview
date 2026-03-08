@@ -220,7 +220,8 @@ export async function geocode(query: string): Promise<GeoResult | null> {
     const result = data.results?.[0];
     const location = result?.geometry?.location;
     
-    if (data.status !== "OK" || !location?.lat || !location?.lng) return null;
+    // Proxy returns { ok: true, results: [...] } on success
+    if (!data.ok || !location?.lat || !location?.lng) return null;
 
     return {
       lat: location.lat,
