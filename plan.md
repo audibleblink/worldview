@@ -282,16 +282,16 @@ bun run scripts/verify-phase4.ts
 
 ### Tasks
 
-- [ ] Update `:help` output in `handleHelp()`:
+- [x] Update `:help` output in `handleHelp()`:
   ```
   :follow <id>    Follow satellite (NORAD ID) or flight (callsign)
                   Examples: :follow 25544, :follow UAL123, :follow AA100
   ```
-- [ ] Verify all user feedback messages match PRD spec
-- [ ] Handle edge case: empty identifier → "Usage: :follow <id>"
-- [ ] Handle edge case: already following different target → switch seamlessly
-- [ ] Run full test suite
-- [ ] Manual end-to-end testing checklist
+- [x] Verify all user feedback messages match PRD spec
+- [x] Handle edge case: empty identifier → "Usage: :follow <id>"
+- [x] Handle edge case: already following different target → switch seamlessly
+- [x] Run full test suite
+- [x] Manual end-to-end testing checklist
 
 ### Files to Modify
 
@@ -323,13 +323,13 @@ bun run scripts/smoke-test-follow.ts
 
 ### Checklist
 
-- [ ] Help text updated with follow command
-- [ ] Empty identifier shows usage message
-- [ ] Switching targets works smoothly
-- [ ] All PRD feedback messages implemented
-- [ ] Full test suite passes
-- [ ] Performance: feedback appears within 100ms
-- [ ] Performance: CelesTrak fetch completes in <3 seconds
+- [x] Help text updated with follow command
+- [x] Empty identifier shows usage message
+- [x] Switching targets works smoothly
+- [x] All PRD feedback messages implemented
+- [x] Full test suite passes
+- [x] Performance: feedback appears within 100ms
+- [x] Performance: CelesTrak fetch completes in <3 seconds
 
 ### Exit Criteria
 

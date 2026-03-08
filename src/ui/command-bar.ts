@@ -396,6 +396,12 @@ export class CommandBar {
         return;
       }
 
+      // Stop following any flight before following a satellite
+      if (this.flightLayer?.isFollowing()) {
+        this.flightLayer.stopFollow();
+      }
+
+      // Stop following any other satellite (handled by startFollow internally)
       // Select and follow the satellite
       this.satelliteLayer.selectSatellite(satellite.noradId, () => {});
       this.satelliteLayer.startFollow();
@@ -433,6 +439,11 @@ export class CommandBar {
         return;
       }
 
+      // Stop following any satellite before following a flight
+      if (this.satelliteLayer?.getFollowedSatellite()) {
+        this.satelliteLayer.stopFollow();
+      }
+
       // Select and follow the flight
       this.flightLayer.selectFlight(flight.icao24, () => {});
       this.flightLayer.startFollow();
@@ -468,6 +479,8 @@ export class CommandBar {
       <div style="text-align: left; line-height: 1.6;">
         <div style="margin-bottom: 4px;">Commands:</div>
         <div style="padding-left: 8px;">:goto &lt;place|zip|coords|airport&gt; - Navigate to location</div>
+        <div style="padding-left: 8px;">:follow &lt;id&gt; - Follow satellite (NORAD ID) or flight (callsign)</div>
+        <div style="padding-left: 24px; font-size: 0.9em; opacity: 0.8;">Examples: :follow 25544, :follow UAL123, :follow AA100</div>
         <div style="padding-left: 8px;">:home - Reset camera view</div>
         <div style="padding-left: 8px;">:help - Show this help</div>
       </div>
