@@ -383,6 +383,9 @@ export class CCTVManager {
         
         // Update Cesium texture
         this.updateEntityTexture(billboard);
+        
+        // Clean up object URL
+        URL.revokeObjectURL(img.src);
       };
 
       img.onerror = () => {
@@ -403,8 +406,10 @@ export class CCTVManager {
   private updateEntityTexture(billboard: CCTVBillboard): void {
     const billboardGraphics = billboard.entity.billboard;
     if (billboardGraphics) {
-      // Force texture update by re-assigning the canvas
-      billboardGraphics.image = new Cesium.ConstantProperty(billboard.canvas);
+      // Force texture update by converting canvas to data URL
+      // This ensures Cesium treats it as a new texture
+      const dataUrl = billboard.canvas.toDataURL('image/png');
+      billboardGraphics.image = new Cesium.ConstantProperty(dataUrl);
     }
   }
 

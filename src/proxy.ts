@@ -22,118 +22,239 @@ interface CCTVCamera {
   longitude: number;
   streamUrl: string;
   status: "live" | "offline";
+  source: "austin" | "caltrans";
+  imageUrl?: string; // Direct image URL for Caltrans cameras
+}
+
+/** Austin Open Data API response type */
+interface AustinCameraData {
+  camera_id: string;
+  location_name: string;
+  camera_status: string;
+  screenshot_address: string;
+  location?: {
+    type: string;
+    coordinates: [number, number]; // [longitude, latitude]
+  };
+}
+
+/** Caltrans CCTV API response type */
+interface CaltransCameraData {
+  cctv: {
+    index: string;
+    location: {
+      district: string;
+      locationName: string;
+      nearbyPlace: string;
+      longitude: string;
+      latitude: string;
+      county: string;
+      route: string;
+    };
+    inService: string;
+    imageData: {
+      streamingVideoURL: string;
+      static: {
+        currentImageURL: string;
+      };
+    };
+  };
+}
+
+// Austin Open Data Portal API for traffic cameras
+const AUSTIN_CAMERA_API = "https://data.austintexas.gov/resource/b4k4-adkb.json";
+
+// Caltrans CCTV API - 12 districts
+// District numbers: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+// Major areas: D4=SF Bay, D7=LA, D11=San Diego, D12=Orange County
+const CALTRANS_DISTRICTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const CALTRANS_API_BASE = "https://cwwp2.dot.ca.gov/data";
+
+// Cache for camera lists (refreshed every 5 minutes)
+let cachedAustinCameras: CCTVCamera[] = [];
+let austinCacheTime = 0;
+let cachedCaltransCameras: CCTVCamera[] = [];
+let caltransCacheTime = 0;
+const CAMERAS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch camera list from Austin Open Data API
+ */
+async function fetchAustinCameras(): Promise<CCTVCamera[]> {
+  // Return cached if still valid
+  if (cachedAustinCameras.length > 0 && Date.now() - austinCacheTime < CAMERAS_CACHE_TTL) {
+    return cachedAustinCameras;
+  }
+
+  try {
+    // Fetch cameras that are turned on, limit to 500
+    const response = await fetch(
+      `${AUSTIN_CAMERA_API}?$where=camera_status='TURNED_ON'&$limit=500`
+    );
+
+    if (!response.ok) {
+      console.error(`[CCTV] Austin API error: ${response.status}`);
+      return cachedAustinCameras; // Return stale cache on error
+    }
+
+    const data: AustinCameraData[] = await response.json();
+    
+    cachedAustinCameras = data
+      .filter(cam => cam.location && cam.screenshot_address)
+      .map(cam => ({
+        id: `austin-${cam.camera_id}`,
+        name: cam.location_name.trim(),
+        latitude: cam.location!.coordinates[1],
+        longitude: cam.location!.coordinates[0],
+        streamUrl: cam.screenshot_address,
+        status: "live" as const,
+        source: "austin" as const,
+        imageUrl: `https://cctv.austinmobility.io/image/${cam.camera_id}.jpg`,
+      }));
+
+    austinCacheTime = Date.now();
+    console.log(`[CCTV] Fetched ${cachedAustinCameras.length} cameras from Austin API`);
+    
+    return cachedAustinCameras;
+  } catch (error) {
+    console.error("[CCTV] Error fetching Austin cameras:", error);
+    return cachedAustinCameras; // Return stale cache on error
+  }
 }
 
 /**
- * Static list of Austin traffic cameras
- * These are known working MJPEG streams from TxDOT and other sources
- * Fallback since Austin Open Data Portal doesn't have a reliable real-time API
+ * Fetch camera list from Caltrans API (all districts)
  */
-const AUSTIN_CAMERAS: CCTVCamera[] = [
-  // Downtown Austin cameras
-  {
-    id: "atx-congress-6th",
-    name: "Congress Ave @ 6th St",
-    latitude: 30.2672,
-    longitude: -97.7431,
-    streamUrl: "https://cctv.austintexas.gov/image/congress-6th.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-lamar-5th",
-    name: "Lamar Blvd @ 5th St",
-    latitude: 30.2680,
-    longitude: -97.7538,
-    streamUrl: "https://cctv.austintexas.gov/image/lamar-5th.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-i35-riverside",
-    name: "I-35 @ Riverside Dr",
-    latitude: 30.2505,
-    longitude: -97.7325,
-    streamUrl: "https://cctv.austintexas.gov/image/i35-riverside.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-mopac-enfield",
-    name: "MoPac @ Enfield Rd",
-    latitude: 30.2869,
-    longitude: -97.7678,
-    streamUrl: "https://cctv.austintexas.gov/image/mopac-enfield.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-i35-mlk",
-    name: "I-35 @ MLK Blvd",
-    latitude: 30.2798,
-    longitude: -97.7269,
-    streamUrl: "https://cctv.austintexas.gov/image/i35-mlk.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-guadalupe-24th",
-    name: "Guadalupe St @ 24th St",
-    latitude: 30.2866,
-    longitude: -97.7414,
-    streamUrl: "https://cctv.austintexas.gov/image/guadalupe-24th.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-congress-11th",
-    name: "Congress Ave @ 11th St",
-    latitude: 30.2743,
-    longitude: -97.7405,
-    streamUrl: "https://cctv.austintexas.gov/image/congress-11th.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-red-river-6th",
-    name: "Red River St @ 6th St",
-    latitude: 30.2669,
-    longitude: -97.7373,
-    streamUrl: "https://cctv.austintexas.gov/image/red-river-6th.jpg",
-    status: "live",
-  },
-  // South Austin cameras
-  {
-    id: "atx-s-lamar-oltorf",
-    name: "S Lamar Blvd @ Oltorf St",
-    latitude: 30.2411,
-    longitude: -97.7731,
-    streamUrl: "https://cctv.austintexas.gov/image/s-lamar-oltorf.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-s-congress-barton",
-    name: "S Congress Ave @ Barton Springs",
-    latitude: 30.2598,
-    longitude: -97.7487,
-    streamUrl: "https://cctv.austintexas.gov/image/s-congress-barton.jpg",
-    status: "live",
-  },
-  // East Austin cameras
-  {
-    id: "atx-e-7th-chicon",
-    name: "E 7th St @ Chicon St",
-    latitude: 30.2640,
-    longitude: -97.7225,
-    streamUrl: "https://cctv.austintexas.gov/image/e-7th-chicon.jpg",
-    status: "live",
-  },
-  {
-    id: "atx-airport-blvd",
-    name: "Airport Blvd @ I-35",
-    latitude: 30.3012,
-    longitude: -97.7128,
-    streamUrl: "https://cctv.austintexas.gov/image/airport-blvd.jpg",
-    status: "live",
-  },
-];
+async function fetchCaltransCameras(): Promise<CCTVCamera[]> {
+  // Return cached if still valid
+  if (cachedCaltransCameras.length > 0 && Date.now() - caltransCacheTime < CAMERAS_CACHE_TTL) {
+    return cachedCaltransCameras;
+  }
+
+  try {
+    // Fetch all districts in parallel
+    const districtPromises = CALTRANS_DISTRICTS.map(async (district) => {
+      const paddedDistrict = district.toString().padStart(2, "0");
+      const url = `${CALTRANS_API_BASE}/d${district}/cctv/cctvStatusD${paddedDistrict}.json`;
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`[CCTV] Caltrans D${district} API error: ${response.status}`);
+          return [];
+        }
+        
+        const json = await response.json();
+        const data: CaltransCameraData[] = json.data || [];
+        
+        return data
+          .filter(item => item.cctv.inService === "true" && item.cctv.imageData?.static?.currentImageURL)
+          .map(item => ({
+            id: `caltrans-d${district}-${item.cctv.index}`,
+            name: `${item.cctv.location.route} : ${item.cctv.location.locationName}`,
+            latitude: parseFloat(item.cctv.location.latitude),
+            longitude: parseFloat(item.cctv.location.longitude),
+            streamUrl: item.cctv.imageData.streamingVideoURL || "",
+            status: "live" as const,
+            source: "caltrans" as const,
+            imageUrl: item.cctv.imageData.static.currentImageURL,
+          }));
+      } catch (err) {
+        console.warn(`[CCTV] Error fetching Caltrans D${district}:`, err);
+        return [];
+      }
+    });
+
+    const districtResults = await Promise.all(districtPromises);
+    cachedCaltransCameras = districtResults.flat();
+    caltransCacheTime = Date.now();
+    
+    console.log(`[CCTV] Fetched ${cachedCaltransCameras.length} cameras from Caltrans API`);
+    return cachedCaltransCameras;
+  } catch (error) {
+    console.error("[CCTV] Error fetching Caltrans cameras:", error);
+    return cachedCaltransCameras; // Return stale cache on error
+  }
+}
+
+/**
+ * Fetch cameras from all sources
+ */
+async function fetchAllCameras(source?: "austin" | "caltrans"): Promise<CCTVCamera[]> {
+  if (source === "austin") {
+    return fetchAustinCameras();
+  }
+  if (source === "caltrans") {
+    return fetchCaltransCameras();
+  }
+  
+  // Fetch both in parallel
+  const [austin, caltrans] = await Promise.all([
+    fetchAustinCameras(),
+    fetchCaltransCameras(),
+  ]);
+  
+  return [...austin, ...caltrans];
+}
+
+// Initialize camera caches on startup
+fetchAustinCameras();
+fetchCaltransCameras();
 
 // Cache for CCTV thumbnails (cameraId -> { data: Uint8Array, timestamp: number })
+// Short TTL cache - used to avoid hammering the API
 const cctvThumbnailCache = new Map<string, { data: Uint8Array; timestamp: number; contentType: string }>();
 const CCTV_THUMBNAIL_TTL = 1000; // 1 second cache
+
+// Last known good image cache - persists successful images for fallback
+// This cache never expires - we always prefer showing a stale image over "OFFLINE"
+const lastKnownGoodCache = new Map<string, { data: Uint8Array; contentType: string; fetchedAt: number }>();
+
+// File system cache directory for persistent storage
+const CCTV_CACHE_DIR = "./cache/cctv";
+
+// Ensure cache directory exists
+import { mkdir } from "node:fs/promises";
+await mkdir(CCTV_CACHE_DIR, { recursive: true });
+
+/**
+ * Load cached image from disk
+ */
+async function loadCachedImage(cameraId: string): Promise<{ data: Uint8Array; fetchedAt: number } | null> {
+  try {
+    const imagePath = `${CCTV_CACHE_DIR}/${cameraId}.jpg`;
+    const metaPath = `${CCTV_CACHE_DIR}/${cameraId}.meta.json`;
+    
+    const imageFile = Bun.file(imagePath);
+    const metaFile = Bun.file(metaPath);
+    
+    if (!(await imageFile.exists()) || !(await metaFile.exists())) {
+      return null;
+    }
+    
+    const data = new Uint8Array(await imageFile.arrayBuffer());
+    const meta = await metaFile.json();
+    
+    return { data, fetchedAt: meta.fetchedAt };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save image to disk cache
+ */
+async function saveCachedImage(cameraId: string, data: Uint8Array): Promise<void> {
+  try {
+    const imagePath = `${CCTV_CACHE_DIR}/${cameraId}.jpg`;
+    const metaPath = `${CCTV_CACHE_DIR}/${cameraId}.meta.json`;
+    
+    await Bun.write(imagePath, data);
+    await Bun.write(metaPath, JSON.stringify({ fetchedAt: Date.now() }));
+  } catch (error) {
+    console.error(`[CCTV] Failed to save cache for ${cameraId}:`, error);
+  }
+}
 
 // CORS headers used in multiple responses
 const CORS_HEADERS = {
@@ -419,13 +540,15 @@ Bun.serve({
     // CCTV Camera Endpoints
     // ========================================================================
 
-    // GET /api/cctv/cameras?bbox=west,south,east,north - List cameras in viewport
+    // GET /api/cctv/cameras?bbox=west,south,east,north&source=austin|caltrans - List cameras in viewport
     if (url.pathname === "/api/cctv/cameras") {
+      const sourceParam = url.searchParams.get("source") as "austin" | "caltrans" | null;
+      const cameras = await fetchAllCameras(sourceParam || undefined);
       const bboxParam = url.searchParams.get("bbox");
       
       if (!bboxParam) {
         // Return all cameras if no bbox specified
-        return jsonResponse(AUSTIN_CAMERAS);
+        return jsonResponse(cameras);
       }
 
       const parts = bboxParam.split(",").map(Number);
@@ -440,7 +563,7 @@ Bun.serve({
       }
 
       // Filter cameras within bounding box
-      const camerasInBbox = AUSTIN_CAMERAS.filter((camera) => {
+      const camerasInBbox = cameras.filter((camera) => {
         return (
           camera.longitude >= west &&
           camera.longitude <= east &&
@@ -449,21 +572,23 @@ Bun.serve({
         );
       });
 
-      console.log(`[CCTV] Returning ${camerasInBbox.length} cameras in bbox [${bboxParam}]`);
+      const sourceLabel = sourceParam || "all";
+      console.log(`[CCTV] Returning ${camerasInBbox.length} ${sourceLabel} cameras in bbox [${bboxParam}]`);
       return jsonResponse(camerasInBbox);
     }
 
-    // GET /api/cctv/thumbnail/:id - Get latest JPEG frame (1fps sampling)
+    // GET /api/cctv/thumbnail/:id - Get latest JPEG frame (proxied from source)
     const thumbnailMatch = url.pathname.match(/^\/api\/cctv\/thumbnail\/(.+)$/);
     if (thumbnailMatch && thumbnailMatch[1]) {
       const cameraId = thumbnailMatch[1];
-      const camera = AUSTIN_CAMERAS.find((c) => c.id === cameraId);
+      const cameras = await fetchAllCameras();
+      const camera = cameras.find((c) => c.id === cameraId);
 
       if (!camera) {
         return jsonResponse({ error: "Camera not found", cameraId }, 404);
       }
 
-      // Check cache first
+      // Check cache first (1 second TTL to avoid hammering the API)
       const cached = cctvThumbnailCache.get(cameraId);
       if (cached && Date.now() - cached.timestamp < CCTV_THUMBNAIL_TTL) {
         return new Response(cached.data as unknown as BlobPart, {
@@ -472,25 +597,77 @@ Bun.serve({
       }
 
       try {
-        // For demo purposes, generate a synthetic frame since real Austin CCTV
-        // streams require special access. In production, this would fetch from
-        // the actual stream URL.
-        const frame = await generateSyntheticFrame(camera);
+        // Fetch real image from the appropriate source
+        const imageUrl = camera.imageUrl;
+        if (!imageUrl) {
+          throw new Error("Camera has no image URL");
+        }
+        const response = await fetch(imageUrl);
         
-        // Cache the frame
+        if (!response.ok) {
+          throw new Error(`Image fetch failed: ${response.status}`);
+        }
+        
+        const imageData = new Uint8Array(await response.arrayBuffer());
+        const contentType = response.headers.get("Content-Type") || "image/jpeg";
+        
+        // Cache the frame (short TTL - in memory)
         cctvThumbnailCache.set(cameraId, {
-          data: frame,
+          data: imageData,
           timestamp: Date.now(),
-          contentType: "image/png",
+          contentType,
         });
+        
+        // Update in-memory last known good cache
+        lastKnownGoodCache.set(cameraId, {
+          data: imageData,
+          contentType,
+          fetchedAt: Date.now(),
+        });
+        
+        // Persist to disk (async, don't wait)
+        saveCachedImage(cameraId, imageData);
 
-        return new Response(frame as unknown as BlobPart, {
-          headers: { ...CORS_HEADERS, "Content-Type": "image/png" },
+        return new Response(imageData as unknown as BlobPart, {
+          headers: { ...CORS_HEADERS, "Content-Type": contentType },
         });
       } catch (error) {
-        console.error(`[CCTV] Error fetching thumbnail for ${cameraId}:`, error);
+        // Try in-memory cache first
+        const lastGood = lastKnownGoodCache.get(cameraId);
+        if (lastGood) {
+          return new Response(lastGood.data as unknown as BlobPart, {
+            headers: { 
+              ...CORS_HEADERS, 
+              "Content-Type": lastGood.contentType,
+              "X-Stale": "true",
+              "X-Last-Fetched": new Date(lastGood.fetchedAt).toISOString(),
+            },
+          });
+        }
         
-        // Return a generated "offline" frame instead of error
+        // Try disk cache (survives restarts)
+        const diskCached = await loadCachedImage(cameraId);
+        if (diskCached) {
+          // Populate in-memory cache from disk
+          lastKnownGoodCache.set(cameraId, {
+            data: diskCached.data,
+            contentType: "image/jpeg",
+            fetchedAt: diskCached.fetchedAt,
+          });
+          
+          return new Response(diskCached.data as unknown as BlobPart, {
+            headers: { 
+              ...CORS_HEADERS, 
+              "Content-Type": "image/jpeg",
+              "X-Stale": "true",
+              "X-From-Disk": "true",
+              "X-Last-Fetched": new Date(diskCached.fetchedAt).toISOString(),
+            },
+          });
+        }
+        
+        // No cached image available - return offline frame
+        console.error(`[CCTV] Error fetching thumbnail for ${cameraId} (no cache):`, error);
         const offlineFrame = await generateOfflineFrame(camera);
         return new Response(offlineFrame as unknown as BlobPart, {
           headers: { ...CORS_HEADERS, "Content-Type": "image/png" },
@@ -502,17 +679,22 @@ Bun.serve({
     const streamMatch = url.pathname.match(/^\/api\/cctv\/stream\/(.+)$/);
     if (streamMatch && streamMatch[1]) {
       const cameraId = streamMatch[1];
-      const camera = AUSTIN_CAMERAS.find((c) => c.id === cameraId);
+      const cameras = await fetchAllCameras();
+      const camera = cameras.find((c) => c.id === cameraId);
 
       if (!camera) {
         return jsonResponse({ error: "Camera not found", cameraId }, 404);
       }
 
-      // For MJPEG streams, we would proxy the actual stream
-      // Since real streams aren't available, return a synthetic MJPEG
+      if (!camera.imageUrl) {
+        return jsonResponse({ error: "Camera has no image URL", cameraId }, 400);
+      }
+
+      // MJPEG stream - fetch real frames from camera source
       const boundary = "frame";
+      const streamImageUrl = camera.imageUrl;
       
-      // Create a readable stream that generates frames
+      // Create a readable stream that fetches real frames
       const stream = new ReadableStream({
         async start(controller) {
           let frameCount = 0;
@@ -525,7 +707,43 @@ Bun.serve({
             }
 
             try {
-              const frameData = await generateSyntheticFrame(camera);
+              // Fetch real frame from camera source
+              const response = await fetch(streamImageUrl);
+              
+              let frameData: Uint8Array;
+              
+              if (!response.ok) {
+                // Try in-memory cache first
+                const lastGood = lastKnownGoodCache.get(cameraId);
+                if (lastGood) {
+                  frameData = lastGood.data;
+                } else {
+                  // Try disk cache
+                  const diskCached = await loadCachedImage(cameraId);
+                  if (diskCached) {
+                    frameData = diskCached.data;
+                    // Populate in-memory cache
+                    lastKnownGoodCache.set(cameraId, {
+                      data: diskCached.data,
+                      contentType: "image/jpeg",
+                      fetchedAt: diskCached.fetchedAt,
+                    });
+                  } else {
+                    throw new Error(`Image fetch failed: ${response.status}`);
+                  }
+                }
+              } else {
+                frameData = new Uint8Array(await response.arrayBuffer());
+                // Update in-memory cache
+                lastKnownGoodCache.set(cameraId, {
+                  data: frameData,
+                  contentType: "image/jpeg",
+                  fetchedAt: Date.now(),
+                });
+                // Persist to disk (async)
+                saveCachedImage(cameraId, frameData);
+              }
+              
               const header = `--${boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frameData.length}\r\n\r\n`;
               
               controller.enqueue(new TextEncoder().encode(header));
@@ -534,8 +752,8 @@ Bun.serve({
               
               frameCount++;
               
-              // 15 FPS = ~66ms between frames
-              setTimeout(sendFrame, 66);
+              // ~1 FPS for real streams (cameras update ~every second)
+              setTimeout(sendFrame, 1000);
             } catch (error) {
               console.error(`[CCTV] Stream error for ${cameraId}:`, error);
               controller.close();
@@ -900,4 +1118,4 @@ function crc32(data: Uint8Array): number {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-console.log("[CCTV] Camera proxy ready with", AUSTIN_CAMERAS.length, "Austin cameras");
+console.log("[CCTV] Camera proxy ready - fetching Austin + Caltrans cameras");
