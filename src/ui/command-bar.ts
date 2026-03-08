@@ -341,13 +341,51 @@ export class CommandBar {
         return;
       }
 
-      // Search for satellite by NORAD ID
-      const satellite = this.satelliteLayer.findByNoradId(noradId);
+      // Search for satellite by NORAD ID in loaded data
+      let satellite = this.satelliteLayer.findByNoradId(noradId);
 
+      // If not found, try fetching from CelesTrak
       if (!satellite) {
-        this.showError(`Satellite ${noradId} not found`);
-        addLogEntry(`[FOLLOW] Satellite ${noradId} not found`, "error");
-        return;
+        // Check rate limit before fetching
+        if (!this.satelliteLayer.canFetchFromCelestrak()) {
+          this.showError("Please wait before fetching another satellite");
+          addLogEntry(`[FOLLOW] Rate limited - please wait`, "error");
+          return;
+        }
+
+        // Show loading state
+        this.setLoading(true);
+        this.loadingIndicator.textContent = `FETCHING ${noradId}...`;
+        addLogEntry(`[FOLLOW] Fetching satellite ${noradId}...`, "info");
+
+        try {
+          satellite = await this.satelliteLayer.fetchAndAddSatellite(noradId);
+          this.setLoading(false);
+        } catch (error) {
+          this.setLoading(false);
+          
+          if (error instanceof Error) {
+            const message = error.message;
+            
+            if (message.startsWith("NOT_FOUND:")) {
+              this.showError(`Satellite ${noradId} not found`);
+              addLogEntry(`[FOLLOW] Satellite ${noradId} not found on CelesTrak`, "error");
+            } else if (message.startsWith("TIMEOUT:")) {
+              this.showError("Failed to fetch satellite data");
+              addLogEntry(`[FOLLOW] Timeout fetching satellite ${noradId}`, "error");
+            } else if (message.startsWith("RATE_LIMIT:")) {
+              this.showError("Please wait before fetching another satellite");
+              addLogEntry(`[FOLLOW] Rate limited - please wait`, "error");
+            } else {
+              this.showError("Failed to fetch satellite data");
+              addLogEntry(`[FOLLOW] Error fetching satellite ${noradId}: ${message}`, "error");
+            }
+          } else {
+            this.showError("Failed to fetch satellite data");
+            addLogEntry(`[FOLLOW] Unknown error fetching satellite ${noradId}`, "error");
+          }
+          return;
+        }
       }
 
       // Check if currently following this satellite - toggle behavior

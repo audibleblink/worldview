@@ -18,6 +18,10 @@ const BILLBOARD_SIZE_SELECTED = 28;
 const POSITION_UPDATE_INTERVAL_MS = 2500;
 const FOLLOW_RANGE_METERS = 2_500_000;
 
+// CelesTrak fetch rate limiting
+const CELESTRAK_COOLDOWN_MS = 5000;
+const CELESTRAK_FETCH_TIMEOUT_MS = 10000;
+
 const CATEGORY_COLORS: Record<string, Cesium.Color> = {
   stations: Cesium.Color.fromCssColorString("#00cfff"),
   military: Cesium.Color.fromCssColorString("#ff4444"),
@@ -211,6 +215,9 @@ export class SatelliteLayer {
   private hiddenCategories: Set<string> = new Set();
   private onExternalDeselect: (() => void) | null = null;
 
+  // CelesTrak rate limiting
+  private lastCelestrakFetch: number = 0;
+
   constructor(viewer: Cesium.Viewer, onCountUpdate?: (n: number | null) => void) {
     this.viewer = viewer;
     this.onCountUpdate = onCountUpdate ?? null;
@@ -311,6 +318,147 @@ export class SatelliteLayer {
   getFollowedSatellite(): SatelliteRecord | null {
     if (!this.selectedNoradId || !this.followTickRemove) return null;
     return this.records.find((r) => r.noradId === this.selectedNoradId) ?? null;
+  }
+
+  /**
+   * Check if CelesTrak fetch is allowed (rate limiting)
+   * @returns true if enough time has passed since last fetch
+   */
+  canFetchFromCelestrak(): boolean {
+    const now = Date.now();
+    return now - this.lastCelestrakFetch >= CELESTRAK_COOLDOWN_MS;
+  }
+
+  /**
+   * Get remaining cooldown time in milliseconds
+   */
+  getCelestrakCooldownRemaining(): number {
+    const now = Date.now();
+    const elapsed = now - this.lastCelestrakFetch;
+    return Math.max(0, CELESTRAK_COOLDOWN_MS - elapsed);
+  }
+
+  /**
+   * Fetch a satellite from CelesTrak by NORAD ID and add it to the loaded collection
+   * @param noradId - NORAD catalog number (1-5 digits)
+   * @returns The satellite record if found and added, throws on error
+   */
+  async fetchAndAddSatellite(noradId: number): Promise<SatelliteRecord> {
+    // Check rate limit first
+    if (!this.canFetchFromCelestrak()) {
+      const remaining = Math.ceil(this.getCelestrakCooldownRemaining() / 1000);
+      throw new Error(`RATE_LIMIT:Please wait ${remaining}s before fetching another satellite`);
+    }
+
+    // Update timestamp before fetch to prevent concurrent requests
+    this.lastCelestrakFetch = Date.now();
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CELESTRAK_FETCH_TIMEOUT_MS);
+
+      const response = await fetch(
+        `http://localhost:3001/tle?catnr=${noradId}`,
+        { signal: controller.signal }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (response.status === 404) {
+        throw new Error(`NOT_FOUND:Satellite ${noradId} not found`);
+      }
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(`FETCH_ERROR:${data.error || "Failed to fetch satellite data"}`);
+      }
+
+      const tleText = await response.text();
+      const lines = tleText.trim().split("\n").map(l => l.trim()).filter(l => l.length > 0);
+
+      if (lines.length < 3) {
+        throw new Error("PARSE_ERROR:Invalid TLE data received");
+      }
+
+      // Parse the TLE
+      const name = lines[0]!;
+      const line1 = lines[1]!;
+      const line2 = lines[2]!;
+
+      if (!line1.startsWith("1 ") || !line2.startsWith("2 ")) {
+        throw new Error("PARSE_ERROR:Invalid TLE format");
+      }
+
+      const satrec = satellite.twoline2satrec(line1, line2);
+      if (satrec.error !== 0) {
+        throw new Error("PARSE_ERROR:Failed to parse TLE data");
+      }
+
+      // NORAD catalog number from TLE
+      const parsedNoradId = line1.substring(2, 7).trim();
+      
+      // Use the research category color for on-demand fetched satellites
+      const color = CATEGORY_COLORS["research"]!;
+
+      const record: SatelliteRecord = {
+        name,
+        noradId: parsedNoradId,
+        category: "research", // Default category for on-demand satellites
+        satrec,
+        color,
+      };
+
+      // Add to records
+      this.records.push(record);
+
+      // Compute initial position
+      const now = new Date();
+      const result = satellite.propagate(satrec, now);
+      if (!result?.position || typeof result.position === "boolean") {
+        throw new Error("PROPAGATE_ERROR:Failed to compute satellite position");
+      }
+
+      const gmst = satellite.gstime(now);
+      const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
+      const cartesian = Cesium.Cartesian3.fromRadians(geo.longitude, geo.latitude, geo.height * 1000);
+
+      // Create billboard if collection exists
+      if (this.billboards) {
+        if (!this.satelliteTexture) {
+          this.satelliteTexture = createSatelliteTexture();
+        }
+
+        const billboard = this.billboards.add({
+          position: cartesian,
+          image: this.satelliteTexture,
+          width: BILLBOARD_SIZE_NORMAL,
+          height: BILLBOARD_SIZE_NORMAL,
+          color: record.color,
+          id: record.noradId,
+        });
+        this.billboardMap.set(record.noradId, billboard);
+        this.satellitePositions.set(record.noradId, cartesian);
+        this.notifyVisibleCount();
+      }
+
+      return record;
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          throw new Error("TIMEOUT:Failed to fetch satellite data");
+        }
+        // Re-throw our custom errors
+        if (error.message.startsWith("RATE_LIMIT:") ||
+            error.message.startsWith("NOT_FOUND:") ||
+            error.message.startsWith("FETCH_ERROR:") ||
+            error.message.startsWith("PARSE_ERROR:") ||
+            error.message.startsWith("PROPAGATE_ERROR:") ||
+            error.message.startsWith("TIMEOUT:")) {
+          throw error;
+        }
+      }
+      throw new Error("FETCH_ERROR:Failed to fetch satellite data");
+    }
   }
 
   selectSatellite(noradId: string, onSelect: (record: SatelliteRecord, velocityKmS: number) => void): void {

@@ -209,23 +209,23 @@ bun test test/airline-codes.test.ts test/flight-follow.test.ts
 
 ### Tasks
 
-- [ ] Add single-satellite endpoint to `src/proxy/tle.ts`:
+- [x] Add single-satellite endpoint to `src/proxy/tle.ts`:
   - `GET /tle?catnr={noradId}` → CelesTrak single fetch
   - Parse TLE response and return satellite data
-- [ ] Add rate limiter state to `SatelliteLayer`:
+- [x] Add rate limiter state to `SatelliteLayer`:
   - `lastCelestrakFetch: number`
   - `CELESTRAK_COOLDOWN_MS = 5000`
-- [ ] Implement `fetchAndAddSatellite(noradId: number)` in `SatelliteLayer`:
+- [x] Implement `fetchAndAddSatellite(noradId: number)` in `SatelliteLayer`:
   - Check rate limit
   - Fetch from proxy
   - Parse TLE
   - Add to loaded collection
   - Create billboard entity
-- [ ] Update `handleFollow()` to use on-demand fetch:
+- [x] Update `handleFollow()` to use on-demand fetch:
   - If satellite not in loaded data, call `fetchAndAddSatellite()`
   - Show loading spinner during fetch
   - Handle fetch errors (404, timeout, network)
-- [ ] Write tests with mocked fetch
+- [x] Write tests with mocked fetch
 
 ### Files to Modify
 
@@ -257,14 +257,14 @@ bun run scripts/verify-phase4.ts
 
 ### Checklist
 
-- [ ] `/tle?catnr=25544` returns valid TLE data
-- [ ] Rate limiter blocks requests within 5 seconds
-- [ ] Rate limit error shows: "Please wait before fetching another satellite"
-- [ ] CelesTrak 404 shows: "Satellite {id} not found"
-- [ ] Timeout shows: "Failed to fetch satellite data"
-- [ ] Fetched satellite appears on globe
-- [ ] Fetched satellite position updates over time
-- [ ] `bun test` passes
+- [x] `/tle?catnr=25544` returns valid TLE data
+- [x] Rate limiter blocks requests within 5 seconds
+- [x] Rate limit error shows: "Please wait before fetching another satellite"
+- [x] CelesTrak 404 shows: "Satellite {id} not found"
+- [x] Timeout shows: "Failed to fetch satellite data"
+- [x] Fetched satellite appears on globe
+- [x] Fetched satellite position updates over time
+- [x] `bun test` passes
 
 ### Exit Criteria
 
