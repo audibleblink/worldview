@@ -35,6 +35,18 @@ if (!openskyClientId || !openskyClientSecret) {
   console.warn("Create an API client at https://opensky-network.org/my-opensky/account to get credentials");
 }
 
+// FlightAware AeroAPI for route lookup
+const FLIGHTAWARE_API_KEY = process.env.FLIGHTAWARE_API_KEY;
+const FLIGHTAWARE_API_URL = "https://aeroapi.flightaware.com/aeroapi";
+
+if (!FLIGHTAWARE_API_KEY) {
+  console.warn("WARNING: FLIGHTAWARE_API_KEY not set - route lookup will be unavailable");
+}
+
+// Cache for flight routes (callsign -> { origin, destination, timestamp })
+const flightRouteCache = new Map<string, { origin: string; destination: string; timestamp: number }>();
+const ROUTE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 // OAuth2 token management
 const OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
 const TOKEN_REFRESH_MARGIN = 30; // seconds before expiry to refresh
@@ -167,6 +179,74 @@ Bun.serve({
       } catch (error) {
         console.error("Flights proxy error:", error);
         return jsonResponse({ error: "Flights proxy error" }, 502);
+      }
+    }
+
+    // FlightAware route lookup by callsign
+    const routeMatch = url.pathname.match(/^\/flight-route\/(.+)$/);
+    if (routeMatch && routeMatch[1]) {
+      const callsign = routeMatch[1].trim().toUpperCase();
+      
+      if (!FLIGHTAWARE_API_KEY) {
+        return jsonResponse({ error: "FlightAware API key not configured" }, 503);
+      }
+
+      // Check cache first
+      const cached = flightRouteCache.get(callsign);
+      if (cached && Date.now() - cached.timestamp < ROUTE_CACHE_TTL) {
+        return jsonResponse({ origin: cached.origin, destination: cached.destination });
+      }
+
+      try {
+        // FlightAware uses the callsign/ident to look up flights
+        const response = await fetch(`${FLIGHTAWARE_API_URL}/flights/${callsign}`, {
+          headers: {
+            "x-apikey": FLIGHTAWARE_API_KEY,
+            "Accept": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            return jsonResponse({ error: "Flight not found", callsign }, 404);
+          }
+          console.error(`FlightAware API error: ${response.status} ${response.statusText}`);
+          return jsonResponse({ error: "FlightAware API error", status: response.status }, 502);
+        }
+
+        const data = await response.json();
+        
+        // Find the most recent active flight
+        const flights = data.flights || [];
+        const activeFlight = flights.find((f: any) => 
+          f.status === "En Route" || f.status === "Scheduled" || f.actual_off
+        ) || flights[0];
+
+        if (!activeFlight) {
+          return jsonResponse({ error: "No flight data found", callsign }, 404);
+        }
+
+        const origin = activeFlight.origin?.code_icao || activeFlight.origin?.code_iata || null;
+        const destination = activeFlight.destination?.code_icao || activeFlight.destination?.code_iata || null;
+
+        // Cache the result
+        if (origin || destination) {
+          flightRouteCache.set(callsign, { 
+            origin: origin || "—", 
+            destination: destination || "—", 
+            timestamp: Date.now() 
+          });
+        }
+
+        return jsonResponse({ 
+          origin: origin || "—", 
+          destination: destination || "—",
+          status: activeFlight.status,
+          aircraft_type: activeFlight.aircraft_type,
+        });
+      } catch (error) {
+        console.error("FlightAware route lookup error:", error);
+        return jsonResponse({ error: "FlightAware route lookup error" }, 502);
       }
     }
 

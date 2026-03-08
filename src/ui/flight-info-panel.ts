@@ -94,6 +94,27 @@ function formatVerticalRate(verticalRateMS: number): string {
 }
 
 /**
+ * Fetch flight route from FlightAware via proxy.
+ */
+async function fetchFlightRoute(callsign: string): Promise<{ origin: string; destination: string } | null> {
+  if (!callsign.trim()) return null;
+  
+  try {
+    const response = await fetch(`http://localhost:3001/flight-route/${encodeURIComponent(callsign.trim())}`);
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    if (data.origin && data.destination) {
+      return { origin: data.origin, destination: data.destination };
+    }
+    return null;
+  } catch (error) {
+    console.error("[FLIGHTS] Route lookup failed:", error);
+    return null;
+  }
+}
+
+/**
  * Show the flight info panel with the provided data.
  */
 export function showFlightInfoPanel(
@@ -104,13 +125,27 @@ export function showFlightInfoPanel(
   const panel = getOrCreatePanel();
 
   // Populate fields
-  setField("flight-info-callsign", record.callsign.trim() || "—");
+  const callsign = record.callsign.trim();
+  setField("flight-info-callsign", callsign || "—");
   setField("flight-info-altitude", `${Math.round(record.altitude * 3.28084).toLocaleString()} ft`);
   setField("flight-info-speed", `${Math.round(record.velocity * 1.94384)} kts`);
   setField("flight-info-heading", `${Math.round(record.heading)}°`);
   setField("flight-info-vs", formatVerticalRate(record.verticalRate));
   setField("flight-info-type", meta?.typecode ?? "—");
-  setField("flight-info-route", "—"); // Reserved for future
+  setField("flight-info-route", "...");  // Show loading state
+  
+  // Fetch route asynchronously from FlightAware
+  if (callsign) {
+    fetchFlightRoute(callsign).then((route) => {
+      if (route && route.origin !== "—" && route.destination !== "—") {
+        setField("flight-info-route", `${route.origin} → ${route.destination}`);
+      } else {
+        setField("flight-info-route", "—");
+      }
+    });
+  } else {
+    setField("flight-info-route", "—");
+  }
 
   // Re-wire close button (clone clears stale listeners)
   const closeBtn = replaceWithClone("flight-info-close");
