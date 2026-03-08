@@ -199,15 +199,15 @@ bun test test/command-bar.test.ts
 
 ### Tasks
 
-- [ ] Modify `src/ui/shell.ts`:
-  - [ ] Import `CommandBar` from `./command-bar.ts`
-  - [ ] Instantiate `CommandBar` in `initShell()`
-  - [ ] Add `:` keydown handler in `initKeyboardShortcuts()`:
+- [x] Modify `src/ui/shell.ts`:
+  - [x] Import `CommandBar` from `./command-bar.ts`
+  - [x] Instantiate `CommandBar` in `initShell()`
+  - [x] Add `:` keydown handler in `initKeyboardShortcuts()`:
     - Check `isTypingInInput()` first
     - Prevent default
     - Call `commandBar.show()`
-  - [ ] Register escape handler with `addEscapeHandler()`
-- [ ] Ensure command bar doesn't conflict with other keyboard shortcuts
+  - [x] Register escape handler with `addEscapeHandler()`
+- [x] Ensure command bar doesn't conflict with other keyboard shortcuts
 
 ### Verification
 

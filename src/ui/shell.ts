@@ -7,9 +7,13 @@ type Viewer = import("cesium").Viewer;
 import { initLeftPanel, type LeftPanelOptions } from "./left-panel.ts";
 import { initRightPanel } from "./right-panel.ts";
 import { initBottomBar, setMode, type ViewMode } from "./bottom-bar.ts";
+import { CommandBar } from "./command-bar.ts";
 
 // Performance monitoring state
 let performanceMonitor: PerformanceMonitor | null = null;
+
+// Command bar instance
+let commandBar: CommandBar | null = null;
 
 export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): void {
   console.log("Initializing UI shell...");
@@ -32,6 +36,10 @@ export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): 
   
   // Initialize performance monitoring
   performanceMonitor = new PerformanceMonitor(viewer);
+
+  // Initialize command bar
+  commandBar = new CommandBar();
+  commandBar.init();
 
   console.log("UI shell initialized");
 }
@@ -372,13 +380,30 @@ export function addEscapeHandler(handler: () => void): void {
 }
 
 function initKeyboardShortcuts(): void {
-  document.addEventListener("keydown", (event: KeyboardEvent) => {
-    if (isTypingInInput()) return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Register command bar escape handler
+  addEscapeHandler(() => {
+    if (commandBar?.getIsVisible()) {
+      commandBar.hide();
+      return;
+    }
+  });
 
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
+    // Handle escape even when typing (for closing command bar)
     if (event.key === "Escape") {
       event.preventDefault();
       for (const handler of escapeHandlers) handler();
+      return;
+    }
+
+    // Don't process other shortcuts when typing in input
+    if (isTypingInInput()) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    // Open command bar with ':' key
+    if (event.key === ":") {
+      event.preventDefault();
+      commandBar?.show();
       return;
     }
     
@@ -396,5 +421,5 @@ function initKeyboardShortcuts(): void {
     }
   });
 
-  console.log("Keyboard shortcuts initialized (1-6 for view modes, f for FPS, Escape for unfollow)");
+  console.log("Keyboard shortcuts initialized (1-6 for view modes, f for FPS, : for command bar, Escape for unfollow)");
 }
