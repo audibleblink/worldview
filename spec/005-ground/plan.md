@@ -272,25 +272,25 @@ verify().catch(console.error);
 
 ### Tasks
 
-- [ ] **3.1 Create seismic file structure**
+- [x] **3.1 Create seismic file structure**
   - Create `src/ground/seismic/` directory
   - Create files: `EarthquakeLayer.ts`, `USGSFetcher.ts`, `RingAnimation.ts`
 
-- [ ] **3.2 Implement USGSFetcher**
+- [x] **3.2 Implement USGSFetcher**
   - Create `USGSFetcher.ts`:
     - Fetch `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson`
     - Parse GeoJSON response
     - Filter by viewport proximity (within 500km)
     - Poll every 60 seconds
 
-- [ ] **3.3 Implement demo fallback**
+- [x] **3.3 Implement demo fallback**
   - If no real earthquakes near viewport:
     - Generate synthetic earthquake at random location
     - Magnitude 2.5-4.5
     - Add "SIMULATED" label
   - Cycle demo earthquakes every 30 seconds
 
-- [ ] **3.4 Implement RingAnimation**
+- [x] **3.4 Implement RingAnimation**
   - Create `RingAnimation.ts`:
     - Use Cesium `EllipseGraphics` with animated radius
     - Ring properties by magnitude:
@@ -301,14 +301,14 @@ verify().catch(console.error);
     - Fade opacity as rings expand
   - Create pulsing epicenter dot
 
-- [ ] **3.5 Implement EarthquakeLayer**
+- [x] **3.5 Implement EarthquakeLayer**
   - Create `EarthquakeLayer.ts`:
     - `initialize(viewer: Cesium.Viewer)`
     - `show()` / `hide()` lifecycle
     - Manage active earthquake entities
     - Coordinate fetcher + animations + demo fallback
 
-- [ ] **3.6 Add epicenter labels**
+- [x] **3.6 Add epicenter labels**
   - Show "M{magnitude} - {place}" label
   - Position above epicenter dot
   - Terminal styling
