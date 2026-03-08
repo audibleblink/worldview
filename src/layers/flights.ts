@@ -128,11 +128,12 @@ export async function fetchAircraftMeta(icao24: string): Promise<FlightMetadata 
 }
 
 /**
- * Creates a 24x24 aircraft chevron texture with glow
+ * Creates a 32x32 aircraft silhouette texture (top-down view)
  * Returns a data URL for use as billboard image
+ * Rendered in white for color tinting
  */
 export function createAircraftTexture(): string {
-  const size = 24;
+  const size = 32;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -141,23 +142,48 @@ export function createAircraftTexture(): string {
   const centerX = size / 2;
   const centerY = size / 2;
 
-  // Draw glow
+  // Draw subtle glow behind
   const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size / 2);
-  gradient.addColorStop(0, "rgba(0, 255, 255, 0.6)");
-  gradient.addColorStop(0.5, "rgba(0, 255, 255, 0.2)");
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.3)");
+  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.1)");
   gradient.addColorStop(1, "transparent");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
 
-  // Draw chevron/arrow pointing up
-  ctx.beginPath();
-  ctx.moveTo(centerX, 4); // Top point
-  ctx.lineTo(centerX + 6, 16); // Right wing
-  ctx.lineTo(centerX, 12); // Center notch
-  ctx.lineTo(centerX - 6, 16); // Left wing
-  ctx.closePath();
+  ctx.fillStyle = "#ffffff";
 
-  ctx.fillStyle = "#00ffff";
+  // Fuselage (pointed nose at top, pointing up)
+  ctx.beginPath();
+  ctx.moveTo(centerX, 3);           // Nose
+  ctx.lineTo(centerX + 2, 8);       // Right side of nose
+  ctx.lineTo(centerX + 2, 24);      // Right fuselage
+  ctx.lineTo(centerX + 1, 28);      // Right tail
+  ctx.lineTo(centerX - 1, 28);      // Left tail
+  ctx.lineTo(centerX - 2, 24);      // Left fuselage
+  ctx.lineTo(centerX - 2, 8);       // Left side of nose
+  ctx.closePath();
+  ctx.fill();
+
+  // Main wings (swept back)
+  ctx.beginPath();
+  ctx.moveTo(centerX, 12);          // Wing root front
+  ctx.lineTo(centerX + 13, 18);     // Right wingtip
+  ctx.lineTo(centerX + 12, 20);     // Right wing trailing edge
+  ctx.lineTo(centerX, 16);          // Wing root back
+  ctx.lineTo(centerX - 12, 20);     // Left wing trailing edge
+  ctx.lineTo(centerX - 13, 18);     // Left wingtip
+  ctx.closePath();
+  ctx.fill();
+
+  // Tail wings (horizontal stabilizer)
+  ctx.beginPath();
+  ctx.moveTo(centerX, 24);          // Tail root front
+  ctx.lineTo(centerX + 6, 26);      // Right tail tip
+  ctx.lineTo(centerX + 5, 28);      // Right tail back
+  ctx.lineTo(centerX, 26);          // Tail root back
+  ctx.lineTo(centerX - 5, 28);      // Left tail back
+  ctx.lineTo(centerX - 6, 26);      // Left tail tip
+  ctx.closePath();
   ctx.fill();
 
   return canvas.toDataURL();
@@ -433,6 +459,7 @@ export class FlightLayer {
   /**
    * Start following the currently selected flight.
    * Registers a preRender listener that updates camera each frame.
+   * Maintains current camera altitude - only follows horizontally.
    */
   startFollow(): void {
     if (!this.selectedIcao24) return;
@@ -444,16 +471,29 @@ export class FlightLayer {
     }
 
     this.following = true;
-    console.log("[FLIGHTS] Follow mode started for", this.selectedIcao24);
+    
+    // Capture current camera height to maintain during follow
+    const cameraCartographic = this.viewer.camera.positionCartographic;
+    const followHeight = cameraCartographic.height;
+    
+    console.log("[FLIGHTS] Follow mode started for", this.selectedIcao24, "at height", followHeight);
 
     const followListener = this.viewer.scene.preRender.addEventListener(() => {
       if (!this.following || !this.selectedIcao24) return;
 
       const pos = this.getCurrentPosition(this.selectedIcao24);
       if (pos) {
-        lookAtTarget(this.viewer, pos, {
-          range: FLIGHT_FOLLOW_RANGE,
-          pitch: Cesium.Math.toRadians(FLIGHT_FOLLOW_PITCH),
+        // Get plane's lon/lat but use our locked camera height
+        const planeCartographic = Cesium.Cartographic.fromCartesian(pos);
+        const targetAtCameraHeight = Cesium.Cartesian3.fromRadians(
+          planeCartographic.longitude,
+          planeCartographic.latitude,
+          0 // Ground level - camera will be positioned above this
+        );
+        
+        lookAtTarget(this.viewer, targetAtCameraHeight, {
+          range: followHeight,
+          pitch: Cesium.Math.toRadians(-90), // Look straight down
         });
       }
     });

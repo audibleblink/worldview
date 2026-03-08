@@ -340,17 +340,24 @@ export class TrafficParticleSystem {
     if (this.isRunning) return;
     this.isRunning = true;
     this.lastUpdateTime = performance.now();
+    
+    // Respawn particles if they were cleared
+    if (this.particles.length === 0 && this.network) {
+      this.spawnParticles();
+    }
+    
     this.animationLoop();
     console.log("[TrafficParticleSystem] Started");
   }
 
-  /** Stop the animation loop */
+  /** Stop the animation loop and clear particles */
   stop(): void {
     this.isRunning = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    this.clearParticles();
     console.log("[TrafficParticleSystem] Stopped");
   }
 

@@ -165,8 +165,13 @@ export function flyTo(
   duration: number = 2,
   pitch: number = -45
 ): void {
+  // Offset latitude south to compensate for oblique pitch looking north
+  // At 45° pitch, the camera looks forward by ~height meters
+  // 1 degree latitude ≈ 111km, so offset = height / 111000
+  const latOffset = pitch === -90 ? 0 : (height / 111000) * Math.tan(Math.abs(pitch) * Math.PI / 180);
+  
   viewer?.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height),
+    destination: Cesium.Cartesian3.fromDegrees(longitude, latitude - latOffset, height),
     orientation: {
       heading: Cesium.Math.toRadians(0), // North
       pitch: Cesium.Math.toRadians(pitch),

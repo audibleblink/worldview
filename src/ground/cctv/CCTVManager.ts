@@ -41,6 +41,11 @@ export class CCTVManager {
   
   // Stream failure tracking
   private failedStreams: Set<string> = new Set();
+  
+  // Center-stage mode
+  private centerStageCameraId: string | null = null;
+  private centerStageOverlay: HTMLElement | null = null;
+  private onCenterStageChange: ((cameraId: string | null) => void) | null = null;
 
   constructor(config: Partial<CCTVManagerConfig> = {}) {
     this.config = { ...DEFAULT_CCTV_CONFIG, ...config };
@@ -182,6 +187,180 @@ export class CCTVManager {
     this.onBillboardChange = callback;
   }
 
+  /** Set callback for center-stage mode changes */
+  setOnCenterStageChange(callback: (cameraId: string | null) => void): void {
+    this.onCenterStageChange = callback;
+  }
+
+  /** Check if a camera ID is a CCTV billboard */
+  isCCTVBillboard(entityId: string): boolean {
+    return this.activeBillboards.has(entityId);
+  }
+
+  /** Get the currently center-staged camera ID */
+  getCenterStageCameraId(): string | null {
+    return this.centerStageCameraId;
+  }
+
+  /** Check if a camera is in center-stage mode */
+  isCenterStage(cameraId: string): boolean {
+    return this.centerStageCameraId === cameraId;
+  }
+
+  /** Toggle center-stage mode for a camera */
+  toggleCenterStage(cameraId: string): void {
+    if (this.centerStageCameraId === cameraId) {
+      this.exitCenterStage();
+    } else {
+      this.enterCenterStage(cameraId);
+    }
+  }
+
+  /** Enter center-stage mode for a camera */
+  enterCenterStage(cameraId: string): void {
+    const billboard = this.activeBillboards.get(cameraId);
+    if (!billboard) {
+      console.warn(`[CCTVManager] Cannot center-stage non-projected camera: ${cameraId}`);
+      return;
+    }
+
+    // Exit previous center-stage if any
+    if (this.centerStageCameraId && this.centerStageCameraId !== cameraId) {
+      const prevBillboard = this.activeBillboards.get(this.centerStageCameraId);
+      if (prevBillboard) {
+        prevBillboard.isCenterStage = false;
+      }
+    }
+
+    this.centerStageCameraId = cameraId;
+    billboard.isCenterStage = true;
+    
+    // Create center-stage overlay
+    this.createCenterStageOverlay(billboard);
+    
+    this.onCenterStageChange?.(cameraId);
+    console.log(`[CCTVManager] Entered center-stage: ${cameraId}`);
+  }
+
+  /** Exit center-stage mode */
+  exitCenterStage(): void {
+    if (!this.centerStageCameraId) return;
+
+    const billboard = this.activeBillboards.get(this.centerStageCameraId);
+    if (billboard) {
+      billboard.isCenterStage = false;
+    }
+
+    this.removeCenterStageOverlay();
+    
+    const previousId = this.centerStageCameraId;
+    this.centerStageCameraId = null;
+    
+    this.onCenterStageChange?.(null);
+    console.log(`[CCTVManager] Exited center-stage: ${previousId}`);
+  }
+
+  /** Create the center-stage overlay DOM element */
+  private createCenterStageOverlay(billboard: CCTVBillboard): void {
+    this.removeCenterStageOverlay();
+
+    const camera = this.getCamera(billboard.cameraId);
+    const cameraName = camera?.name ?? billboard.cameraId;
+
+    const overlay = document.createElement("div");
+    overlay.id = "cctv-center-stage";
+    overlay.className = "cctv-center-stage";
+    overlay.innerHTML = `
+      <div class="cctv-center-stage-container">
+        <div class="cctv-center-stage-header">
+          <span class="cctv-center-stage-title">${cameraName}</span>
+          <div class="cctv-center-stage-controls">
+            <button class="cctv-center-stage-btn" id="cctv-refresh-btn">REFRESH</button>
+            <button class="cctv-center-stage-btn" id="cctv-unproject-btn">UNPROJECT</button>
+            <button class="cctv-center-stage-btn cctv-close-btn" id="cctv-close-btn">CLOSE</button>
+          </div>
+        </div>
+        <div class="cctv-center-stage-feed">
+          <canvas id="cctv-center-stage-canvas" width="640" height="480"></canvas>
+        </div>
+      </div>
+    `;
+
+    // Add click handlers
+    const closeBtn = overlay.querySelector("#cctv-close-btn");
+    closeBtn?.addEventListener("click", () => this.exitCenterStage());
+
+    const refreshBtn = overlay.querySelector("#cctv-refresh-btn");
+    refreshBtn?.addEventListener("click", () => {
+      const cameraId = this.centerStageCameraId;
+      if (cameraId) {
+        const cam = this.getCamera(cameraId);
+        const bill = this.activeBillboards.get(cameraId);
+        if (cam && bill) {
+          this.updateBillboardFrame(bill, cam);
+        }
+      }
+    });
+
+    const unprojectBtn = overlay.querySelector("#cctv-unproject-btn");
+    unprojectBtn?.addEventListener("click", () => {
+      const cameraId = this.centerStageCameraId;
+      this.exitCenterStage();
+      if (cameraId) {
+        this.removeProjection(cameraId);
+      }
+    });
+
+    // Click on backdrop to close
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        this.exitCenterStage();
+      }
+    });
+
+    const container = document.getElementById("cesium-container") ?? document.body;
+    container.appendChild(overlay);
+    this.centerStageOverlay = overlay;
+
+    // Start rendering to the center-stage canvas
+    this.startCenterStageRendering(billboard);
+  }
+
+  /** Remove the center-stage overlay */
+  private removeCenterStageOverlay(): void {
+    if (this.centerStageOverlay) {
+      this.centerStageOverlay.remove();
+      this.centerStageOverlay = null;
+    }
+  }
+
+  /** Start rendering frames to the center-stage canvas */
+  private startCenterStageRendering(billboard: CCTVBillboard): void {
+    const canvas = document.getElementById("cctv-center-stage-canvas") as HTMLCanvasElement | null;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const render = () => {
+      if (!billboard.isCenterStage || !this.centerStageOverlay) return;
+
+      // Scale and draw the billboard canvas to the larger center-stage canvas
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(billboard.canvas, 0, 0, canvas.width, canvas.height);
+
+      // Draw center-stage border
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+      requestAnimationFrame(render);
+    };
+
+    render();
+  }
+
   /** Fetch cameras within the given viewport */
   async fetchCamerasInViewport(bbox: BBox): Promise<Camera[]> {
     try {
@@ -256,7 +435,9 @@ export class CCTVManager {
     this.drawPlaceholder(ctx, canvas.width, canvas.height, camera.name);
 
     // Create Cesium entity with billboard
+    // Use camera.id as entity id for click detection
     const entity = this.viewer.entities.add({
+      id: camera.id,
       position: Cesium.Cartesian3.fromDegrees(
         camera.longitude,
         camera.latitude,
@@ -291,6 +472,7 @@ export class CCTVManager {
       ctx,
       updateInterval: null,
       isActive: true,
+      isCenterStage: false,
     };
 
     // Start frame updates
@@ -313,6 +495,11 @@ export class CCTVManager {
     const billboard = this.activeBillboards.get(cameraId);
     if (!billboard) return;
 
+    // Exit center-stage if this billboard is in center-stage
+    if (this.centerStageCameraId === cameraId) {
+      this.exitCenterStage();
+    }
+
     // Stop frame updates
     if (billboard.updateInterval !== null) {
       clearInterval(billboard.updateInterval);
@@ -333,14 +520,25 @@ export class CCTVManager {
     console.log(`[CCTVManager] Removed projection: ${cameraId}`);
   }
 
-  /** Toggle a camera projection */
-  async toggleProjection(camera: Camera): Promise<boolean> {
+  /** Toggle a camera projection, optionally flying to the camera */
+  async toggleProjection(camera: Camera, flyToOnProject = true): Promise<boolean> {
     if (this.isProjected(camera.id)) {
       this.removeProjection(camera.id);
       return false;
     } else {
-      return await this.projectCamera(camera);
+      const success = await this.projectCamera(camera);
+      if (success && flyToOnProject && this.onFlyToCamera) {
+        this.onFlyToCamera(camera.longitude, camera.latitude);
+      }
+      return success;
     }
+  }
+
+  /** Set callback for flying to a camera location */
+  private onFlyToCamera: ((longitude: number, latitude: number) => void) | null = null;
+
+  setOnFlyToCamera(callback: (longitude: number, latitude: number) => void): void {
+    this.onFlyToCamera = callback;
   }
 
   /** Update billboard texture with latest frame */
@@ -413,8 +611,8 @@ export class CCTVManager {
     }
   }
 
-  /** Draw terminal-style border on canvas */
-  private drawBorder(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  /** Draw terminal-style border on canvas with unproject button */
+  private drawBorder(ctx: CanvasRenderingContext2D, width: number, height: number, showUnprojectBtn = true): void {
     ctx.strokeStyle = "#00ff88";
     ctx.lineWidth = 3;
     ctx.strokeRect(1, 1, width - 2, height - 2);
@@ -423,6 +621,107 @@ export class CCTVManager {
     ctx.strokeStyle = "rgba(0, 255, 136, 0.3)";
     ctx.lineWidth = 6;
     ctx.strokeRect(3, 3, width - 6, height - 6);
+
+    // Draw unproject button in top-right corner
+    if (showUnprojectBtn) {
+      const btnWidth = 20;
+      const btnHeight = 16;
+      const btnX = width - btnWidth - 6;
+      const btnY = 6;
+
+      // Button background
+      ctx.fillStyle = "rgba(255, 51, 51, 0.8)";
+      ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+
+      // Button border
+      ctx.strokeStyle = "#ff3333";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+
+      // X icon
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(btnX + 5, btnY + 4);
+      ctx.lineTo(btnX + btnWidth - 5, btnY + btnHeight - 4);
+      ctx.moveTo(btnX + btnWidth - 5, btnY + 4);
+      ctx.lineTo(btnX + 5, btnY + btnHeight - 4);
+      ctx.stroke();
+    }
+  }
+
+  /** Get the unproject button bounds for hit testing */
+  getUnprojectButtonBounds(): { x: number; y: number; width: number; height: number } {
+    return {
+      x: 320 - 20 - 6, // canvas width - btn width - padding
+      y: 6,
+      width: 20,
+      height: 16,
+    };
+  }
+
+  /** 
+   * Handle click on a billboard - check if close button was hit
+   * Returns true if close button was clicked and billboard was removed
+   */
+  handleBillboardClick(
+    cameraId: string,
+    screenPosition: { x: number; y: number },
+    viewer: InstanceType<typeof Cesium.Viewer>
+  ): boolean {
+    const billboard = this.activeBillboards.get(cameraId);
+    if (!billboard) return false;
+
+    // Get billboard screen position and size
+    const billboardGraphics = billboard.entity.billboard;
+    if (!billboardGraphics) return false;
+
+    const entityPosition = billboard.entity.position?.getValue(Cesium.JulianDate.now());
+    if (!entityPosition) return false;
+
+    // Convert entity world position to screen coordinates
+    const screenPos = Cesium.SceneTransforms.worldToWindowCoordinates(
+      viewer.scene,
+      entityPosition
+    );
+    if (!screenPos) return false;
+
+    // Get billboard dimensions (accounting for scale)
+    const billboardWidth = this.config.billboardWidth;
+    const billboardHeight = this.config.billboardHeight;
+
+    // Billboard is anchored at bottom-center, so calculate bounds
+    const billboardLeft = screenPos.x - billboardWidth / 2;
+    const billboardTop = screenPos.y - billboardHeight;
+
+    // Convert click position to billboard-local coordinates
+    const localX = screenPosition.x - billboardLeft;
+    const localY = screenPosition.y - billboardTop;
+
+    // Check if click is within billboard bounds
+    if (localX < 0 || localX > billboardWidth || localY < 0 || localY > billboardHeight) {
+      return false;
+    }
+
+    // Scale local coordinates to canvas coordinates (canvas is 320x240)
+    const canvasX = (localX / billboardWidth) * 320;
+    const canvasY = (localY / billboardHeight) * 240;
+
+    // Check if click hit the close button
+    const btnBounds = this.getUnprojectButtonBounds();
+    if (
+      canvasX >= btnBounds.x &&
+      canvasX <= btnBounds.x + btnBounds.width &&
+      canvasY >= btnBounds.y &&
+      canvasY <= btnBounds.y + btnBounds.height
+    ) {
+      // Close button clicked - remove the billboard
+      this.removeProjection(cameraId);
+      console.log(`[CCTVManager] Close button clicked, removed billboard: ${cameraId}`);
+      return true;
+    }
+
+    return false;
   }
 
   /** Draw placeholder frame */
@@ -468,6 +767,9 @@ export class CCTVManager {
 
   /** Clean up all resources */
   destroy(): void {
+    // Exit center-stage first
+    this.exitCenterStage();
+    
     // Remove all active billboards
     for (const cameraId of this.activeBillboards.keys()) {
       this.removeProjection(cameraId);

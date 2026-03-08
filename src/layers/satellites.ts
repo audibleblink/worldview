@@ -134,25 +134,61 @@ export function propagateAll(
 }
 
 /**
- * Creates a 32×32 glow texture canvas data URL.
- * White/color center → transparent edge radial gradient.
- * Runs in browser context only.
+ * Create a satellite sprite texture.
+ * Draws a satellite shape (body with solar panels) in white for color tinting.
  */
-export function createGlowTexture(color: string): string {
+export function createSatelliteTexture(): string {
   const size = 32;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
 
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-  gradient.addColorStop(0, "white");
-  gradient.addColorStop(0.3, color);
-  gradient.addColorStop(1, "transparent");
+  const centerX = size / 2;
+  const centerY = size / 2;
 
+  // Draw subtle glow behind
+  const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size / 2);
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.4)");
+  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.1)");
+  gradient.addColorStop(1, "transparent");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+
+  // Central body (rectangle)
+  const bodyWidth = 6;
+  const bodyHeight = 8;
+  ctx.fillRect(centerX - bodyWidth / 2, centerY - bodyHeight / 2, bodyWidth, bodyHeight);
+
+  // Left solar panel
+  ctx.fillRect(centerX - 14, centerY - 3, 10, 6);
+  
+  // Right solar panel  
+  ctx.fillRect(centerX + 4, centerY - 3, 10, 6);
+
+  // Panel grid lines
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+  ctx.lineWidth = 0.5;
+  
+  // Left panel lines
+  ctx.beginPath();
+  ctx.moveTo(centerX - 9, centerY - 3);
+  ctx.lineTo(centerX - 9, centerY + 3);
+  ctx.moveTo(centerX - 14, centerY);
+  ctx.lineTo(centerX - 4, centerY);
+  ctx.stroke();
+  
+  // Right panel lines
+  ctx.beginPath();
+  ctx.moveTo(centerX + 9, centerY - 3);
+  ctx.lineTo(centerX + 9, centerY + 3);
+  ctx.moveTo(centerX + 4, centerY);
+  ctx.lineTo(centerX + 14, centerY);
+  ctx.stroke();
 
   return canvas.toDataURL();
 }
@@ -164,6 +200,7 @@ export class SatelliteLayer {
   private updateInterval: ReturnType<typeof setInterval> | null = null;
   private billboardMap: Map<string, Cesium.Billboard> = new Map(); // noradId → billboard
   private onCountUpdate: ((n: number | null) => void) | null = null;
+  private satelliteTexture: string | null = null;
 
   private selectedNoradId: string | null = null;
   private orbitalPathEntity: Cesium.Entity | null = null;
@@ -184,10 +221,15 @@ export class SatelliteLayer {
     this.billboards = new Cesium.BillboardCollection({ scene: this.viewer.scene });
     this.viewer.scene.primitives.add(this.billboards);
 
+    // Create texture once and reuse - color tinting handles per-satellite colors
+    if (!this.satelliteTexture) {
+      this.satelliteTexture = createSatelliteTexture();
+    }
+
     for (const { record, cartesian } of propagateAll(this.records, new Date())) {
       const billboard = this.billboards.add({
         position: cartesian,
-        image: createGlowTexture(record.color.toCssHexString()),
+        image: this.satelliteTexture,
         width: BILLBOARD_SIZE_NORMAL,
         height: BILLBOARD_SIZE_NORMAL,
         color: record.color,

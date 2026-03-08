@@ -30,9 +30,16 @@ import { OSMFetcher, type OSMFetcherError } from "./traffic/OSMFetcher.ts";
 import { RoadNetwork } from "./traffic/RoadNetwork.ts";
 import { CCTVManager } from "./cctv/CCTVManager.ts";
 import { EarthquakeLayer } from "./seismic/EarthquakeLayer.ts";
+import { flyTo } from "../globe.ts";
 
-/** Default Austin bounding box for initial traffic load */
-const AUSTIN_BBOX = { south: 30.20, west: -97.80, north: 30.35, east: -97.68 };
+/** Minimum viewport size for traffic loading (degrees) */
+const MIN_VIEWPORT_SIZE = 0.01;
+/** Maximum viewport size for traffic loading (degrees) - skip if zoomed out too far */
+const MAX_VIEWPORT_SIZE = 0.5;
+/** Debounce delay for viewport changes (ms) */
+const VIEWPORT_DEBOUNCE_MS = 800;
+/** Minimum distance change to trigger reload (degrees) */
+const MIN_RELOAD_DISTANCE = 0.05;
 
 /** Ground layer error types */
 export type GroundLayerError = {
@@ -62,6 +69,11 @@ export class GroundLayer {
   private trafficVisible = true;
   private cctvVisible = true;
   private seismicVisible = true;
+  
+  // Viewport-based loading state
+  private lastLoadedBbox: { south: number; west: number; north: number; east: number } | null = null;
+  private viewportDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private cameraChangeHandler: (() => void) | null = null;
 
   // Callbacks
   private onCameraCountChange: ((count: number) => void) | null = null;
@@ -118,7 +130,7 @@ export class GroundLayer {
       
       // Retry loading roads if visible
       if (this.isVisible && this.trafficVisible) {
-        await this.loadRoads();
+        await this.loadRoadsForViewport();
       }
     }
     
@@ -150,6 +162,7 @@ export class GroundLayer {
 
       // Initialize CCTV manager
       this.cctv.initialize(viewer);
+      this.cctv.setOnFlyToCamera((lon, lat) => flyTo(lon, lat, 1500, 1.5));
       console.log("[GroundLayer] CCTV manager initialized");
 
       // Initialize earthquake layer
@@ -165,10 +178,132 @@ export class GroundLayer {
   }
 
   /**
-   * Load road network data for traffic visualization
-   * Call this before showing the layer for best experience
+   * Get the current viewport bounding box from camera
    */
-  async loadRoads(bbox = AUSTIN_BBOX): Promise<void> {
+  private getViewportBbox(): { south: number; west: number; north: number; east: number } | null {
+    if (!this.viewer) return null;
+
+    const camera = this.viewer.camera;
+    const canvas = this.viewer.scene.canvas;
+    
+    try {
+      // Get corners of viewport in cartographic coordinates
+      const corners = [
+        camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
+        camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
+        camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
+        camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
+      ];
+
+      // Filter out undefined values (when camera is looking at sky)
+      const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
+      
+      if (validCorners.length < 2) {
+        return null; // Camera looking at sky
+      }
+
+      // Convert to cartographic and find bounds
+      let west = 180, south = 90, east = -180, north = -90;
+      
+      for (const corner of validCorners) {
+        const carto = Cesium.Cartographic.fromCartesian(corner);
+        const lon = Cesium.Math.toDegrees(carto.longitude);
+        const lat = Cesium.Math.toDegrees(carto.latitude);
+        
+        west = Math.min(west, lon);
+        east = Math.max(east, lon);
+        south = Math.min(south, lat);
+        north = Math.max(north, lat);
+      }
+
+      // Expand bounds slightly for better coverage
+      const lonPadding = (east - west) * 0.15;
+      const latPadding = (north - south) * 0.15;
+      
+      return {
+        west: west - lonPadding,
+        south: south - latPadding,
+        east: east + lonPadding,
+        north: north + latPadding,
+      };
+    } catch (error) {
+      console.error("[GroundLayer] Error calculating viewport bbox:", error);
+      return null;
+    }
+  }
+  
+  /**
+   * Check if viewport has changed enough to warrant reloading roads
+   */
+  private shouldReloadRoads(newBbox: { south: number; west: number; north: number; east: number }): boolean {
+    if (!this.lastLoadedBbox) return true;
+    
+    // Calculate center distance
+    const oldCenterLon = (this.lastLoadedBbox.east + this.lastLoadedBbox.west) / 2;
+    const oldCenterLat = (this.lastLoadedBbox.north + this.lastLoadedBbox.south) / 2;
+    const newCenterLon = (newBbox.east + newBbox.west) / 2;
+    const newCenterLat = (newBbox.north + newBbox.south) / 2;
+    
+    const distance = Math.sqrt(
+      Math.pow(newCenterLon - oldCenterLon, 2) + 
+      Math.pow(newCenterLat - oldCenterLat, 2)
+    );
+    
+    return distance > MIN_RELOAD_DISTANCE;
+  }
+  
+  /**
+   * Handle camera movement to reload roads for new viewport
+   */
+  private handleCameraChange = (): void => {
+    if (!this.isVisible || !this.trafficVisible) return;
+    
+    // Debounce rapid changes
+    if (this.viewportDebounceTimer) {
+      clearTimeout(this.viewportDebounceTimer);
+    }
+    
+    this.viewportDebounceTimer = setTimeout(() => {
+      this.loadRoadsForViewport();
+    }, VIEWPORT_DEBOUNCE_MS);
+  };
+  
+  /**
+   * Load roads for the current viewport
+   */
+  async loadRoadsForViewport(): Promise<void> {
+    const bbox = this.getViewportBbox();
+    if (!bbox) {
+      console.log("[GroundLayer] Cannot determine viewport - skipping road load");
+      return;
+    }
+    
+    // Check viewport size
+    const lonSpan = bbox.east - bbox.west;
+    const latSpan = bbox.north - bbox.south;
+    
+    if (lonSpan > MAX_VIEWPORT_SIZE || latSpan > MAX_VIEWPORT_SIZE) {
+      console.log("[GroundLayer] Viewport too large for traffic - zoom in");
+      return;
+    }
+    
+    if (lonSpan < MIN_VIEWPORT_SIZE || latSpan < MIN_VIEWPORT_SIZE) {
+      console.log("[GroundLayer] Viewport too small - using existing roads");
+      return;
+    }
+    
+    // Check if we need to reload
+    if (!this.shouldReloadRoads(bbox)) {
+      return;
+    }
+    
+    await this.loadRoads(bbox);
+  }
+
+  /**
+   * Load road network data for traffic visualization
+   */
+  async loadRoads(bbox: { south: number; west: number; north: number; east: number }): Promise<void> {
     try {
       console.log("[GroundLayer] Loading road network...");
       const rawWays = await this.osmFetcher.fetchRoads(bbox);
@@ -189,8 +324,9 @@ export class GroundLayer {
       
       this.roadNetwork = new RoadNetwork(rawWays);
       await this.traffic.loadNetwork(this.roadNetwork);
+      this.lastLoadedBbox = bbox;  // Track loaded area
       this.trafficError = null;  // Clear any previous error
-      console.log(`[GroundLayer] Road network loaded: ${this.roadNetwork.segments.length} segments`);
+      console.log(`[GroundLayer] Road network loaded: ${this.roadNetwork.segments.length} segments for bbox [${bbox.south.toFixed(3)}, ${bbox.west.toFixed(3)}, ${bbox.north.toFixed(3)}, ${bbox.east.toFixed(3)}]`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.trafficError = message;
@@ -215,10 +351,14 @@ export class GroundLayer {
 
     this.isVisible = true;
 
-    // Load roads if not already loaded
-    if (!this.roadNetwork) {
-      await this.loadRoads();
+    // Set up camera change listener for viewport-based loading
+    if (this.viewer && !this.cameraChangeHandler) {
+      this.cameraChangeHandler = this.handleCameraChange;
+      this.viewer.camera.moveEnd.addEventListener(this.cameraChangeHandler);
     }
+
+    // Load roads for current viewport
+    await this.loadRoadsForViewport();
 
     // Show sub-layers based on their visibility state
     if (this.trafficVisible && this.roadNetwork) {
@@ -240,6 +380,12 @@ export class GroundLayer {
     if (!this.isVisible) return;
 
     this.isVisible = false;
+
+    // Clear debounce timer
+    if (this.viewportDebounceTimer) {
+      clearTimeout(this.viewportDebounceTimer);
+      this.viewportDebounceTimer = null;
+    }
 
     // Stop traffic animation
     this.traffic.stop();
@@ -450,12 +596,19 @@ export class GroundLayer {
   destroy(): void {
     this.hide();
 
+    // Remove camera listener
+    if (this.viewer && this.cameraChangeHandler) {
+      this.viewer.camera.moveEnd.removeEventListener(this.cameraChangeHandler);
+      this.cameraChangeHandler = null;
+    }
+
     this.traffic.destroy();
     this.cctv.destroy();
     this.seismic.destroy();
 
     this.viewer = null;
     this.roadNetwork = null;
+    this.lastLoadedBbox = null;
     this.isInitialized = false;
     this.trafficError = null;
     this.cctvError = null;

@@ -30,6 +30,8 @@ export interface CCTVBillboard {
   ctx: CanvasRenderingContext2D;
   updateInterval: number | null;
   isActive: boolean;
+  /** Whether this billboard is in center-stage (focused) mode */
+  isCenterStage: boolean;
 }
 
 /** CCTV Manager configuration */
@@ -45,8 +47,8 @@ export interface CCTVManagerConfig {
 /** Default configuration */
 export const DEFAULT_CCTV_CONFIG: CCTVManagerConfig = {
   maxBillboards: 4,
-  thumbnailRefreshMs: 1000,   // 1fps for thumbnails
-  billboardRefreshMs: 66,     // ~15fps for billboards
+  thumbnailRefreshMs: 30_000, // Service only updates every 30 seconds
+  billboardRefreshMs: 30_000, // Match service update rate
   billboardWidth: 200,        // pixels (will scale with distance)
   billboardHeight: 150,       // pixels (4:3 aspect)
   billboardAltitude: 15,      // meters above ground

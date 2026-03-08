@@ -7,6 +7,11 @@ import type { CCTVManager } from "./CCTVManager.ts";
 
 const PROXY_BASE = "http://localhost:3001";
 
+// Thumbnail refresh configuration
+const THUMBNAIL_REFRESH_MS = 30_000;  // Refresh every 30 seconds (service only updates every 30s)
+const THUMBNAIL_STAGGER_MS = 500;     // Stagger requests by 500ms to avoid bursts
+const MAX_CONCURRENT_REQUESTS = 2;    // Limit concurrent thumbnail requests
+
 /** Panel state and DOM references */
 interface PanelState {
   container: HTMLElement | null;
@@ -15,6 +20,9 @@ interface PanelState {
   cameras: Camera[];
   thumbnailIntervals: Map<string, number>;
   refreshInterval: number | null;
+  objectUrls: Map<string, string>;  // Track object URLs for cleanup
+  pendingRequests: Set<string>;     // Track in-flight requests
+  isRefreshing: boolean;
 }
 
 const state: PanelState = {
@@ -24,6 +32,9 @@ const state: PanelState = {
   cameras: [],
   thumbnailIntervals: new Map(),
   refreshInterval: null,
+  objectUrls: new Map(),
+  pendingRequests: new Set(),
+  isRefreshing: false,
 };
 
 /** Initialize the CCTV panel */
@@ -162,12 +173,29 @@ async function loadThumbnail(cameraId: string): Promise<void> {
   const img = document.getElementById(`thumb-${cameraId}`) as HTMLImageElement | null;
   if (!img) return;
 
+  // Skip if already have a pending request for this camera
+  if (state.pendingRequests.has(cameraId)) return;
+  
+  // Limit concurrent requests
+  if (state.pendingRequests.size >= MAX_CONCURRENT_REQUESTS) return;
+
+  state.pendingRequests.add(cameraId);
+
   try {
     const response = await fetch(`${PROXY_BASE}/api/cctv/thumbnail/${cameraId}`);
     
     if (response.ok) {
       const blob = await response.blob();
-      img.src = URL.createObjectURL(blob);
+      
+      // Revoke previous object URL to prevent memory leak
+      const prevUrl = state.objectUrls.get(cameraId);
+      if (prevUrl) {
+        URL.revokeObjectURL(prevUrl);
+      }
+      
+      const newUrl = URL.createObjectURL(blob);
+      state.objectUrls.set(cameraId, newUrl);
+      img.src = newUrl;
       
       // Update status indicator if we got a frame
       const item = img.closest(".cctv-item");
@@ -192,6 +220,8 @@ async function loadThumbnail(cameraId: string): Promise<void> {
     // Network error - show offline
     img.src = "";
     img.alt = "ERROR";
+  } finally {
+    state.pendingRequests.delete(cameraId);
   }
 }
 
@@ -199,15 +229,38 @@ async function loadThumbnail(cameraId: string): Promise<void> {
 function startThumbnailRefresh(): void {
   clearThumbnailIntervals();
 
-  // Refresh all thumbnails every second
-  state.refreshInterval = window.setInterval(() => {
-    for (const camera of state.cameras) {
+  // Don't start refresh if no cameras
+  if (state.cameras.length === 0) return;
+
+  // Staggered refresh: cycle through cameras with delays
+  const refreshCycle = async () => {
+    if (state.isRefreshing) return;
+    state.isRefreshing = true;
+    
+    for (let i = 0; i < state.cameras.length; i++) {
+      const camera = state.cameras[i];
+      if (!camera) continue;
+      
+      // Load thumbnail (non-blocking)
       loadThumbnail(camera.id);
+      
+      // Stagger requests to avoid burst
+      if (i < state.cameras.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, THUMBNAIL_STAGGER_MS));
+      }
     }
-  }, 1000);
+    
+    state.isRefreshing = false;
+  };
+
+  // Initial load (staggered)
+  refreshCycle();
+
+  // Periodic refresh at slower rate
+  state.refreshInterval = window.setInterval(refreshCycle, THUMBNAIL_REFRESH_MS);
 }
 
-/** Clear all thumbnail refresh intervals */
+/** Clear all thumbnail refresh intervals and clean up resources */
 function clearThumbnailIntervals(): void {
   if (state.refreshInterval !== null) {
     clearInterval(state.refreshInterval);
@@ -218,6 +271,16 @@ function clearThumbnailIntervals(): void {
     clearInterval(interval);
   }
   state.thumbnailIntervals.clear();
+  
+  // Clean up object URLs to prevent memory leaks
+  for (const url of state.objectUrls.values()) {
+    URL.revokeObjectURL(url);
+  }
+  state.objectUrls.clear();
+  
+  // Clear pending requests
+  state.pendingRequests.clear();
+  state.isRefreshing = false;
 }
 
 /** Get current camera count */
@@ -232,6 +295,9 @@ export function destroyCCTVPanel(): void {
   state.cameraList = null;
   state.manager = null;
   state.cameras = [];
+  state.objectUrls.clear();
+  state.pendingRequests.clear();
+  state.isRefreshing = false;
 }
 
 /** Export the CCTVPanel class for compatibility */

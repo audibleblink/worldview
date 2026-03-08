@@ -65,12 +65,13 @@ export async function init(): Promise<void> {
 
     initShell(viewer, { satelliteLayer, loadAllTLEs, flightLayer, groundLayer });
 
-    // Escape stops follow mode for both satellites and flights
+    // Escape stops follow mode for both satellites and flights, and exits center-stage
     addEscapeHandler(() => {
       satelliteLayer.stopFollow();
       resetFollowButton();
       flightLayer.stopFollow();
       resetFlightFollowButton();
+      groundLayer.getCCTVManager().exitCenterStage();
     });
 
     setupKeyboardNavigation();
@@ -78,30 +79,46 @@ export async function init(): Promise<void> {
     shaderManager.init(viewer);
     (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
 
-    // Click-to-select: billboard id is set to noradId/icao24 string at creation time
+    // Click-to-select: billboard id is set to noradId/icao24/cameraId string at creation time
     viewer.screenSpaceEventHandler.setInputAction((click: { position: { x: number; y: number } }) => {
       const picked = viewer.scene.pick((click as any).position);
 
-      if (picked && typeof picked.id === "string") {
+      // Extract entity ID - Cesium returns entity object in picked.id, string ID is in picked.id.id
+      const entityId = picked?.id?.id ?? (typeof picked?.id === "string" ? picked.id : null);
+
+      if (entityId && typeof entityId === "string") {
+        // Check if it's a CCTV billboard
+        const cctvManager = groundLayer.getCCTVManager();
+        if (cctvManager.isCCTVBillboard(entityId)) {
+          // Check if click hit the close button on the billboard
+          if (cctvManager.handleBillboardClick(entityId, click.position, viewer)) {
+            return; // Close button was clicked, billboard removed
+          }
+          // Toggle center-stage mode for this camera
+          cctvManager.toggleCenterStage(entityId);
+          return;
+        }
+
         // Check if it's a flight (FlightLayer tracks its own icao24 set)
-        if (flightLayer.hasIcao(picked.id)) {
-          flightLayer.selectFlight(picked.id, async (record) => {
-            const meta = await fetchAircraftMeta(picked.id);
+        if (flightLayer.hasIcao(entityId)) {
+          flightLayer.selectFlight(entityId, async (record) => {
+            const meta = await fetchAircraftMeta(entityId);
             showFlightInfoPanel(record, meta, flightLayer);
           });
           return;
         }
 
         // Otherwise handle as satellite
-        satelliteLayer.selectSatellite(picked.id, (record, velocity) => {
+        satelliteLayer.selectSatellite(entityId, (record, velocity) => {
           showSatelliteInfoPanel(record, velocity, satelliteLayer);
         });
         return;
       }
 
-      // Clicked empty space — deselect both
+      // Clicked empty space — deselect both and exit center-stage
       satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
       flightLayer.deselectFlight(hideFlightInfoPanel);
+      groundLayer.getCCTVManager().exitCenterStage();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     console.log("WorldView initialized");

@@ -52,7 +52,12 @@ const cctv = {
   panel: null as CCTVPanel | null,
   viewer: null as Viewer | null,
   viewportDebounce: null as number | null,
+  lastAltitude: 0,
+  isAboveAltitudeThreshold: true,
 };
+
+// CCTV altitude threshold - only load cameras below this altitude (in meters)
+const CCTV_MAX_ALTITUDE_M = 2_000_000; // 2000 km
 
 export interface LeftPanelOptions {
   satelliteLayer?: SatelliteLayer;
@@ -521,13 +526,54 @@ function getViewportBBox(): BBox | null {
   }
 }
 
+/** Get current camera altitude in meters */
+function getCameraAltitude(): number {
+  if (!cctv.viewer) return Infinity;
+  
+  const cartographic = cctv.viewer.camera.positionCartographic;
+  return cartographic?.height ?? Infinity;
+}
+
 /** Update CCTV cameras for current viewport */
 async function updateCCTVCamerasForViewport(): Promise<void> {
+  if (!cctv.panel) return;
+  
+  const altitude = getCameraAltitude();
+  cctv.lastAltitude = altitude;
+  
+  // Check if we're above the altitude threshold
+  if (altitude > CCTV_MAX_ALTITUDE_M) {
+    if (!cctv.isAboveAltitudeThreshold) {
+      cctv.isAboveAltitudeThreshold = true;
+      // Clear cameras and show message
+      clearCCTVPanel();
+      addLogEntry(`[CCTV] Zoom in to view cameras (alt: ${(altitude / 1000).toFixed(0)}km)`);
+    }
+    return;
+  }
+  
+  cctv.isAboveAltitudeThreshold = false;
+  
   const bbox = getViewportBBox();
-  if (!bbox || !cctv.panel) return;
+  if (!bbox) return;
   
   await cctv.panel.updateViewport(bbox);
   addLogEntry(`[CCTV] Found ${cctv.panel.getCameraCount()} cameras`);
+}
+
+/** Clear CCTV panel when zoomed out */
+function clearCCTVPanel(): void {
+  if (!cctv.panel) return;
+  
+  const listEl = document.getElementById("cctv-camera-list");
+  if (listEl) {
+    listEl.innerHTML = '<div class="cctv-empty">ZOOM IN TO VIEW CAMERAS</div>';
+  }
+  
+  const countEl = document.getElementById("cctv-count");
+  if (countEl) {
+    countEl.textContent = "—";
+  }
 }
 
 /** Wire up viewport change listener */
@@ -538,16 +584,14 @@ function wireUpViewportChangeListener(viewer: Viewer): void {
       clearTimeout(cctv.viewportDebounce);
     }
     
+    // Longer debounce (800ms) to reduce API spam during navigation
     cctv.viewportDebounce = window.setTimeout(() => {
       updateCCTVCamerasForViewport();
-    }, 500);
+    }, 800);
   };
 
-  // Listen for camera move end
+  // Listen for camera move end only (not changed - that fires too often)
   viewer.camera.moveEnd.addEventListener(handleViewportChange);
-  
-  // Also update on zoom
-  viewer.camera.changed.addEventListener(handleViewportChange);
 }
 
 function createSystemLog(): HTMLElement {
