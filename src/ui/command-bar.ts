@@ -6,10 +6,12 @@
 import { geocode, getAltitudeForType } from "../geocoder.ts";
 import { flyTo } from "../globe.ts";
 import { addLogEntry } from "./left-panel.ts";
-import { parseCommand } from "./command-parser.ts";
+import { parseCommand, detectIdentifierType } from "./command-parser.ts";
+import { convertIataToIcao } from "../utils/airline-codes.ts";
 
 // Re-export for convenience
-export { parseCommand, type ParsedCommand } from "./command-parser.ts";
+export { parseCommand, detectIdentifierType, type ParsedCommand, type IdentifierType } from "./command-parser.ts";
+export { convertIataToIcao } from "../utils/airline-codes.ts";
 
 export class CommandBar {
   private container: HTMLElement;
@@ -192,11 +194,25 @@ export class CommandBar {
       return;
     }
 
+    // Handle follow with no args
+    if (cmd.type === "follow" && (!cmd.args || !cmd.args.trim())) {
+      this.showError("Usage: follow <id>");
+      return;
+    }
+
     switch (cmd.type) {
       case "goto":
         this.isExecuting = true;
         try {
           await this.handleGoto(cmd.args || "");
+        } finally {
+          this.isExecuting = false;
+        }
+        break;
+      case "follow":
+        this.isExecuting = true;
+        try {
+          await this.handleFollow(cmd.args || "");
         } finally {
           this.isExecuting = false;
         }
@@ -281,6 +297,32 @@ export class CommandBar {
         addLogEntry("[NAV] Network error for: " + location, "error");
       }
     }
+  }
+
+  /**
+   * Handle follow command - follow satellite or flight
+   * TODO: Implement satellite/flight search and follow logic in Phase 2/3
+   */
+  private async handleFollow(identifier: string): Promise<void> {
+    // Detect identifier type (satellite vs flight)
+    const idType = detectIdentifierType(identifier);
+
+    if (idType === "satellite") {
+      // TODO: Phase 2 - Search loaded satellites by NORAD ID
+      // TODO: Phase 2 - If not found, fetch from CelesTrak
+      // TODO: Phase 2 - Call startFollow() or stopFollow() based on current state
+      addLogEntry(`[FOLLOW] Satellite ${identifier} (stub)`, "info");
+    } else {
+      // Convert IATA to ICAO if needed
+      const icaoCallsign = convertIataToIcao(identifier);
+
+      // TODO: Phase 3 - Search loaded flights by callsign
+      // TODO: Phase 3 - Call startFollow() or stopFollow() based on current state
+      addLogEntry(`[FOLLOW] Flight ${icaoCallsign} (stub)`, "info");
+    }
+
+    // Stub: just show success for now
+    this.showSuccess();
   }
 
   /**

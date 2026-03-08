@@ -5,7 +5,7 @@
 
 /** Parsed command structure */
 export interface ParsedCommand {
-  type: "goto" | "home" | "help";
+  type: "goto" | "home" | "help" | "follow";
   args?: string;
 }
 
@@ -21,6 +21,7 @@ interface CommandDef {
 const COMMANDS: Record<string, CommandDef> = {
   "goto": { type: "goto", prefixLen: 4, hasArgs: true },
   "go": { type: "goto", prefixLen: 2, hasArgs: true },
+  "follow": { type: "follow", prefixLen: 6, hasArgs: true },
   "home": { type: "home", prefixLen: 4, hasArgs: false },
   "help": { type: "help", prefixLen: 4, hasArgs: false },
   "?": { type: "help", prefixLen: 1, hasArgs: false },
@@ -53,4 +54,20 @@ export function parseCommand(input: string): ParsedCommand | null {
   }
 
   return null; // Unknown command
+}
+
+/** Identifier type for follow command */
+export type IdentifierType = "satellite" | "flight";
+
+/**
+ * Detect whether an identifier is a satellite NORAD ID or a flight callsign
+ * - Satellite: 1-5 digits only (NORAD IDs are max 5 digits)
+ * - Flight: alphanumeric or 6+ digits
+ */
+export function detectIdentifierType(identifier: string): IdentifierType {
+  // NORAD IDs are 1-5 digit numbers only
+  if (/^\d{1,5}$/.test(identifier)) {
+    return "satellite";
+  }
+  return "flight";
 }

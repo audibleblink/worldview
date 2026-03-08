@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { parseCommand, type ParsedCommand } from "../src/ui/command-parser";
+import { parseCommand, detectIdentifierType, type ParsedCommand } from "../src/ui/command-parser";
 
 // Test parseCommand - goto command
 test("parseCommand - goto with location", () => {
@@ -121,4 +121,60 @@ test("parseCommand - partial command", () => {
 
 test("parseCommand - similar but invalid", () => {
   expect(parseCommand("gotoaustin")).toBeNull(); // no space after goto
+});
+
+// Test parseCommand - follow command
+test("parseCommand - follow with NORAD ID", () => {
+  const result = parseCommand("follow 25544");
+  expect(result).toEqual({ type: "follow", args: "25544" });
+});
+
+test("parseCommand - follow with callsign", () => {
+  const result = parseCommand("follow UA100");
+  expect(result).toEqual({ type: "follow", args: "UA100" });
+});
+
+test("parseCommand - follow uppercase", () => {
+  const result = parseCommand("FOLLOW 25544");
+  expect(result).toEqual({ type: "follow", args: "25544" });
+});
+
+test("parseCommand - follow mixed case", () => {
+  const result = parseCommand("Follow UAL123");
+  expect(result).toEqual({ type: "follow", args: "UAL123" });
+});
+
+test("parseCommand - follow with extra whitespace", () => {
+  const result = parseCommand("  follow   25544  ");
+  expect(result).toEqual({ type: "follow", args: "25544" });
+});
+
+test("parseCommand - follow without identifier returns follow with empty args", () => {
+  const result = parseCommand("follow");
+  expect(result).toEqual({ type: "follow", args: "" });
+});
+
+// Test detectIdentifierType
+test("detectIdentifierType - 5 digit NORAD ID", () => {
+  expect(detectIdentifierType("25544")).toBe("satellite");
+});
+
+test("detectIdentifierType - 1 digit NORAD ID", () => {
+  expect(detectIdentifierType("1")).toBe("satellite");
+});
+
+test("detectIdentifierType - 6+ digits is flight", () => {
+  expect(detectIdentifierType("123456")).toBe("flight");
+});
+
+test("detectIdentifierType - alphanumeric is flight", () => {
+  expect(detectIdentifierType("UAL123")).toBe("flight");
+});
+
+test("detectIdentifierType - mixed case alphanumeric is flight", () => {
+  expect(detectIdentifierType("Ual123")).toBe("flight");
+});
+
+test("detectIdentifierType - letters only is flight", () => {
+  expect(detectIdentifierType("ABC")).toBe("flight");
 });
