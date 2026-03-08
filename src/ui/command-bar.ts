@@ -15,6 +15,7 @@ export class CommandBar {
   private container: HTMLElement;
   private input: HTMLInputElement;
   private errorDisplay: HTMLElement;
+  private loadingIndicator: HTMLElement;
   private isVisible: boolean = false;
   private onExecute: ((command: string) => void) | null = null;
   private isExecuting: boolean = false;
@@ -37,8 +38,13 @@ export class CommandBar {
     this.errorDisplay = document.createElement("div");
     this.errorDisplay.className = "command-bar-error";
 
+    this.loadingIndicator = document.createElement("span");
+    this.loadingIndicator.className = "command-bar-loading";
+    this.loadingIndicator.textContent = "SEARCHING...";
+
     this.container.appendChild(prefix);
     this.container.appendChild(this.input);
+    this.container.appendChild(this.loadingIndicator);
     this.container.appendChild(this.errorDisplay);
 
     // Append to document body
@@ -113,8 +119,10 @@ export class CommandBar {
     if (loading) {
       this.container.classList.add("loading");
       this.container.classList.remove("error", "success");
+      this.loadingIndicator.classList.add("visible");
     } else {
       this.container.classList.remove("loading");
+      this.loadingIndicator.classList.remove("visible");
     }
   }
 
@@ -297,9 +305,15 @@ export class CommandBar {
    * Display help text in the command bar
    */
   private showHelpText(): void {
-    // Show help in the error display area
-    this.errorDisplay.textContent =
-      "Commands: goto <location>, home, help";
+    // Show help in the error display area with multi-line formatting
+    this.errorDisplay.innerHTML = `
+      <div style="text-align: left; line-height: 1.6;">
+        <div style="margin-bottom: 4px;">Commands:</div>
+        <div style="padding-left: 8px;">:goto &lt;place|zip|coords|airport&gt; - Navigate to location</div>
+        <div style="padding-left: 8px;">:home - Reset camera view</div>
+        <div style="padding-left: 8px;">:help - Show this help</div>
+      </div>
+    `;
     this.container.classList.remove("error", "loading", "success");
     // Don't auto-hide - let user read and dismiss with Escape
   }

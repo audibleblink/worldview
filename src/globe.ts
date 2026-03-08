@@ -152,15 +152,26 @@ export function destroyGlobe(): void {
 
 /**
  * Fly to a specific location
+ * @param longitude - Longitude in degrees
+ * @param latitude - Latitude in degrees
+ * @param height - Camera altitude in meters (default 1,000km)
+ * @param duration - Animation duration in seconds (default 2s)
+ * @param pitch - Camera pitch in degrees (default -45°, negative = looking down)
  */
 export function flyTo(
   longitude: number,
   latitude: number,
   height: number = 1_000_000,
-  duration: number = 2
+  duration: number = 2,
+  pitch: number = -45
 ): void {
   viewer?.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, height),
+    orientation: {
+      heading: Cesium.Math.toRadians(0), // North
+      pitch: Cesium.Math.toRadians(pitch),
+      roll: 0,
+    },
     duration,
   });
 }
