@@ -6,13 +6,14 @@
 // Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
 declare const Cesium: typeof import("cesium");
 import { initGlobe } from "./globe.ts";
-import { initShell, updateSatelliteCount, updateFlightCount, addEscapeHandler } from "./ui/shell.ts";
+import { initShell, updateSatelliteCount, updateFlightCount, updateCameraCount, addEscapeHandler } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
 import { FlightLayer, fetchAircraftMeta } from "./layers/flights.ts";
 import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } from "./ui/sat-info-panel.ts";
 import { showFlightInfoPanel, hideFlightInfoPanel, resetFlightFollowButton } from "./ui/flight-info-panel.ts";
+import { GroundLayer } from "./ground/index.ts";
 
 // POI navigation key mappings: q→0, w→1, e→2, r→3, t→4
 const POI_KEY_MAP: Record<string, number> = { q: 0, w: 1, e: 2, r: 3, t: 4 };
@@ -42,6 +43,15 @@ export async function init(): Promise<void> {
     const satelliteLayer = new SatelliteLayer(viewer, updateSatelliteCount);
     const flightLayer = new FlightLayer(viewer, updateFlightCount);
 
+    // Initialize ground layer
+    const groundLayer = new GroundLayer();
+    await groundLayer.initialize(viewer);
+    
+    // Set up camera count updates
+    groundLayer.setOnCameraCountChange((count) => {
+      updateCameraCount(count > 0 ? count : null);
+    });
+
     // When a category filter hides the selected satellite, close the panel
     satelliteLayer.setExternalDeselectCallback(() => {
       hideSatelliteInfoPanel();
@@ -53,7 +63,7 @@ export async function init(): Promise<void> {
       hideFlightInfoPanel();
     });
 
-    initShell(viewer, { satelliteLayer, loadAllTLEs, flightLayer });
+    initShell(viewer, { satelliteLayer, loadAllTLEs, flightLayer, groundLayer });
 
     // Escape stops follow mode for both satellites and flights
     addEscapeHandler(() => {

@@ -162,6 +162,24 @@ html, body {
   flex: 1;
   display: flex;
   justify-content: center;
+  gap: var(--spacing-lg);
+}
+
+.top-bar-center span {
+  font-size: var(--font-size-xs);
+  letter-spacing: 1px;
+}
+
+#sat-tracking-counter {
+  color: var(--color-primary);
+}
+
+#flight-tracking-counter {
+  color: var(--color-highlight);
+}
+
+#camera-tracking-counter {
+  color: var(--color-secondary);
 }
 
 .top-bar-right {
@@ -503,6 +521,51 @@ select:disabled {
   flex: 1;
   font-size: 8px;
   padding: 2px var(--spacing-xs);
+}
+
+/* Ground layer options row */
+.ground-options-row {
+  margin-left: var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+  padding-left: var(--spacing-sm);
+  border-left: 2px solid var(--color-border);
+}
+
+.ground-options-row.hidden {
+  display: none;
+}
+
+.sub-toggle-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.sub-toggle-row:last-child {
+  margin-bottom: 0;
+}
+
+.sub-toggle-row .toggle-btn {
+  flex: 1;
+  font-size: 8px;
+  padding: 2px var(--spacing-xs);
+}
+
+.sub-toggle-row .toggle-btn.sub-toggle {
+  min-width: 50px;
+}
+
+.sub-toggle-row .style-toggle {
+  min-width: 60px;
+  font-size: 7px;
+  color: var(--color-secondary);
+  border-color: var(--color-secondary);
+}
+
+.sub-toggle-row .style-toggle:hover {
+  background: var(--color-secondary);
+  color: var(--color-bg);
 }
 
 /* ============================================

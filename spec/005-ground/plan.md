@@ -378,34 +378,34 @@ verify().catch(console.error);
 
 ### Tasks
 
-- [ ] **4.1 Create GroundLayer orchestrator**
+- [x] **4.1 Create GroundLayer orchestrator**
   - Create `src/ground/index.ts`:
     - `GroundLayer` class combining all sub-layers
     - `initialize(viewer: Cesium.Viewer)`
     - `show()` / `hide()` lifecycle
     - Pass-through to traffic, CCTV, seismic systems
 
-- [ ] **4.2 Add left-panel toggle**
+- [x] **4.2 Add left-panel toggle**
   - Add "GROUND" toggle row to `src/ui/left-panel.ts`
   - Wire up show/hide to `GroundLayer`
   - Add log entries for layer state changes
 
-- [ ] **4.3 Add ground layer options row**
+- [x] **4.3 Add ground layer options row**
   - Sub-toggles for: TRAFFIC, CCTV, SEISMIC
   - Allow enabling/disabling individual components
   - Hidden when GROUND layer is OFF
 
-- [ ] **4.4 Add particle style toggle**
+- [x] **4.4 Add particle style toggle**
   - Add toggle button: HEAT-MAP / TERMINAL
   - Wire to `TrafficParticleSystem.setStyleMode()`
   - Only visible when TRAFFIC is ON
 
-- [ ] **4.5 Wire up to main.ts**
+- [x] **4.5 Wire up to main.ts**
   - Import `GroundLayer` in `src/main.ts`
   - Initialize with viewer
   - Pass to `initLeftPanel` options
 
-- [ ] **4.6 Update count display**
+- [x] **4.6 Update count display**
   - Add "CAMERAS: N" to top bar (alongside SATELLITES, FLIGHTS)
   - Update when CCTV panel viewport changes
 

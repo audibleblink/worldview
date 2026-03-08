@@ -19,6 +19,8 @@ import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 import type { FlightLayer } from "../layers/flights.ts";
 import { CCTVManager, CCTVPanel, type BBox } from "../ground/cctv/index.ts";
+import { GroundLayer } from "../ground/index.ts";
+import type { StyleMode } from "../ground/traffic/particleStyles.ts";
 
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
@@ -34,6 +36,16 @@ const flight = {
   active: false,
 };
 
+// Ground layer state
+const ground = {
+  layer: null as GroundLayer | null,
+  active: false,
+  trafficActive: true,
+  cctvActive: true,
+  seismicActive: true,
+  styleMode: "heatmap" as StyleMode,
+};
+
 // CCTV state
 const cctv = {
   manager: null as CCTVManager | null,
@@ -46,6 +58,7 @@ export interface LeftPanelOptions {
   satelliteLayer?: SatelliteLayer;
   loadAllTLEs?: () => Promise<SatelliteRecord[]>;
   flightLayer?: FlightLayer;
+  groundLayer?: GroundLayer;
 }
 
 export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void {
@@ -57,10 +70,18 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   flight.layer = options?.flightLayer ?? null;
   flight.active = false;
 
-  // Initialize CCTV manager
+  // Initialize ground layer (may be provided externally or created here)
+  ground.layer = options?.groundLayer ?? null;
+  ground.active = false;
+
+  // Initialize CCTV manager - use from ground layer if available
   cctv.viewer = viewer;
-  cctv.manager = new CCTVManager();
-  cctv.manager.initialize(viewer);
+  if (ground.layer) {
+    cctv.manager = ground.layer.getCCTVManager();
+  } else {
+    cctv.manager = new CCTVManager();
+    cctv.manager.initialize(viewer);
+  }
 
   const leftPanel = document.querySelector(".left-panel");
   if (!leftPanel) {
@@ -92,6 +113,7 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   wireUpPOINavigation();
   wireUpSatelliteToggle();
   wireUpFlightToggle();
+  wireUpGroundToggle();
   wireUpViewportChangeListener(viewer);
 
   updatePOIDisplayState();
@@ -147,6 +169,20 @@ function createToggles(): HTMLElement {
     <div class="toggle-row">
       <span>FLIGHTS</span>
       <button class="toggle-btn" id="flight-toggle">OFF</button>
+    </div>
+    <div class="toggle-row">
+      <span>GROUND</span>
+      <button class="toggle-btn" id="ground-toggle">OFF</button>
+    </div>
+    <div class="ground-options-row hidden" id="ground-options-row">
+      <div class="sub-toggle-row">
+        <button class="toggle-btn on sub-toggle" id="ground-traffic-toggle">TRAFFIC</button>
+        <button class="toggle-btn style-toggle" id="ground-style-toggle">HEATMAP</button>
+      </div>
+      <div class="sub-toggle-row">
+        <button class="toggle-btn on sub-toggle" id="ground-cctv-toggle">CCTV</button>
+        <button class="toggle-btn on sub-toggle" id="ground-seismic-toggle">SEISMIC</button>
+      </div>
     </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
@@ -265,6 +301,115 @@ function wireUpFlightToggle(): void {
       btn.disabled = false;
     }
   });
+}
+
+function wireUpGroundToggle(): void {
+  const btn = document.getElementById("ground-toggle") as HTMLButtonElement | null;
+  const optionsRow = document.getElementById("ground-options-row");
+  
+  if (!btn) return;
+
+  // Main ground toggle
+  btn.addEventListener("click", async () => {
+    if (!ground.layer) {
+      addLogEntry("[GROUND] Layer not available", "error");
+      return;
+    }
+
+    if (ground.active) {
+      ground.layer.hide();
+      ground.active = false;
+      btn.textContent = "OFF";
+      btn.classList.remove("on");
+      optionsRow?.classList.add("hidden");
+      addLogEntry("[GROUND] Layer disabled");
+      return;
+    }
+
+    btn.textContent = "LOADING";
+    btn.disabled = true;
+    try {
+      await ground.layer.show();
+      ground.active = true;
+      btn.textContent = "ON";
+      btn.classList.add("on");
+      optionsRow?.classList.remove("hidden");
+      updateGroundSubToggles();
+      addLogEntry("[GROUND] Layer active", "success");
+    } catch (err) {
+      addLogEntry(`[GROUND] Failed to load: ${err}`, "error");
+      btn.textContent = "ERR";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Traffic sub-toggle
+  const trafficBtn = document.getElementById("ground-traffic-toggle") as HTMLButtonElement | null;
+  trafficBtn?.addEventListener("click", () => {
+    if (!ground.layer || !ground.active) return;
+    ground.trafficActive = !ground.trafficActive;
+    ground.layer.setTrafficVisible(ground.trafficActive);
+    trafficBtn.classList.toggle("on", ground.trafficActive);
+    updateStyleToggleVisibility();
+    addLogEntry(`[GROUND] Traffic ${ground.trafficActive ? "ON" : "OFF"}`);
+  });
+
+  // Style toggle (HEATMAP / TERMINAL)
+  const styleBtn = document.getElementById("ground-style-toggle") as HTMLButtonElement | null;
+  styleBtn?.addEventListener("click", () => {
+    if (!ground.layer || !ground.active || !ground.trafficActive) return;
+    ground.styleMode = ground.styleMode === "heatmap" ? "terminal" : "heatmap";
+    ground.layer.setTrafficStyleMode(ground.styleMode);
+    styleBtn.textContent = ground.styleMode.toUpperCase();
+    addLogEntry(`[GROUND] Style: ${ground.styleMode.toUpperCase()}`);
+  });
+
+  // CCTV sub-toggle
+  const cctvBtn = document.getElementById("ground-cctv-toggle") as HTMLButtonElement | null;
+  cctvBtn?.addEventListener("click", () => {
+    if (!ground.layer || !ground.active) return;
+    ground.cctvActive = !ground.cctvActive;
+    ground.layer.setCCTVVisible(ground.cctvActive);
+    cctvBtn.classList.toggle("on", ground.cctvActive);
+    addLogEntry(`[GROUND] CCTV ${ground.cctvActive ? "ON" : "OFF"}`);
+  });
+
+  // Seismic sub-toggle
+  const seismicBtn = document.getElementById("ground-seismic-toggle") as HTMLButtonElement | null;
+  seismicBtn?.addEventListener("click", () => {
+    if (!ground.layer || !ground.active) return;
+    ground.seismicActive = !ground.seismicActive;
+    ground.layer.setSeismicVisible(ground.seismicActive);
+    seismicBtn.classList.toggle("on", ground.seismicActive);
+    addLogEntry(`[GROUND] Seismic ${ground.seismicActive ? "ON" : "OFF"}`);
+  });
+}
+
+/** Update sub-toggle button states to match current settings */
+function updateGroundSubToggles(): void {
+  const trafficBtn = document.getElementById("ground-traffic-toggle");
+  const cctvBtn = document.getElementById("ground-cctv-toggle");
+  const seismicBtn = document.getElementById("ground-seismic-toggle");
+  const styleBtn = document.getElementById("ground-style-toggle");
+
+  trafficBtn?.classList.toggle("on", ground.trafficActive);
+  cctvBtn?.classList.toggle("on", ground.cctvActive);
+  seismicBtn?.classList.toggle("on", ground.seismicActive);
+  
+  if (styleBtn) {
+    styleBtn.textContent = ground.styleMode.toUpperCase();
+  }
+  
+  updateStyleToggleVisibility();
+}
+
+/** Show/hide style toggle based on traffic state */
+function updateStyleToggleVisibility(): void {
+  const styleBtn = document.getElementById("ground-style-toggle") as HTMLButtonElement | null;
+  if (styleBtn) {
+    styleBtn.style.visibility = ground.trafficActive ? "visible" : "hidden";
+  }
 }
 
 function createActionButtons(): HTMLElement {
