@@ -97,6 +97,43 @@ Bun.serve({
       return handleGeocode(url, apiKey);
     }
 
+    // Google Maps 2D tiles (full map view with roads, labels, towns, etc.)
+    // lyrs options: m=roadmap, s=satellite, p=terrain, y=hybrid, h=roads-only
+    const mapTileMatch = url.pathname.match(/^\/map-tiles\/(\d+)\/(\d+)\/(\d+)$/);
+    if (mapTileMatch) {
+      const [, z, x, y] = mapTileMatch;
+      const lyrs = url.searchParams.get("lyrs") || "m"; // default to roadmap
+      
+      // Use Google Maps tile server
+      // lyrs: m=roadmap, s=satellite, p=terrain, y=hybrid (sat+labels), h=roads only
+      const mtTileUrl = `https://mt1.google.com/vt/lyrs=${lyrs}&x=${x}&y=${y}&z=${z}`;
+      
+      try {
+        const response = await fetch(mtTileUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+          },
+        });
+        
+        if (!response.ok) {
+          console.error(`Map tile fetch failed: ${response.status}`);
+          return corsResponse(null, { status: response.status });
+        }
+        
+        return corsResponse(response.body, {
+          status: 200,
+          headers: {
+            "Content-Type": response.headers.get("Content-Type") || "image/png",
+            "Cache-Control": "public, max-age=86400",
+          },
+        });
+      } catch (error) {
+        console.error("Map tile proxy error:", error);
+        return jsonResponse({ error: "Map tile proxy error" }, 502);
+      }
+    }
+
     // Google Tiles proxy (default)
     const targetUrl = new URL(url.pathname + url.search, GOOGLE_TILES_URL);
     targetUrl.searchParams.set("key", apiKey);

@@ -443,10 +443,7 @@ export class CCTVManager {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(billboard.canvas, 0, 0, canvas.width, canvas.height);
 
-      // Draw center-stage border
-      ctx.strokeStyle = "#00ff88";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+      // No border for center-stage (cleaner full-screen look)
 
       requestAnimationFrame(render);
     };
@@ -756,16 +753,11 @@ export class CCTVManager {
     }
   }
 
-  /** Draw terminal-style border on canvas with unproject button */
+  /** Draw border on canvas with unproject button */
   private drawBorder(ctx: CanvasRenderingContext2D, width: number, height: number, showUnprojectBtn = true): void {
-    ctx.strokeStyle = "#00ff88";
+    ctx.strokeStyle = "#000000";
     ctx.lineWidth = 3;
     ctx.strokeRect(1, 1, width - 2, height - 2);
-    
-    // Add subtle glow effect
-    ctx.strokeStyle = "rgba(0, 255, 136, 0.3)";
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, width - 6, height - 6);
 
     // Draw unproject button in top-right corner
     if (showUnprojectBtn) {

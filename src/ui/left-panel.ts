@@ -22,6 +22,7 @@ import { CCTVManager, CCTVPanel } from "../ground/cctv/index.ts";
 import { GroundLayer } from "../ground/index.ts";
 import type { StyleMode } from "../ground/traffic/particleStyles.ts";
 import { getViewportBBox, getCameraAltitude, type BBox } from "../camera.ts";
+import { mapViewLayer, type MapStyle } from "../layers/mapView.ts";
 
 // Satellite layer state — grouped to make lifecycle clear
 const sat = {
@@ -45,6 +46,11 @@ const ground = {
   cctvActive: true,
   seismicActive: true,
   styleMode: "heatmap" as StyleMode,
+};
+
+// Map view layer state
+const mapView = {
+  active: false,
 };
 
 // CCTV state
@@ -87,6 +93,9 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
     });
   }
 
+  // Initialize map view layer
+  mapViewLayer.initialize(viewer);
+
   // Initialize CCTV manager - use from ground layer if available
   cctv.viewer = viewer;
   if (ground.layer) {
@@ -119,6 +128,7 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   wireUpSatelliteToggle();
   wireUpFlightToggle();
   wireUpGroundToggle();
+  wireUpMapViewToggle();
   wireUpViewportChangeListener(viewer);
 
   updatePOIDisplayState();
@@ -188,6 +198,13 @@ function createToggles(): HTMLElement {
         <button class="toggle-btn on sub-toggle" id="ground-cctv-toggle">CCTV</button>
         <button class="toggle-btn on sub-toggle" id="ground-seismic-toggle">SEISMIC</button>
       </div>
+    </div>
+    <div class="toggle-row">
+      <span>MAP VIEW</span>
+      <button class="toggle-btn" id="map-view-toggle">3D</button>
+    </div>
+    <div class="map-style-row hidden" id="map-style-row">
+      <button class="toggle-btn on" id="map-style-btn">ROADMAP</button>
     </div>
     <div class="toggle-row">
       <span>AUTO HOF SPY</span>
@@ -374,6 +391,30 @@ function wireUpGroundToggle(): void {
     ground.layer.setSeismicVisible(ground.seismicActive);
     seismicBtn.classList.toggle("on", ground.seismicActive);
     addLogEntry(`[GROUND] Seismic ${ground.seismicActive ? "ON" : "OFF"}`);
+  });
+}
+
+function wireUpMapViewToggle(): void {
+  const btn = document.getElementById("map-view-toggle") as HTMLButtonElement | null;
+  const styleRow = document.getElementById("map-style-row");
+  const styleBtn = document.getElementById("map-style-btn") as HTMLButtonElement | null;
+  if (!btn) return;
+
+  // Main toggle: switch between 3D and 2D
+  btn.addEventListener("click", () => {
+    mapView.active = mapViewLayer.toggle();
+    btn.textContent = mapView.active ? "2D" : "3D";
+    btn.classList.toggle("on", mapView.active);
+    styleRow?.classList.toggle("hidden", !mapView.active);
+    addLogEntry(`[MAP] ${mapView.active ? "2D Map" : "3D Tiles"} view`);
+  });
+
+  // Style button: cycle through map styles when in 2D mode
+  styleBtn?.addEventListener("click", () => {
+    if (!mapView.active) return;
+    const newStyle = mapViewLayer.cycleStyle();
+    styleBtn.textContent = newStyle.toUpperCase();
+    addLogEntry(`[MAP] Style: ${newStyle.toUpperCase()}`);
   });
 }
 

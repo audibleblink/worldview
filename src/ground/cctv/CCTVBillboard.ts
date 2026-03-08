@@ -27,28 +27,16 @@ export function createBillboardCanvas(width = 320, height = 240): {
   return { canvas, ctx };
 }
 
-/** Draw terminal-style border on canvas */
+/** Draw border on canvas */
 export function drawBorder(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  color = "#00ff88"
+  color = "#000000"
 ): void {
-  // Main border
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.strokeRect(1, 1, width - 2, height - 2);
-
-  // Subtle glow effect
-  ctx.strokeStyle = color.replace(")", ", 0.3)").replace("rgb", "rgba").replace("#", "rgba(");
-  if (color.startsWith("#")) {
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
-  }
-  ctx.lineWidth = 6;
-  ctx.strokeRect(3, 3, width - 6, height - 6);
 }
 
 /** Draw loading/connecting placeholder */

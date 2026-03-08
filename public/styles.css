@@ -1319,12 +1319,13 @@ select option {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(10, 15, 20, 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
   animation: cctv-center-stage-fade-in 0.2s ease-out;
+  backdrop-filter: blur(4px);
 }
 
 @keyframes cctv-center-stage-fade-in {
@@ -1339,11 +1340,13 @@ select option {
 }
 
 .cctv-center-stage-container {
-  background: var(--color-bg);
-  border: 2px solid var(--color-highlight);
-  box-shadow: 0 0 40px rgba(0, 255, 136, 0.3);
+  background: var(--color-bg-panel-solid);
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 0 40px rgba(0, 212, 212, 0.25), inset 0 0 60px rgba(0, 0, 0, 0.5);
   max-width: 90vw;
   max-height: 90vh;
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .cctv-center-stage-header {
@@ -1351,15 +1354,16 @@ select option {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(0, 255, 136, 0.1);
-  border-bottom: 1px solid var(--color-highlight);
+  background: rgba(0, 212, 212, 0.1);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .cctv-center-stage-title {
   font-size: var(--font-size-md);
-  color: var(--color-highlight);
+  color: var(--color-primary);
   font-weight: bold;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 10px rgba(0, 212, 212, 0.3);
 }
 
 .cctv-center-stage-controls {
@@ -1368,53 +1372,68 @@ select option {
 }
 
 .cctv-center-stage-btn {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  color: var(--color-bg);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  padding: 4px 10px;
+  padding: 8px 16px;
   cursor: pointer;
   text-transform: uppercase;
   transition: all 0.15s ease;
+  border-radius: var(--radius-sm);
+  letter-spacing: 1px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(0, 212, 212, 0.3);
 }
 
 .cctv-center-stage-btn:hover {
-  background: var(--color-border);
-  color: var(--color-bg);
-}
-
-.cctv-center-stage-btn.cctv-close-btn {
-  border-color: var(--color-highlight);
-  color: var(--color-highlight);
-}
-
-.cctv-center-stage-btn.cctv-close-btn:hover {
-  background: var(--color-highlight);
-  color: var(--color-bg);
+  background: #00e8e8;
+  border-color: #00e8e8;
+  box-shadow: 0 0 15px rgba(0, 212, 212, 0.5);
 }
 
 #cctv-unproject-btn {
-  border-color: var(--color-warning);
-  color: var(--color-warning);
+  background: rgba(0, 212, 212, 0.15);
+  border-color: var(--color-border-light);
+  color: var(--color-primary);
+  box-shadow: none;
 }
 
 #cctv-unproject-btn:hover {
-  background: var(--color-warning);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: var(--color-bg);
+  box-shadow: 0 0 10px rgba(0, 212, 212, 0.3);
+}
+
+.cctv-center-stage-btn.cctv-close-btn {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 58, 58, 0.3);
+}
+
+.cctv-center-stage-btn.cctv-close-btn:hover {
+  background: #ff5555;
+  border-color: #ff5555;
+  box-shadow: 0 0 15px rgba(255, 58, 58, 0.5);
 }
 
 .cctv-center-stage-feed {
-  padding: var(--spacing-sm);
+  padding: var(--spacing-md);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #000;
 }
 
 #cctv-center-stage-canvas {
   display: block;
   max-width: 100%;
   max-height: 70vh;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 /* ============================================
