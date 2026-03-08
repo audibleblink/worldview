@@ -84,7 +84,7 @@ function createModeSwitcher(): HTMLElement {
   const container = document.createElement("div");
   container.className = "mode-switcher";
 
-  const modes: ViewMode[] = ["NORMAL", "CRT", "NVG", "FLIR", "ANIME", "NAVI"];
+  const modes: ViewMode[] = ["NORMAL", "CRT", "NVG", "FLIR", "AH64"];
   const currentMode = shaderManager.getMode();
 
   modes.forEach((mode) => {

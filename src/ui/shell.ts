@@ -137,8 +137,7 @@ const MODE_SHORTCUTS: Record<string, ViewMode> = {
   "2": "CRT",
   "3": "NVG",
   "4": "FLIR",
-  "5": "ANIME",
-  "6": "NAVI",
+  "5": "AH64",
 };
 
 /** Get the performance monitor instance */

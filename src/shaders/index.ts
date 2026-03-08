@@ -13,7 +13,7 @@ import { createCRTConfig, CRT_DEFAULTS } from "./crt.ts";
 import { createNormalConfig } from "./normal.ts";
 import { createNVGConfig, NVG_DEFAULTS } from "./nvg.ts";
 import { createFLIRConfig, FLIR_DEFAULTS } from "./flir.ts";
-import { createAnimeConfig, ANIME_DEFAULTS } from "./anime.ts";
+import { createAH64Config, AH64_DEFAULTS, setAH64Viewer } from "./ah64.ts";
 
 // Re-export types
 export type { ViewMode, ShaderConfig, ShaderManagerInterface, ParameterMapping } from "./types.ts";
@@ -21,7 +21,7 @@ export { PARAMETER_MAPPINGS } from "./types.ts";
 export { CRT_DEFAULTS, createCRTConfig } from "./crt.ts";
 export { NVG_DEFAULTS, createNVGConfig } from "./nvg.ts";
 export { FLIR_DEFAULTS, createFLIRConfig } from "./flir.ts";
-export { ANIME_DEFAULTS, createAnimeConfig } from "./anime.ts";
+export { AH64_DEFAULTS, createAH64Config } from "./ah64.ts";
 
 type Viewer = import("cesium").Viewer;
 type PostProcessStage = import("cesium").PostProcessStage;
@@ -37,9 +37,8 @@ const MODE_DEFAULTS: Record<ViewMode, Record<string, number>> = {
   CRT: CRT_DEFAULTS,
   NVG: NVG_DEFAULTS,
   FLIR: FLIR_DEFAULTS,
-  ANIME: ANIME_DEFAULTS,
+  AH64: AH64_DEFAULTS,
   NORMAL: {},
-  NAVI: {},
 };
 
 /** Shader config factory for each mode */
@@ -48,9 +47,8 @@ const SHADER_FACTORIES: Record<ViewMode, ShaderConfigFactory> = {
   CRT: createCRTConfig,
   NVG: createNVGConfig,
   FLIR: createFLIRConfig,
-  ANIME: createAnimeConfig,
+  AH64: createAH64Config,
   NORMAL: createNormalConfig,
-  NAVI: createNormalConfig,
 };
 
 /**
@@ -164,6 +162,7 @@ class ShaderManager implements ShaderManagerInterface {
    */
   init(viewer: Viewer): void {
     this.viewer = viewer;
+    setAH64Viewer(viewer);
     
     // Load persisted state before setting up shaders
     const restored = this.loadState();
@@ -475,6 +474,7 @@ class ShaderManager implements ShaderManagerInterface {
     
     this.removeCurrentStage();
     this.viewer = null;
+    setAH64Viewer(null);
   }
 
   /**

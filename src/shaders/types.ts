@@ -10,7 +10,7 @@ type PostProcessStage = import("cesium").PostProcessStage;
 /**
  * Available view modes for the globe visualization
  */
-export type ViewMode = "NORMAL" | "CRT" | "NVG" | "FLIR" | "ANIME" | "NAVI";
+export type ViewMode = "NORMAL" | "CRT" | "NVG" | "FLIR" | "AH64";
 
 /**
  * Uniform values that can be passed to shaders
@@ -84,7 +84,7 @@ export interface ParameterMapping {
 /**
  * Parameter mappings for each shader mode
  */
-export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "NAVI">, ParameterMapping> = {
+export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "AH64">, ParameterMapping> = {
   CRT: {
     PIXELATION: { uniform: "scanlineIntensity", min: 0, max: 0.5, default: 0.15 },
     DISTORTION: { uniform: "barrelDistortion", min: 0, max: 0.2, default: 0.05 },
@@ -99,10 +99,5 @@ export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "NAVI">, Pa
     PIXELATION: { uniform: "brightness", min: 0.5, max: 1.5, default: 1.0 },
     DISTORTION: { uniform: "edgeEnhancement", min: 0, max: 1.0, default: 0.3 },
     INSTABILITY: { uniform: "contrast", min: 0.8, max: 2.0, default: 1.3 },
-  },
-  ANIME: {
-    PIXELATION: { uniform: "saturation", min: 0.5, max: 2.0, default: 1.3 },
-    DISTORTION: { uniform: "outlineThickness", min: 0.5, max: 3.0, default: 1.0 },
-    INSTABILITY: { uniform: "colorLevels", min: 3, max: 10, default: 5 },
   },
 };

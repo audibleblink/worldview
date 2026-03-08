@@ -111,7 +111,7 @@ function createEffectSliders(): HTMLElement {
       valueSpan.textContent = `${sliderValue}%`;
 
       const mode = shaderManager.getMode();
-      if (mode === "NORMAL" || mode === "NAVI") return;
+      if (mode === "NORMAL" || mode === "AH64") return;
 
       const mapping = PARAMETER_MAPPINGS[mode]?.[name];
       if (mapping) {
@@ -130,7 +130,7 @@ function createEffectSliders(): HTMLElement {
 function updateSlidersForMode(mode: ViewMode): void {
   if (!sliderElements) return;
 
-  const isEffectMode = mode !== "NORMAL" && mode !== "NAVI";
+  const isEffectMode = mode !== "NORMAL" && mode !== "AH64";
 
   for (const name of SLIDER_NAMES) {
     const { input, value } = sliderElements[name];
