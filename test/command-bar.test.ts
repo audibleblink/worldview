@@ -97,11 +97,22 @@ test("parseCommand - whitespace only returns null", () => {
   expect(parseCommand("   ")).toBeNull();
 });
 
-test("parseCommand - goto without location returns null", () => {
-  // "goto " with trailing space gets trimmed to "goto", which doesn't start with "goto "
-  // so it returns null - this is correct behavior
-  const result = parseCommand("goto ");
-  expect(result).toBeNull();
+test("parseCommand - goto without location returns goto with empty args", () => {
+  // "goto" alone returns a goto command with empty args
+  // The CommandBar.executeCommand() handles showing the usage error
+  const result = parseCommand("goto");
+  expect(result).toEqual({ type: "goto", args: "" });
+});
+
+test("parseCommand - goto with only spaces returns goto with empty args", () => {
+  const result = parseCommand("goto   ");
+  expect(result?.type).toBe("goto");
+  expect(result?.args?.trim()).toBe("");
+});
+
+test("parseCommand - go without location returns goto with empty args", () => {
+  const result = parseCommand("go");
+  expect(result).toEqual({ type: "goto", args: "" });
 });
 
 test("parseCommand - partial command", () => {

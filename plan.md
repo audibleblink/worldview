@@ -234,16 +234,16 @@ bun --hot src/server.ts
 
 ### Tasks
 
-- [ ] Add error handling to `handleGoto()`:
-  - [ ] Network error → Show "Network error", log to system log
-  - [ ] Location not found → Show "Location not found", log to system log
-  - [ ] Invalid coordinates → Show "Invalid coordinates format"
-  - [ ] API timeout (5s) → Show "Request timed out"
-- [ ] Add to `parseCommand()`:
-  - [ ] `goto` with no args → Show "Usage: goto <location>"
-  - [ ] Unknown command → Show "Unknown command. Type :help"
-- [ ] Handle rapid command submission (debounce or disable input while loading)
-- [ ] Clean up any pending requests when command bar closes
+- [x] Add error handling to `handleGoto()`:
+  - [x] Network error → Show "Network error", log to system log
+  - [x] Location not found → Show "Location not found", log to system log
+  - [x] Invalid coordinates → Show "Invalid coordinates format"
+  - [x] API timeout (5s) → Show "Request timed out"
+- [x] Add to `parseCommand()`:
+  - [x] `goto` with no args → Show "Usage: goto <location>"
+  - [x] Unknown command → Show "Unknown command. Type :help"
+- [x] Handle rapid command submission (debounce or disable input while loading)
+- [x] Clean up any pending requests when command bar closes
 
 ### Verification
 

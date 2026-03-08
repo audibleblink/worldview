@@ -16,12 +16,16 @@ export interface ParsedCommand {
 export function parseCommand(input: string): ParsedCommand | null {
   const trimmed = input.trim().toLowerCase();
 
-  // Handle "goto <location>" or "go <location>"
-  if (trimmed.startsWith("goto ")) {
-    return { type: "goto", args: input.trim().slice(5).trim() };
+  // Handle "goto" or "goto <location>"
+  if (trimmed === "goto" || trimmed.startsWith("goto ")) {
+    const args = trimmed === "goto" ? "" : input.trim().slice(5).trim();
+    return { type: "goto", args };
   }
-  if (trimmed.startsWith("go ")) {
-    return { type: "goto", args: input.trim().slice(3).trim() };
+  
+  // Handle "go" or "go <location>"
+  if (trimmed === "go" || trimmed.startsWith("go ")) {
+    const args = trimmed === "go" ? "" : input.trim().slice(3).trim();
+    return { type: "goto", args };
   }
 
   // Handle "home"

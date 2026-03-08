@@ -17,6 +17,8 @@ export class CommandBar {
   private errorDisplay: HTMLElement;
   private isVisible: boolean = false;
   private onExecute: ((command: string) => void) | null = null;
+  private isExecuting: boolean = false;
+  private abortController: AbortController | null = null;
 
   constructor() {
     // Create DOM structure
@@ -93,6 +95,13 @@ export class CommandBar {
   hide(): void {
     if (!this.isVisible) return;
 
+    // Cancel any pending request
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+
+    this.isExecuting = false;
     this.isVisible = false;
     this.container.classList.remove("visible", "loading", "error", "success");
     this.input.value = "";
@@ -156,7 +165,11 @@ export class CommandBar {
    * Execute a parsed command
    */
   async executeCommand(input: string): Promise<void> {
-    if (!input.trim()) return; // Empty input, do nothing
+    // Empty input - do nothing, keep bar open
+    if (!input.trim()) return;
+
+    // Prevent rapid submissions while executing
+    if (this.isExecuting) return;
 
     const cmd = parseCommand(input);
 
@@ -165,9 +178,20 @@ export class CommandBar {
       return;
     }
 
+    // Handle goto with no args
+    if (cmd.type === "goto" && (!cmd.args || !cmd.args.trim())) {
+      this.showError("Usage: goto <location>");
+      return;
+    }
+
     switch (cmd.type) {
       case "goto":
-        await this.handleGoto(cmd.args || "");
+        this.isExecuting = true;
+        try {
+          await this.handleGoto(cmd.args || "");
+        } finally {
+          this.isExecuting = false;
+        }
         break;
       case "home":
         this.handleHome();
@@ -182,34 +206,72 @@ export class CommandBar {
    * Handle goto command - geocode location and fly to it
    */
   private async handleGoto(location: string): Promise<void> {
-    if (!location) {
+    // Empty location - show usage
+    if (!location.trim()) {
       this.showError("Usage: goto <location>");
       return;
     }
 
+    // Cancel previous request if any
+    if (this.abortController) {
+      this.abortController.abort();
+    }
+    this.abortController = new AbortController();
+
     this.setLoading(true);
+    this.clearError();
 
     try {
       const result = await geocode(location);
 
+      // Check if we were aborted while waiting
+      if (this.abortController?.signal.aborted) {
+        return;
+      }
+
       if (!result) {
-        this.showError("Location not found");
         this.setLoading(false);
+        this.showError("Location not found");
+        addLogEntry("[NAV] Location not found: " + location, "error");
         return;
       }
 
       const altitude = getAltitudeForType(result.type);
 
       // Log to system log
-      this.logNavigation(result.name);
+      addLogEntry("[NAV] Flying to " + result.name, "info");
 
       // Fly to location (note: flyTo takes longitude first, then latitude)
       flyTo(result.lng, result.lat, altitude);
 
       this.showSuccess();
     } catch (error) {
-      this.showError("Network error");
+      // Check if we were aborted - don't show error in that case
+      if (this.abortController?.signal.aborted) {
+        return;
+      }
+
       this.setLoading(false);
+
+      // Check for specific error types
+      if (error instanceof Error) {
+        if (error.name === "AbortError" || error.message.includes("timeout")) {
+          this.showError("Request timed out");
+          addLogEntry("[NAV] Request timed out for: " + location, "error");
+        } else if (
+          error.message.includes("network") ||
+          error.message.includes("fetch") ||
+          error.message.includes("Failed to fetch")
+        ) {
+          this.showError("Network error");
+          addLogEntry("[NAV] Network error for: " + location, "error");
+        } else {
+          this.showError("Error: " + error.message);
+        }
+      } else {
+        this.showError("Network error");
+        addLogEntry("[NAV] Network error for: " + location, "error");
+      }
     }
   }
 
@@ -219,7 +281,7 @@ export class CommandBar {
   private handleHome(): void {
     // Reset to default view: 0°, 0°, 15,000km
     flyTo(0, 0, 15_000_000); // 15,000 km in meters
-    this.logNavigation("Home (0°, 0°)");
+    addLogEntry("[NAV] Flying to Home (0°, 0°)", "info");
     this.showSuccess();
   }
 
@@ -229,13 +291,6 @@ export class CommandBar {
   private handleHelp(): void {
     // Show help in error display area (repurposed for info)
     this.showHelpText();
-  }
-
-  /**
-   * Log navigation to system log
-   */
-  private logNavigation(locationName: string): void {
-    addLogEntry(`[NAV] Flying to ${locationName}`);
   }
 
   /**
