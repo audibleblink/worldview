@@ -1,4 +1,21 @@
-import airports from "./data/airports.json";
+// Airport database - loaded dynamically
+let airports: Record<string, { name: string; lat: number; lng: number }> = {};
+let airportsLoaded = false;
+
+// Load airports database
+async function loadAirports(): Promise<void> {
+  if (airportsLoaded) return;
+  try {
+    const response = await fetch('/src/data/airports.json');
+    airports = await response.json();
+    airportsLoaded = true;
+  } catch (e) {
+    console.error('Failed to load airports database:', e);
+  }
+}
+
+// Initialize airports on module load
+loadAirports();
 
 export interface GeoResult {
   lat: number;
@@ -93,7 +110,7 @@ export function lookupAirport(
   const upperCode = code.trim().toUpperCase();
 
   // Check if the code exists in the airports database
-  const airport = (airports as Record<string, { name: string; lat: number; lng: number }>)[upperCode];
+  const airport = airports[upperCode];
 
   if (airport) {
     return {

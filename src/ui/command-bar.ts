@@ -3,13 +3,13 @@
  * Vim-style command input bar for executing commands
  */
 
-import { geocode, getAltitudeForType } from "../geocoder";
-import { flyTo } from "../globe";
-import { addLogEntry } from "./left-panel";
-import { parseCommand } from "./command-parser";
+import { geocode, getAltitudeForType } from "../geocoder.ts";
+import { flyTo } from "../globe.ts";
+import { addLogEntry } from "./left-panel.ts";
+import { parseCommand } from "./command-parser.ts";
 
 // Re-export for convenience
-export { parseCommand, type ParsedCommand } from "./command-parser";
+export { parseCommand, type ParsedCommand } from "./command-parser.ts";
 
 export class CommandBar {
   private container: HTMLElement;

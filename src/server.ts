@@ -82,6 +82,12 @@ Bun.serve({
       if (response) return response;
     }
 
+    // Serve JSON files from src/
+    if (pathname.startsWith("/src/") && pathname.endsWith(".json")) {
+      const filePath = join(ROOT, pathname);
+      return serveFile(filePath, `JSON file not found: ${pathname}`);
+    }
+
     // Serve public assets
     return serveFile(join(PUBLIC_PATH, pathname), `Not Found: ${pathname}`);
   },
