@@ -20,10 +20,10 @@
   {
     "name": "New York, NY",
     "pois": [
-      { "name": "Empire State Building", "lat": 40.7484, "lng": -73.9857, "altitude": 500, "pitch": -45 },
+      { "name": "Empire State Building", "lat": 40.7484, "lng": -73.9857, "altitude": 750, "pitch": -45 },
       { "name": "Brooklyn Bridge", "lat": 40.7061, "lng": -73.9969, "altitude": 500, "pitch": -45 },
       { "name": "Statue of Liberty", "lat": 40.6892, "lng": -74.0445, "altitude": 500, "pitch": -45 },
-      { "name": "One World Trade Center", "lat": 40.7127, "lng": -74.0134, "altitude": 500, "pitch": -45 }
+      { "name": "One World Trade Center", "lat": 40.7127, "lng": -74.0134, "altitude": 1000, "pitch": -45 }
     ]
   },
   {

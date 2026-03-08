@@ -1,6 +1,6 @@
 /**
  * FlightLayer - Real-time aircraft tracking via OpenSky Network
- * Renders aircraft as rotated billboard icons on the globe
+ * Renders aircraft as 3D models on the globe
  */
 
 // Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
@@ -11,12 +11,18 @@ import { logError } from "../errors.ts";
 
 // Constants
 const FLIGHT_UPDATE_INTERVAL = 10_000;
-const FLIGHT_ICON_SIZE = 28;
-const FLIGHT_ICON_SIZE_SELECTED = 40;
 const FLIGHT_INTERP_CAP = 30;       // seconds max dead-reckoning
 const FLIGHT_FOLLOW_RANGE = 50_000; // meters
 const FLIGHT_FOLLOW_PITCH = -30;    // degrees
 const FLIGHT_LABEL_VISIBLE_DISTANCE = 200_000; // meters - labels hidden beyond this
+const FLIGHT_INTERP_SKIP_FRAMES = 2; // interpolate every N frames (1 = every frame, 2 = every other)
+
+// 3D Model settings
+const AIRCRAFT_MODEL_URL = "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumAir/Cesium_Air.glb";
+const MODEL_SCALE = 50;            // Scale factor for the model
+const MODEL_SCALE_SELECTED = 75;   // Scale factor when selected
+const MODEL_MIN_PIXEL_SIZE = 64;   // Minimum pixel size to remain clickable at distance
+const MAX_VISIBLE_FLIGHTS = 50;    // Only render the N nearest flights to camera
 
 export interface FlightRecord {
   icao24: string;
@@ -121,81 +127,80 @@ export async function fetchAircraftMeta(icao24: string): Promise<FlightMetadata 
 }
 
 /**
- * Creates a 32x32 aircraft silhouette texture (top-down view)
- * Returns a data URL for use as billboard image
- * Rendered in white for color tinting
+ * Compute orientation quaternion from heading, pitch, and roll
+ * @param position - Cartesian3 position of the aircraft
+ * @param heading - Heading in degrees (0 = North, 90 = East)
+ * @param pitch - Pitch in degrees (positive = nose up) - derived from vertical rate
+ * @param roll - Roll in degrees (positive = right wing down) - default 0
  */
-export function createAircraftTexture(): string {
-  const size = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
+function computeOrientation(
+  position: Cesium.Cartesian3,
+  heading: number,
+  pitch: number = 0,
+  roll: number = 0
+): Cesium.Quaternion {
+  // The Cesium Air model's nose points along +X axis by default
+  // Cesium heading 0 = North (+Y in local ENU frame)
+  // We need to rotate the model 90° to align +X (model nose) with +Y (North)
+  // Then apply the flight heading on top of that
+  const adjustedHeading = heading - 90;
+  
+  const hpr = new Cesium.HeadingPitchRoll(
+    Cesium.Math.toRadians(adjustedHeading),
+    Cesium.Math.toRadians(pitch),
+    Cesium.Math.toRadians(roll)
+  );
+  return Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
+}
 
-  const centerX = size / 2;
-  const centerY = size / 2;
+/**
+ * Estimate pitch angle from vertical rate and velocity
+ * Simple approximation: pitch = arctan(verticalRate / horizontalVelocity)
+ */
+function estimatePitch(verticalRate: number, velocity: number): number {
+  if (velocity < 10) return 0; // Avoid division issues at low speeds
+  // verticalRate is in m/s, velocity is horizontal ground speed in m/s
+  const pitchRad = Math.atan2(verticalRate, velocity);
+  return Cesium.Math.toDegrees(pitchRad);
+}
 
-  // Draw subtle glow behind
-  const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size / 2);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 0.3)");
-  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.1)");
-  gradient.addColorStop(1, "transparent");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+/**
+ * Filter flight records to only the N nearest to the camera
+ */
+function filterNearestFlights(
+  records: FlightRecord[],
+  cameraPosition: Cesium.Cartesian3,
+  maxCount: number
+): FlightRecord[] {
+  if (records.length <= maxCount) return records;
 
-  ctx.fillStyle = "#ffffff";
+  // Calculate distance from camera to each flight
+  const withDistance = records.map((record) => {
+    const flightPos = Cesium.Cartesian3.fromDegrees(
+      record.longitude,
+      record.latitude,
+      record.altitude
+    );
+    const distance = Cesium.Cartesian3.distance(cameraPosition, flightPos);
+    return { record, distance };
+  });
 
-  // Fuselage (pointed nose at top, pointing up)
-  ctx.beginPath();
-  ctx.moveTo(centerX, 3);           // Nose
-  ctx.lineTo(centerX + 2, 8);       // Right side of nose
-  ctx.lineTo(centerX + 2, 24);      // Right fuselage
-  ctx.lineTo(centerX + 1, 28);      // Right tail
-  ctx.lineTo(centerX - 1, 28);      // Left tail
-  ctx.lineTo(centerX - 2, 24);      // Left fuselage
-  ctx.lineTo(centerX - 2, 8);       // Left side of nose
-  ctx.closePath();
-  ctx.fill();
-
-  // Main wings (swept back)
-  ctx.beginPath();
-  ctx.moveTo(centerX, 12);          // Wing root front
-  ctx.lineTo(centerX + 13, 18);     // Right wingtip
-  ctx.lineTo(centerX + 12, 20);     // Right wing trailing edge
-  ctx.lineTo(centerX, 16);          // Wing root back
-  ctx.lineTo(centerX - 12, 20);     // Left wing trailing edge
-  ctx.lineTo(centerX - 13, 18);     // Left wingtip
-  ctx.closePath();
-  ctx.fill();
-
-  // Tail wings (horizontal stabilizer)
-  ctx.beginPath();
-  ctx.moveTo(centerX, 24);          // Tail root front
-  ctx.lineTo(centerX + 6, 26);      // Right tail tip
-  ctx.lineTo(centerX + 5, 28);      // Right tail back
-  ctx.lineTo(centerX, 26);          // Tail root back
-  ctx.lineTo(centerX - 5, 28);      // Left tail back
-  ctx.lineTo(centerX - 6, 26);      // Left tail tip
-  ctx.closePath();
-  ctx.fill();
-
-  return canvas.toDataURL();
+  // Sort by distance and take the nearest N
+  withDistance.sort((a, b) => a.distance - b.distance);
+  return withDistance.slice(0, maxCount).map((item) => item.record);
 }
 
 export class FlightLayer {
   private viewer: Cesium.Viewer;
-  private billboards: Cesium.BillboardCollection | null = null;
-  private labels: Cesium.LabelCollection | null = null;
-  private billboardMap: Map<string, Cesium.Billboard> = new Map();
-  private labelMap: Map<string, Cesium.Label> = new Map();
+  private entityMap: Map<string, Cesium.Entity> = new Map();
   private recordMap: Map<string, FlightRecord> = new Map();
   private interpolatedPositions: Map<string, Cesium.Cartesian3> = new Map();
   private updateInterval: ReturnType<typeof setInterval> | null = null;
   private onCountUpdate: ((n: number | null) => void) | null = null;
   private selectedIcao24: string | null = null;
-  private aircraftTexture: string | null = null;
   private externalDeselectCallback: (() => void) | null = null;
   private following: boolean = false;
+  private interpFrameCount: number = 0;
   private interpTickRemove: (() => void) | null = null;
   private followTickRemove: (() => void) | null = null;
 
@@ -205,28 +210,22 @@ export class FlightLayer {
   }
 
   /**
-   * Show the flight layer - fetch data and render billboards
+   * Show the flight layer - fetch data and render 3D model entities
    */
   async show(): Promise<void> {
-    // Create aircraft texture (once, shared by all billboards)
-    if (!this.aircraftTexture) {
-      this.aircraftTexture = createAircraftTexture();
-    }
-
     // Fetch initial flight data
-    const records = await fetchFlights();
+    const allRecords = await fetchFlights();
+    
+    // Filter to nearest flights only
+    const records = filterNearestFlights(
+      allRecords,
+      this.viewer.camera.positionWC,
+      MAX_VISIBLE_FLIGHTS
+    );
 
-    // Create billboard collection
-    this.billboards = new Cesium.BillboardCollection({ scene: this.viewer.scene });
-    this.viewer.scene.primitives.add(this.billboards);
-
-    // Create label collection for callsign/altitude/heading labels
-    this.labels = new Cesium.LabelCollection({ scene: this.viewer.scene });
-    this.viewer.scene.primitives.add(this.labels);
-
-    // Add billboard and label for each aircraft
+    // Add entity for each aircraft
     for (const record of records) {
-      this.addBillboard(record);
+      this.addEntity(record);
     }
 
     // Start polling for updates
@@ -239,11 +238,11 @@ export class FlightLayer {
     this.interpTickRemove = () => interpListener();
 
     // Notify count
-    this.onCountUpdate?.(this.billboardMap.size);
+    this.onCountUpdate?.(this.entityMap.size);
   }
 
   /**
-   * Hide the flight layer - remove all billboards and stop polling
+   * Hide the flight layer - remove all entities and stop polling
    */
   hide(): void {
     // Stop follow mode if active
@@ -261,21 +260,13 @@ export class FlightLayer {
       this.interpTickRemove = null;
     }
 
-    // Remove billboard collection from scene
-    if (this.billboards) {
-      this.viewer.scene.primitives.remove(this.billboards);
-      this.billboards = null;
-    }
-
-    // Remove label collection from scene
-    if (this.labels) {
-      this.viewer.scene.primitives.remove(this.labels);
-      this.labels = null;
+    // Remove all entities from viewer
+    for (const entity of this.entityMap.values()) {
+      this.viewer.entities.remove(entity);
     }
 
     // Clear maps
-    this.billboardMap.clear();
-    this.labelMap.clear();
+    this.entityMap.clear();
     this.recordMap.clear();
     this.interpolatedPositions.clear();
     this.selectedIcao24 = null;
@@ -289,55 +280,57 @@ export class FlightLayer {
    */
   async refreshFlights(): Promise<void> {
     try {
-      const records = await fetchFlights();
+      const allRecords = await fetchFlights();
+      
+      // Filter to nearest flights only
+      const records = filterNearestFlights(
+        allRecords,
+        this.viewer.camera.positionWC,
+        MAX_VISIBLE_FLIGHTS
+      );
       const currentIcaos = new Set(records.map((r) => r.icao24));
 
-      // Update or add billboards and labels
+      // Update or add entities
       for (const record of records) {
-        const existingBillboard = this.billboardMap.get(record.icao24);
-        if (existingBillboard) {
-          // Update existing billboard
+        const existingEntity = this.entityMap.get(record.icao24);
+        if (existingEntity) {
+          // Update existing entity position and orientation
           const position = Cesium.Cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
             record.altitude
           );
-          existingBillboard.position = position;
-          existingBillboard.rotation = -Cesium.Math.toRadians(record.heading);
           
-          // Update existing label
-          const existingLabel = this.labelMap.get(record.icao24);
-          if (existingLabel) {
-            existingLabel.position = position;
-            existingLabel.text = this.formatLabelText(record);
+          const pitch = estimatePitch(record.verticalRate, record.velocity);
+          const orientation = computeOrientation(position, record.heading, pitch);
+          
+          existingEntity.position = new Cesium.ConstantPositionProperty(position);
+          existingEntity.orientation = new Cesium.ConstantProperty(orientation);
+          
+          // Update label text
+          if (existingEntity.label) {
+            existingEntity.label.text = new Cesium.ConstantProperty(this.formatLabelText(record));
           }
           
           // Update stored record
           this.recordMap.set(record.icao24, record);
         } else {
-          // Add new billboard and label
-          this.addBillboard(record);
+          // Add new entity
+          this.addEntity(record);
         }
       }
 
-      // Remove billboards and labels for aircraft no longer in response
-      for (const [icao24, billboard] of this.billboardMap) {
+      // Remove entities for aircraft no longer in nearest set
+      for (const [icao24, entity] of this.entityMap) {
         if (!currentIcaos.has(icao24)) {
-          this.billboards?.remove(billboard);
-          this.billboardMap.delete(icao24);
-          
-          const label = this.labelMap.get(icao24);
-          if (label) {
-            this.labels?.remove(label);
-            this.labelMap.delete(icao24);
-          }
-          
+          this.viewer.entities.remove(entity);
+          this.entityMap.delete(icao24);
           this.recordMap.delete(icao24);
         }
       }
 
       // Notify count
-      this.onCountUpdate?.(this.billboardMap.size);
+      this.onCountUpdate?.(this.entityMap.size);
     } catch (error) {
       logError("FLIGHTS", "Refresh error", error);
     }
@@ -354,48 +347,50 @@ export class FlightLayer {
   }
 
   /**
-   * Add a billboard and label for an aircraft
+   * Add an entity with 3D model and label for an aircraft
    */
-  private addBillboard(record: FlightRecord): void {
-    if (!this.billboards || !this.aircraftTexture) return;
+  private addEntity(record: FlightRecord): void {
+    const position = Cesium.Cartesian3.fromDegrees(
+      record.longitude,
+      record.latitude,
+      record.altitude
+    );
 
-    const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
+    // Calculate pitch from vertical rate
+    const pitch = estimatePitch(record.verticalRate, record.velocity);
+    const orientation = computeOrientation(position, record.heading, pitch);
 
-    // Add billboard with zoom-responsive scaling
-    const billboard = this.billboards.add({
-      position,
-      image: this.aircraftTexture,
-      width: FLIGHT_ICON_SIZE,
-      height: FLIGHT_ICON_SIZE,
-      color: Cesium.Color.CYAN,
-      rotation: -Cesium.Math.toRadians(record.heading),
-      alignedAxis: Cesium.Cartesian3.UNIT_Z,
+    // Create entity with 3D model and label
+    const entity = this.viewer.entities.add({
       id: record.icao24,
-      scaleByDistance: new Cesium.NearFarScalar(5000, 1.2, 500000, 0.6),
-    });
-
-    this.billboardMap.set(record.icao24, billboard);
-    this.recordMap.set(record.icao24, record);
-
-    // Add label with callsign | altitude | heading (above the plane)
-    if (this.labels) {
-      const label = this.labels.add({
-        position,
+      name: record.callsign || record.icao24,
+      position,
+      orientation,
+      model: {
+        uri: AIRCRAFT_MODEL_URL,
+        scale: MODEL_SCALE,
+        minimumPixelSize: MODEL_MIN_PIXEL_SIZE,
+        maximumScale: MODEL_SCALE * 2,
+        silhouetteColor: Cesium.Color.CYAN,
+        silhouetteSize: 1.0,
+      },
+      label: {
         text: this.formatLabelText(record),
         font: "bold 15px Courier New",
         fillColor: Cesium.Color.CYAN,
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -22),
+        pixelOffset: new Cesium.Cartesian2(0, -40),
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         scaleByDistance: new Cesium.NearFarScalar(5000, 1.0, 200000, 0.7),
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, FLIGHT_LABEL_VISIBLE_DISTANCE),
-        id: `label-${record.icao24}`,
-      });
-      this.labelMap.set(record.icao24, label);
-    }
+      },
+    });
+
+    this.entityMap.set(record.icao24, entity);
+    this.recordMap.set(record.icao24, record);
   }
 
   /**
@@ -413,7 +408,7 @@ export class FlightLayer {
   }
 
   /**
-   * Select a flight - resize billboard and notify callback
+   * Select a flight - highlight model and notify callback
    */
   selectFlight(icao24: string, onSelect: (record: FlightRecord) => void): void {
     // Deselect any currently selected flight first
@@ -424,25 +419,27 @@ export class FlightLayer {
 
     this.selectedIcao24 = icao24;
 
-    // Resize billboard to selected size
-    const billboard = this.billboardMap.get(icao24);
-    if (billboard) {
-      billboard.width = FLIGHT_ICON_SIZE_SELECTED;
-      billboard.height = FLIGHT_ICON_SIZE_SELECTED;
+    // Highlight the selected entity
+    const entity = this.entityMap.get(icao24);
+    if (entity?.model) {
+      entity.model.scale = new Cesium.ConstantProperty(MODEL_SCALE_SELECTED);
+      entity.model.silhouetteColor = new Cesium.ConstantProperty(Cesium.Color.YELLOW);
+      entity.model.silhouetteSize = new Cesium.ConstantProperty(2.0);
     }
 
     onSelect(record);
   }
 
   /**
-   * Deselect the current flight - restore billboard size
+   * Deselect the current flight - restore model appearance
    */
   deselectFlight(onDeselect?: () => void): void {
     if (this.selectedIcao24) {
-      const billboard = this.billboardMap.get(this.selectedIcao24);
-      if (billboard) {
-        billboard.width = FLIGHT_ICON_SIZE;
-        billboard.height = FLIGHT_ICON_SIZE;
+      const entity = this.entityMap.get(this.selectedIcao24);
+      if (entity?.model) {
+        entity.model.scale = new Cesium.ConstantProperty(MODEL_SCALE);
+        entity.model.silhouetteColor = new Cesium.ConstantProperty(Cesium.Color.CYAN);
+        entity.model.silhouetteSize = new Cesium.ConstantProperty(1.0);
       }
       this.selectedIcao24 = null;
     }
@@ -458,10 +455,17 @@ export class FlightLayer {
   }
 
   /**
-   * Get the billboard collection
+   * Get an entity by icao24
    */
-  getBillboardCollection(): Cesium.BillboardCollection | null {
-    return this.billboards;
+  getEntity(icao24: string): Cesium.Entity | undefined {
+    return this.entityMap.get(icao24);
+  }
+
+  /**
+   * Check if the layer has any entities
+   */
+  hasEntities(): boolean {
+    return this.entityMap.size > 0;
   }
 
   /**
@@ -474,14 +478,28 @@ export class FlightLayer {
 
   /**
    * Interpolate positions for all tracked flights using dead-reckoning.
-   * Called each frame via preRender listener.
+   * Called each frame via preRender listener, but skips frames for efficiency.
    */
   private interpolatePositions(): void {
+    // Skip frames to reduce CPU load (interpolation every N frames is visually smooth enough)
+    this.interpFrameCount++;
+    if (this.interpFrameCount < FLIGHT_INTERP_SKIP_FRAMES) return;
+    this.interpFrameCount = 0;
+
     const now = Date.now();
+    const cullingVolume = this.viewer.camera.frustum.computeCullingVolume(
+      this.viewer.camera.positionWC,
+      this.viewer.camera.directionWC,
+      this.viewer.camera.upWC
+    );
+
+    // Pre-compute constants outside loop
+    const DEG_TO_RAD = Cesium.Math.RADIANS_PER_DEGREE;
+    const METERS_PER_DEG = 111_320;
 
     for (const [icao24, record] of this.recordMap) {
-      const billboard = this.billboardMap.get(icao24);
-      if (!billboard) continue;
+      const entity = this.entityMap.get(icao24);
+      if (!entity) continue;
 
       // Calculate elapsed time since last update, capped at FLIGHT_INTERP_CAP seconds
       let elapsed = (now - record.lastUpdate) / 1000;
@@ -491,19 +509,31 @@ export class FlightLayer {
 
       // Dead-reckoning along great circle (flat approximation sufficient for short intervals)
       const distM = record.velocity * elapsed;
-      const headingRad = Cesium.Math.toRadians(record.heading);
-      const newLat = record.latitude + (distM * Math.cos(headingRad)) / 111_320;
-      const newLon = record.longitude + (distM * Math.sin(headingRad)) / (111_320 * Math.cos(Cesium.Math.toRadians(record.latitude)));
+      const headingRad = record.heading * DEG_TO_RAD;
+      const cosLat = Math.cos(record.latitude * DEG_TO_RAD);
+      const newLat = record.latitude + (distM * Math.cos(headingRad)) / METERS_PER_DEG;
+      const newLon = record.longitude + (distM * Math.sin(headingRad)) / (METERS_PER_DEG * cosLat);
 
       const pos = Cesium.Cartesian3.fromDegrees(newLon, newLat, record.altitude);
-      billboard.position = pos;
-      this.interpolatedPositions.set(icao24, pos);
-
-      // Update label position to match
-      const label = this.labelMap.get(icao24);
-      if (label) {
-        label.position = pos;
+      
+      // Frustum culling: skip position updates for off-screen flights (except followed flight)
+      if (icao24 !== this.selectedIcao24) {
+        const visibility = cullingVolume.computeVisibility(new Cesium.BoundingSphere(pos, 1000));
+        if (visibility === Cesium.Intersect.OUTSIDE) {
+          // Still update the stored position for when it comes back into view
+          this.interpolatedPositions.set(icao24, pos);
+          continue;
+        }
       }
+
+      // Update entity position and orientation
+      const pitch = estimatePitch(record.verticalRate, record.velocity);
+      const orientation = computeOrientation(pos, record.heading, pitch);
+      
+      entity.position = new Cesium.ConstantPositionProperty(pos);
+      entity.orientation = new Cesium.ConstantProperty(orientation);
+      
+      this.interpolatedPositions.set(icao24, pos);
     }
   }
 
