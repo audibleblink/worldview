@@ -17,6 +17,10 @@ let performanceMonitor: PerformanceMonitor | null = null;
 // Command bar instance
 let commandBar: CommandBar | null = null;
 
+// Interval IDs for cleanup and visibility handling
+let clockIntervalId: ReturnType<typeof setInterval> | null = null;
+let telemetryIntervalId: ReturnType<typeof setInterval> | null = null;
+
 export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): void {
   console.log("Initializing UI shell...");
 
@@ -35,6 +39,7 @@ export function initShell(viewer: Viewer, leftPanelOptions?: LeftPanelOptions): 
   startClock();
   startTelemetry();
   initKeyboardShortcuts();
+  initPageVisibility();
   
   // Initialize performance monitoring
   performanceMonitor = new PerformanceMonitor(viewer);
@@ -97,7 +102,7 @@ function startClock(): void {
     if (el) el.textContent = formatUTCTimestamp();
   };
   tick();
-  setInterval(tick, 1000);
+  clockIntervalId = setInterval(tick, 1000);
 }
 
 function startTelemetry(): void {
@@ -109,7 +114,38 @@ function startTelemetry(): void {
     if (el) el.textContent = `GRB: ${rand(99999, 5)} PASS: DESC:${rand(999, 3)}`;
   };
   tick();
-  setInterval(tick, 3000);
+  telemetryIntervalId = setInterval(tick, 3000);
+}
+
+/** Stop shell intervals (for page visibility) */
+function stopShellIntervals(): void {
+  if (clockIntervalId !== null) {
+    clearInterval(clockIntervalId);
+    clockIntervalId = null;
+  }
+  if (telemetryIntervalId !== null) {
+    clearInterval(telemetryIntervalId);
+    telemetryIntervalId = null;
+  }
+}
+
+/** Resume shell intervals (for page visibility) */
+function resumeShellIntervals(): void {
+  if (clockIntervalId === null) startClock();
+  if (telemetryIntervalId === null) startTelemetry();
+}
+
+/** Initialize page visibility handling to pause updates when tab is hidden */
+function initPageVisibility(): void {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopShellIntervals();
+      console.log("Tab hidden - paused shell intervals");
+    } else {
+      resumeShellIntervals();
+      console.log("Tab visible - resumed shell intervals");
+    }
+  });
 }
 
 export function createTopBar(): HTMLElement {

@@ -69,6 +69,7 @@ export class CCTVManager {
   private centerStageCameraId: string | null = null;
   private centerStageOverlay: HTMLElement | null = null;
   private onCenterStageChange: ((cameraId: string | null) => void) | null = null;
+  private centerStageRAFId: number | null = null;
   
   // Camera markers on map
   private cameraMarkers: InstanceType<typeof Cesium.BillboardCollection> | null = null;
@@ -421,6 +422,12 @@ export class CCTVManager {
 
   /** Remove the center-stage overlay */
   private removeCenterStageOverlay(): void {
+    // Cancel the animation frame loop
+    if (this.centerStageRAFId !== null) {
+      cancelAnimationFrame(this.centerStageRAFId);
+      this.centerStageRAFId = null;
+    }
+    
     if (this.centerStageOverlay) {
       this.centerStageOverlay.remove();
       this.centerStageOverlay = null;
@@ -436,7 +443,10 @@ export class CCTVManager {
     if (!ctx) return;
 
     const render = () => {
-      if (!billboard.isCenterStage || !this.centerStageOverlay) return;
+      if (!billboard.isCenterStage || !this.centerStageOverlay) {
+        this.centerStageRAFId = null;
+        return;
+      }
 
       // Scale and draw the billboard canvas to the larger center-stage canvas
       ctx.fillStyle = "#000000";
@@ -445,7 +455,7 @@ export class CCTVManager {
 
       // No border for center-stage (cleaner full-screen look)
 
-      requestAnimationFrame(render);
+      this.centerStageRAFId = requestAnimationFrame(render);
     };
 
     render();
