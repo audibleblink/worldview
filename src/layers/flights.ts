@@ -518,7 +518,7 @@ export class FlightLayer {
   /**
    * Start following the currently selected flight.
    * Registers a preRender listener that updates camera each frame.
-   * Maintains current camera altitude - only follows horizontally.
+   * User can orbit around the target (change heading/pitch/range) but cannot pan away.
    */
   startFollow(): void {
     if (!this.selectedIcao24) return;
@@ -531,29 +531,54 @@ export class FlightLayer {
 
     this.following = true;
     
-    // Capture current camera height to maintain during follow
+    // Capture initial camera state
     const cameraCartographic = this.viewer.camera.positionCartographic;
-    const followHeight = cameraCartographic.height;
+    const initialRange = cameraCartographic.height;
     
-    console.log("[FLIGHTS] Follow mode started for", this.selectedIcao24, "at height", followHeight);
+    console.log("[FLIGHTS] Follow mode started for", this.selectedIcao24, "at range", initialRange);
+
+    // Store HPR values - these are what we pass to lookAt
+    let heading = 0;
+    let pitch = Cesium.Math.toRadians(-45);
+    let range = initialRange;
+    
+    // Track where we positioned camera last frame to detect user input
+    let lastCamPos: Cesium.Cartesian3 | null = null;
 
     const followListener = this.viewer.scene.preRender.addEventListener(() => {
       if (!this.following || !this.selectedIcao24) return;
 
       const pos = this.getCurrentPosition(this.selectedIcao24);
       if (pos) {
-        // Get plane's lon/lat but use our locked camera height
+        // Get plane's lon/lat but use ground level as target
         const planeCartographic = Cesium.Cartographic.fromCartesian(pos);
-        const targetAtCameraHeight = Cesium.Cartesian3.fromRadians(
+        const target = Cesium.Cartesian3.fromRadians(
           planeCartographic.longitude,
           planeCartographic.latitude,
           0 // Ground level - camera will be positioned above this
         );
+
+        const camera = this.viewer.camera;
+
+        // Check if user moved the camera since last frame
+        if (lastCamPos !== null) {
+          const actualPos = camera.positionWC;
+          const userMoved = !Cesium.Cartesian3.equalsEpsilon(actualPos, lastCamPos, 0, 1.0);
+          
+          if (userMoved) {
+            // User orbited - camera.heading/pitch are now updated by ScreenSpaceCameraController
+            // These ARE the correct values relative to the current lookAt reference frame
+            heading = camera.heading;
+            pitch = camera.pitch;
+            range = Cesium.Cartesian3.distance(actualPos, target);
+          }
+        }
+
+        // Apply lookAt - this creates the reference frame that enables orbit controls
+        camera.lookAt(target, new Cesium.HeadingPitchRange(heading, pitch, range));
         
-        lookAtTarget(this.viewer, targetAtCameraHeight, {
-          range: followHeight,
-          pitch: Cesium.Math.toRadians(-90), // Look straight down
-        });
+        // Store where camera is now
+        lastCamPos = Cesium.Cartesian3.clone(camera.positionWC);
       }
     });
     this.followTickRemove = () => followListener();

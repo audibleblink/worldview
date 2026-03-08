@@ -520,16 +520,42 @@ export class SatelliteLayer {
     if (!this.selectedNoradId) return;
     this.stopFollow();
 
+    // Store HPR values - these are what we pass to lookAt
+    let heading = 0;
+    let pitch = Cesium.Math.toRadians(-45);
+    let range = FOLLOW_RANGE_METERS;
+    
+    // Track where we positioned camera last frame to detect user input
+    let lastCamPos: Cesium.Cartesian3 | null = null;
+
     // Drive camera manually every render frame — reliable, no trackedEntity lag.
+    // User can orbit around the satellite (change heading/pitch/range) but cannot pan away.
     const listener = () => {
       if (!this.selectedNoradId) return;
-      const pos = this.satellitePositions.get(this.selectedNoradId);
-      if (!pos) return;
+      const target = this.satellitePositions.get(this.selectedNoradId);
+      if (!target) return;
 
-      lookAtTarget(this.viewer, pos, {
-        range: FOLLOW_RANGE_METERS,
-        pitch: Cesium.Math.toRadians(-45),
-      });
+      const camera = this.viewer.camera;
+
+      // Check if user moved the camera since last frame
+      if (lastCamPos !== null) {
+        const actualPos = camera.positionWC;
+        const userMoved = !Cesium.Cartesian3.equalsEpsilon(actualPos, lastCamPos, 0, 1.0);
+        
+        if (userMoved) {
+          // User orbited - camera.heading/pitch are now updated by ScreenSpaceCameraController
+          // These ARE the correct values relative to the current lookAt reference frame
+          heading = camera.heading;
+          pitch = camera.pitch;
+          range = Cesium.Cartesian3.distance(actualPos, target);
+        }
+      }
+
+      // Apply lookAt - this creates the reference frame that enables orbit controls
+      camera.lookAt(target, new Cesium.HeadingPitchRange(heading, pitch, range));
+      
+      // Store where camera is now
+      lastCamPos = Cesium.Cartesian3.clone(camera.positionWC);
     };
 
     this.viewer.scene.preRender.addEventListener(listener);
