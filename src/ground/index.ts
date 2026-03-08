@@ -26,13 +26,20 @@ export { RingAnimation, getMagnitudeConfig } from "./seismic/RingAnimation.ts";
 // Import sub-layers for orchestrator
 import { TrafficParticleSystem } from "./traffic/TrafficParticleSystem.ts";
 import type { StyleMode } from "./traffic/particleStyles.ts";
-import { OSMFetcher } from "./traffic/OSMFetcher.ts";
+import { OSMFetcher, type OSMFetcherError } from "./traffic/OSMFetcher.ts";
 import { RoadNetwork } from "./traffic/RoadNetwork.ts";
 import { CCTVManager } from "./cctv/CCTVManager.ts";
 import { EarthquakeLayer } from "./seismic/EarthquakeLayer.ts";
 
 /** Default Austin bounding box for initial traffic load */
 const AUSTIN_BBOX = { south: 30.20, west: -97.80, north: 30.35, east: -97.68 };
+
+/** Ground layer error types */
+export type GroundLayerError = {
+  layer: "traffic" | "cctv" | "seismic";
+  message: string;
+  recoverable: boolean;
+};
 
 /**
  * GroundLayer - Unified orchestrator for all ground-level visualizations
@@ -58,12 +65,73 @@ export class GroundLayer {
 
   // Callbacks
   private onCameraCountChange: ((count: number) => void) | null = null;
+  private onError: ((error: GroundLayerError) => void) | null = null;
+  
+  // Error state
+  private trafficError: string | null = null;
+  private cctvError: string | null = null;
+  private seismicError: string | null = null;
 
   constructor() {
     this.traffic = new TrafficParticleSystem();
     this.cctv = new CCTVManager();
     this.seismic = new EarthquakeLayer();
     this.osmFetcher = new OSMFetcher();
+    
+    // Set up OSM error handler
+    this.osmFetcher.setOnError((error) => {
+      this.trafficError = error.message;
+      this.onError?.({
+        layer: "traffic",
+        message: `Traffic data unavailable: ${error.message}`,
+        recoverable: error.retriable,
+      });
+    });
+  }
+  
+  /**
+   * Set callback for ground layer errors
+   */
+  setOnError(callback: (error: GroundLayerError) => void): void {
+    this.onError = callback;
+  }
+  
+  /**
+   * Get current error state for each sub-layer
+   */
+  getErrorStates(): { traffic: string | null; cctv: string | null; seismic: string | null } {
+    return {
+      traffic: this.trafficError,
+      cctv: this.cctvError,
+      seismic: this.seismicError,
+    };
+  }
+  
+  /**
+   * Clear error states and retry failed operations
+   */
+  async retryFailedOperations(): Promise<void> {
+    // Reset OSM fetcher offline mode
+    if (this.trafficError) {
+      this.osmFetcher.resetOfflineMode();
+      this.trafficError = null;
+      
+      // Retry loading roads if visible
+      if (this.isVisible && this.trafficVisible) {
+        await this.loadRoads();
+      }
+    }
+    
+    // Reset CCTV retry states
+    if (this.cctvError) {
+      this.cctv.resetAllRetryStates();
+      this.cctvError = null;
+    }
+    
+    // Seismic uses public USGS API, usually doesn't need retry
+    this.seismicError = null;
+    
+    console.log("[GroundLayer] Retrying failed operations");
   }
 
   /**
@@ -104,10 +172,33 @@ export class GroundLayer {
     try {
       console.log("[GroundLayer] Loading road network...");
       const rawWays = await this.osmFetcher.fetchRoads(bbox);
+      
+      if (rawWays.length === 0) {
+        // Check if it's an error condition or just no roads in area
+        if (this.osmFetcher.isInOfflineMode()) {
+          this.trafficError = "Unable to fetch road data. Using cached data if available.";
+          this.onError?.({
+            layer: "traffic",
+            message: this.trafficError,
+            recoverable: true,
+          });
+        }
+        console.warn("[GroundLayer] No road data available");
+        return;
+      }
+      
       this.roadNetwork = new RoadNetwork(rawWays);
       await this.traffic.loadNetwork(this.roadNetwork);
+      this.trafficError = null;  // Clear any previous error
       console.log(`[GroundLayer] Road network loaded: ${this.roadNetwork.segments.length} segments`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.trafficError = message;
+      this.onError?.({
+        layer: "traffic",
+        message: `Failed to load road network: ${message}`,
+        recoverable: true,
+      });
       console.error("[GroundLayer] Failed to load road network:", error);
       // Don't throw - traffic is optional
     }
@@ -287,6 +378,70 @@ export class GroundLayer {
     });
   }
 
+  // --- Performance & Debug ---
+  
+  /**
+   * Get performance statistics for the ground layer
+   */
+  getPerformanceStats(): {
+    traffic: {
+      particleCount: number;
+      visibleParticles: number;
+      visibleSegments: number;
+      avgFrameTime: number;
+      lodLevel: number;
+      cullingEnabled: boolean;
+    };
+    cctv: {
+      activeBillboards: number;
+      texturePool: { total: number; inUse: number; available: number };
+      failedStreams: number;
+    };
+    seismic: {
+      activeQuakes: number;
+    };
+  } {
+    return {
+      traffic: {
+        particleCount: this.traffic.getParticleCount(),
+        visibleParticles: this.traffic.getVisibleParticleCount(),
+        visibleSegments: this.traffic.getVisibleSegmentCount(),
+        avgFrameTime: this.traffic.getAverageFrameTime(),
+        lodLevel: this.traffic.getLODLevel(),
+        cullingEnabled: this.traffic.isCullingEnabled(),
+      },
+      cctv: {
+        activeBillboards: this.cctv.getActiveBillboardCount(),
+        texturePool: this.cctv.getTexturePoolStats(),
+        failedStreams: this.cctv.getFailedStreamCount(),
+      },
+      seismic: {
+        activeQuakes: this.seismic.getActiveCount(),
+      },
+    };
+  }
+  
+  /**
+   * Set LOD enabled state for traffic
+   */
+  setTrafficLODEnabled(enabled: boolean): void {
+    this.traffic.setLODEnabled(enabled);
+  }
+  
+  /**
+   * Set culling enabled state for traffic
+   */
+  setTrafficCullingEnabled(enabled: boolean): void {
+    this.traffic.setCullingEnabled(enabled);
+  }
+  
+  /**
+   * Reset performance counters
+   */
+  resetPerformanceCounters(): void {
+    this.traffic.resetPerformanceCounters();
+  }
+
   // --- Cleanup ---
 
   /**
@@ -302,6 +457,9 @@ export class GroundLayer {
     this.viewer = null;
     this.roadNetwork = null;
     this.isInitialized = false;
+    this.trafficError = null;
+    this.cctvError = null;
+    this.seismicError = null;
 
     console.log("[GroundLayer] Destroyed");
   }

@@ -73,6 +73,13 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   // Initialize ground layer (may be provided externally or created here)
   ground.layer = options?.groundLayer ?? null;
   ground.active = false;
+  
+  // Set up ground layer error handler
+  if (ground.layer) {
+    ground.layer.setOnError((error) => {
+      addLogEntry(`[${error.layer.toUpperCase()}] ${error.message}`, "error");
+    });
+  }
 
   // Initialize CCTV manager - use from ground layer if available
   cctv.viewer = viewer;

@@ -40,13 +40,59 @@ const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 /** Highway types to fetch */
 const HIGHWAY_TYPES = ["motorway", "motorway_link", "primary", "primary_link", "secondary", "secondary_link", "tertiary", "tertiary_link", "residential"];
 
+/** Retry configuration for API failures */
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+};
+
+/** Error event for external listeners */
+export type OSMFetcherError = {
+  type: "api_error" | "network_error" | "cache_error";
+  message: string;
+  retriable: boolean;
+};
+
 export class OSMFetcher {
   private db: IDBDatabase | null = null;
   private dbInitPromise: Promise<void> | null = null;
+  private onError: ((error: OSMFetcherError) => void) | null = null;
+  private lastError: OSMFetcherError | null = null;
+  private isOffline = false;
 
   constructor() {
     // Initialize IndexedDB lazily
     this.dbInitPromise = this.initDB();
+  }
+  
+  /** Set error callback for external handling */
+  setOnError(callback: (error: OSMFetcherError) => void): void {
+    this.onError = callback;
+  }
+  
+  /** Get last error that occurred */
+  getLastError(): OSMFetcherError | null {
+    return this.lastError;
+  }
+  
+  /** Check if fetcher is in offline/error mode */
+  isInOfflineMode(): boolean {
+    return this.isOffline;
+  }
+  
+  /** Reset offline mode (for retry) */
+  resetOfflineMode(): void {
+    this.isOffline = false;
+    this.lastError = null;
+  }
+  
+  /** Emit an error to callback */
+  private emitError(error: OSMFetcherError): void {
+    this.lastError = error;
+    this.onError?.(error);
+    console.error(`[OSMFetcher] ${error.type}: ${error.message}`);
   }
 
   /** Initialize IndexedDB for caching */
@@ -142,6 +188,7 @@ out geom;`;
   /**
    * Fetch roads within a bounding box
    * Returns cached data if available, otherwise fetches from Overpass API
+   * Includes retry logic with exponential backoff
    */
   async fetchRoads(bbox: BoundingBox): Promise<RawOSMWay[]> {
     const cacheKey = this.getCacheKey(bbox);
@@ -152,50 +199,98 @@ out geom;`;
       return cached;
     }
 
-    // Fetch from API
+    // If in offline mode, return empty (don't spam failed requests)
+    if (this.isOffline) {
+      console.log("[OSMFetcher] In offline mode, using cached data only");
+      return [];
+    }
+
+    // Fetch from API with retry logic
     const query = this.buildQuery(bbox);
     console.log(`[OSMFetcher] Fetching roads for bbox: ${cacheKey}`);
 
-    try {
-      const response = await fetch(OVERPASS_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: query,
-      });
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < RETRY_CONFIG.maxRetries; attempt++) {
+      try {
+        const response = await fetch(OVERPASS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: query,
+        });
 
-      if (!response.ok) {
-        throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          // Check for rate limiting
+          if (response.status === 429) {
+            const retryAfter = response.headers.get("Retry-After");
+            const delay = retryAfter ? parseInt(retryAfter) * 1000 : RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt);
+            console.warn(`[OSMFetcher] Rate limited, retrying in ${delay}ms`);
+            await this.sleep(Math.min(delay, RETRY_CONFIG.maxDelayMs));
+            continue;
+          }
+          
+          throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data: OverpassResponse = await response.json();
+        
+        // Parse response into RawOSMWay format
+        const ways: RawOSMWay[] = data.elements
+          .filter((el): el is typeof el & { type: "way"; geometry: Array<{ lat: number; lon: number }> } => 
+            el.type === "way" && Array.isArray(el.geometry) && el.geometry.length >= 2
+          )
+          .map((el) => ({
+            id: el.id,
+            tags: {
+              highway: el.tags?.highway,
+              oneway: el.tags?.oneway,
+              name: el.tags?.name,
+              maxspeed: el.tags?.maxspeed,
+              lanes: el.tags?.lanes,
+            },
+            geometry: el.geometry,
+          }));
+
+        console.log(`[OSMFetcher] Fetched ${ways.length} road segments`);
+
+        // Cache the results
+        await this.setCache(cacheKey, ways);
+
+        // Success - reset offline mode if it was set
+        this.isOffline = false;
+        this.lastError = null;
+
+        return ways;
+      } catch (error) {
+        lastError = error as Error;
+        
+        // Check if it's a network error
+        const isNetworkError = error instanceof TypeError && error.message.includes("fetch");
+        
+        if (attempt < RETRY_CONFIG.maxRetries - 1) {
+          const delay = RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt);
+          console.warn(`[OSMFetcher] Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, error);
+          await this.sleep(delay);
+        } else {
+          // All retries exhausted
+          this.isOffline = true;
+          this.emitError({
+            type: isNetworkError ? "network_error" : "api_error",
+            message: `Failed to fetch roads after ${RETRY_CONFIG.maxRetries} attempts: ${lastError.message}`,
+            retriable: true,
+          });
+        }
       }
-
-      const data: OverpassResponse = await response.json();
-      
-      // Parse response into RawOSMWay format
-      const ways: RawOSMWay[] = data.elements
-        .filter((el): el is typeof el & { type: "way"; geometry: Array<{ lat: number; lon: number }> } => 
-          el.type === "way" && Array.isArray(el.geometry) && el.geometry.length >= 2
-        )
-        .map((el) => ({
-          id: el.id,
-          tags: {
-            highway: el.tags?.highway,
-            oneway: el.tags?.oneway,
-            name: el.tags?.name,
-            maxspeed: el.tags?.maxspeed,
-            lanes: el.tags?.lanes,
-          },
-          geometry: el.geometry,
-        }));
-
-      console.log(`[OSMFetcher] Fetched ${ways.length} road segments`);
-
-      // Cache the results
-      await this.setCache(cacheKey, ways);
-
-      return ways;
-    } catch (error) {
-      console.error("[OSMFetcher] Failed to fetch roads:", error);
-      throw error;
     }
+
+    // Return empty array on failure (graceful degradation)
+    console.error("[OSMFetcher] Failed to fetch roads after all retries:", lastError);
+    return [];
+  }
+  
+  /** Sleep utility for retry delays */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**

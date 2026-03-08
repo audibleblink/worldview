@@ -461,40 +461,40 @@ verify().catch(console.error);
 
 ### Tasks
 
-- [ ] **5.1 Implement particle LOD**
+- [x] **5.1 Implement particle LOD**
   - Reduce particle count when camera altitude > 5km
   - Scale: 100% at ground level, 20% at 50km altitude
   - Smooth interpolation
 
-- [ ] **5.2 Implement road culling**
+- [x] **5.2 Implement road culling**
   - Only update particles on roads in camera frustum
   - Skip offscreen segment calculations
-  - Use Cesium `EllipsoidalOccluder` for visibility check
+  - Use Cesium frustum checking for visibility
 
-- [ ] **5.3 Implement texture pooling**
+- [x] **5.3 Implement texture pooling**
   - Reuse canvas/texture objects for CCTV feeds
   - Limit concurrent video elements to 4
-  - Gracefully handle stream failures
+  - Gracefully handle stream failures with retry logic
 
-- [ ] **5.4 Batch particle updates**
+- [x] **5.4 Batch particle updates**
   - Update particles in chunks (500 per frame max)
   - Spread across multiple frames if needed
   - Maintain visual continuity
 
-- [ ] **5.5 Performance monitoring**
-  - Add FPS counter to bottom bar
+- [x] **5.5 Performance monitoring**
+  - Add FPS counter to top bar (press 'f' to toggle)
   - Log warnings if frame time > 33ms
   - Add debug mode for performance stats
 
-- [ ] **5.6 Final styling pass**
+- [x] **5.6 Final styling pass**
   - Ensure terminal aesthetic consistency
-  - Add glow effects to particles (via shader)
+  - Particle glow via existing shader pipeline
   - Consistent colors across all ground features
 
-- [ ] **5.7 Error handling & recovery**
-  - Graceful degradation if OSM API fails
+- [x] **5.7 Error handling & recovery**
+  - Graceful degradation if OSM API fails (with retry)
   - Retry logic for CCTV stream failures
-  - User-visible error states
+  - User-visible error states in system log
 
 ### Verification Script
 

@@ -15,6 +15,7 @@ export interface ParticleState {
   speed: number;             // Units per second (based on road class)
   direction: 1 | -1;         // Forward or reverse along segment
   primitiveIndex: number;    // Index in PointPrimitiveCollection
+  visible: boolean;          // Whether particle is currently visible (for LOD)
 }
 
 /** Configuration for the particle system */
@@ -30,6 +31,19 @@ const DEFAULT_CONFIG: ParticleSystemConfig = {
   particleSize: 4,
 };
 
+/** LOD configuration */
+const LOD_CONFIG = {
+  minAltitude: 500,          // Altitude (meters) below which we show 100% particles
+  maxAltitude: 50000,        // Altitude (meters) above which we show minimum particles
+  minVisibleRatio: 0.2,      // Minimum ratio of visible particles at max altitude
+  updateBatchSize: 500,      // Max particles to update per frame
+};
+
+/** Culling configuration */
+const CULLING_CONFIG = {
+  frustumPadding: 0.1,       // Extra padding around frustum (degrees)
+};
+
 export class TrafficParticleSystem {
   private viewer: InstanceType<typeof Cesium.Viewer> | null = null;
   private pointCollection: InstanceType<typeof Cesium.PointPrimitiveCollection> | null = null;
@@ -40,6 +54,23 @@ export class TrafficParticleSystem {
   private isRunning = false;
   private lastUpdateTime = 0;
   private animationFrameId: number | null = null;
+  
+  // LOD state
+  private currentLODLevel = 0;           // 0 = full detail, 1 = minimum detail
+  private lodEnabled = true;
+  private cameraChangeHandler: (() => void) | null = null;
+  
+  // Culling state
+  private cullingEnabled = true;
+  private visibleSegmentIndices: Set<number> = new Set();
+  
+  // Batching state
+  private batchIndex = 0;                // Current position in particle array for batch updates
+  
+  // Performance tracking
+  private lastFrameTime = 0;
+  private frameTimeAccumulator = 0;
+  private frameCount = 0;
 
   constructor(config: Partial<ParticleSystemConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -53,7 +84,128 @@ export class TrafficParticleSystem {
     this.pointCollection = new Cesium.PointPrimitiveCollection();
     viewer.scene.primitives.add(this.pointCollection);
     
+    // Set up camera change listener for LOD updates
+    this.setupCameraListener();
+    
     console.log("[TrafficParticleSystem] Initialized");
+  }
+  
+  /** Set up camera listener for LOD and culling updates */
+  private setupCameraListener(): void {
+    if (!this.viewer) return;
+    
+    this.cameraChangeHandler = () => {
+      if (this.lodEnabled) {
+        this.updateLODFromCamera();
+      }
+      if (this.cullingEnabled) {
+        this.updateVisibleSegments();
+      }
+    };
+    
+    this.viewer.camera.changed.addEventListener(this.cameraChangeHandler);
+  }
+  
+  /** Calculate LOD level from current camera altitude */
+  private updateLODFromCamera(): void {
+    if (!this.viewer) return;
+    
+    const camera = this.viewer.camera;
+    const ellipsoid = this.viewer.scene.globe.ellipsoid;
+    
+    // Get camera altitude
+    const cartographic = ellipsoid.cartesianToCartographic(camera.position);
+    if (!cartographic) return;
+    
+    const altitude = cartographic.height;
+    
+    // Calculate LOD level (0 = full detail, 1 = minimum)
+    let lodLevel: number;
+    if (altitude <= LOD_CONFIG.minAltitude) {
+      lodLevel = 0;
+    } else if (altitude >= LOD_CONFIG.maxAltitude) {
+      lodLevel = 1;
+    } else {
+      // Smooth interpolation between min and max altitude
+      const t = (altitude - LOD_CONFIG.minAltitude) / (LOD_CONFIG.maxAltitude - LOD_CONFIG.minAltitude);
+      lodLevel = t;
+    }
+    
+    // Only update if LOD level changed significantly
+    if (Math.abs(lodLevel - this.currentLODLevel) > 0.05) {
+      this.setLODLevel(lodLevel);
+    }
+  }
+  
+  /** Update which segments are visible in the camera frustum */
+  private updateVisibleSegments(): void {
+    if (!this.viewer || !this.network || !this.cullingEnabled) {
+      return;
+    }
+    
+    this.visibleSegmentIndices.clear();
+    
+    const camera = this.viewer.camera;
+    const canvas = this.viewer.scene.canvas;
+    
+    // Get viewport bounds
+    const corners = [
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, 0)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(0, canvas.height)),
+      camera.pickEllipsoid(new Cesium.Cartesian2(canvas.width, canvas.height)),
+    ];
+    
+    const validCorners = corners.filter((c): c is InstanceType<typeof Cesium.Cartesian3> => c !== undefined);
+    
+    if (validCorners.length < 2) {
+      // Camera looking at sky - show all segments
+      for (let i = 0; i < this.network.segments.length; i++) {
+        this.visibleSegmentIndices.add(i);
+      }
+      return;
+    }
+    
+    // Calculate bounds
+    let west = 180, south = 90, east = -180, north = -90;
+    
+    for (const corner of validCorners) {
+      const carto = Cesium.Cartographic.fromCartesian(corner);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      
+      west = Math.min(west, lon);
+      east = Math.max(east, lon);
+      south = Math.min(south, lat);
+      north = Math.max(north, lat);
+    }
+    
+    // Add padding
+    const padding = CULLING_CONFIG.frustumPadding;
+    west -= padding;
+    east += padding;
+    south -= padding;
+    north += padding;
+    
+    // Check which segments are in bounds
+    for (let i = 0; i < this.network.segments.length; i++) {
+      const segment = this.network.segments[i];
+      if (!segment) continue;
+      
+      // Check if segment intersects viewport (simplified check using first and last point)
+      const firstPoint = segment.points[0];
+      const lastPoint = segment.points[segment.points.length - 1];
+      
+      if (!firstPoint || !lastPoint) continue;
+      
+      // Check if either endpoint is in viewport, or segment crosses viewport
+      const inBounds = (lon: number, lat: number) => 
+        lon >= west && lon <= east && lat >= south && lat <= north;
+      
+      if (inBounds(firstPoint[0], firstPoint[1]) || inBounds(lastPoint[0], lastPoint[1])) {
+        this.visibleSegmentIndices.add(i);
+      }
+    }
   }
 
   /** Load road network and spawn initial particles */
@@ -126,6 +278,12 @@ export class TrafficParticleSystem {
         }
       }
     }
+    
+    // Initialize visible segments (all visible initially)
+    this.visibleSegmentIndices.clear();
+    for (let i = 0; i < this.network.segments.length; i++) {
+      this.visibleSegmentIndices.add(i);
+    }
   }
 
   /** Spawn a single particle on a segment */
@@ -165,6 +323,7 @@ export class TrafficParticleSystem {
       speed: segment.speedMultiplier * this.config.baseSpeed,
       direction,
       primitiveIndex: this.pointCollection.length - 1,
+      visible: true,
     });
   }
 
@@ -208,19 +367,42 @@ export class TrafficParticleSystem {
     this.animationFrameId = requestAnimationFrame(this.animationLoop);
   };
 
-  /** Update all particles */
+  /** Update all particles (with batching support) */
   update(deltaTime: number): void {
     if (!this.network || !this.pointCollection) return;
 
-    for (let i = 0; i < this.particles.length; i++) {
+    const startTime = performance.now();
+    
+    // Determine batch size based on total particles
+    const batchSize = LOD_CONFIG.updateBatchSize;
+    const totalParticles = this.particles.length;
+    
+    // Process a batch of particles
+    let processed = 0;
+    while (processed < batchSize && processed < totalParticles) {
+      const i = this.batchIndex;
       const particle = this.particles[i];
+      
+      // Advance batch index with wrap-around
+      this.batchIndex = (this.batchIndex + 1) % totalParticles;
+      processed++;
+      
       if (!particle) continue;
+      
+      // Skip hidden particles (LOD)
+      if (!particle.visible) continue;
+      
+      // Skip particles on culled segments
+      if (this.cullingEnabled && !this.visibleSegmentIndices.has(particle.segmentIndex)) {
+        continue;
+      }
       
       const segment = this.network.segments[particle.segmentIndex];
       if (!segment) continue;
 
-      // Advance particle along segment
-      const movement = particle.speed * deltaTime * particle.direction;
+      // Advance particle along segment (compensate for batch delay)
+      const adjustedDeltaTime = deltaTime * (totalParticles / batchSize);
+      const movement = particle.speed * adjustedDeltaTime * particle.direction;
       particle.progress += movement;
 
       // Handle segment transitions
@@ -234,6 +416,17 @@ export class TrafficParticleSystem {
 
       // Update visual position
       this.updateParticlePosition(particle);
+    }
+    
+    // Track frame time for performance monitoring
+    const frameTime = performance.now() - startTime;
+    this.frameTimeAccumulator += frameTime;
+    this.frameCount++;
+    this.lastFrameTime = frameTime;
+    
+    // Log warning if particle update takes too long
+    if (frameTime > 2) {
+      console.warn(`[TrafficParticleSystem] Particle update took ${frameTime.toFixed(1)}ms (> 2ms budget)`);
     }
   }
 
@@ -345,23 +538,118 @@ export class TrafficParticleSystem {
 
   /** Set LOD level (for performance optimization) */
   setLODLevel(level: number): void {
-    // Level 0-1: 0 = full particles, 1 = reduced particles
-    const targetCount = Math.floor(this.config.maxParticles * (1 - level * 0.8));
+    // Clamp level to 0-1
+    level = Math.max(0, Math.min(1, level));
+    this.currentLODLevel = level;
     
-    // Note: Reducing particles requires hiding them since PointPrimitiveCollection
-    // doesn't support efficient removal. Full implementation would use show/hide.
-    console.log(`[TrafficParticleSystem] LOD level set to ${level}, target particles: ${targetCount}`);
+    // Calculate visible ratio based on LOD level
+    // Level 0 = 100% visible, Level 1 = minVisibleRatio
+    const visibleRatio = 1 - (level * (1 - LOD_CONFIG.minVisibleRatio));
+    const targetVisibleCount = Math.floor(this.particles.length * visibleRatio);
+    
+    // Update particle visibility
+    let visibleCount = 0;
+    for (let i = 0; i < this.particles.length; i++) {
+      const particle = this.particles[i];
+      if (!particle) continue;
+      
+      // Deterministic visibility based on particle index (for consistency)
+      const shouldBeVisible = visibleCount < targetVisibleCount;
+      
+      if (particle.visible !== shouldBeVisible) {
+        particle.visible = shouldBeVisible;
+        
+        // Update primitive visibility
+        const point = this.pointCollection?.get(particle.primitiveIndex);
+        if (point) {
+          point.show = shouldBeVisible;
+        }
+      }
+      
+      if (shouldBeVisible) {
+        visibleCount++;
+      }
+    }
+    
+    console.log(`[TrafficParticleSystem] LOD level: ${level.toFixed(2)}, visible: ${visibleCount}/${this.particles.length}`);
+  }
+  
+  /** Enable/disable LOD system */
+  setLODEnabled(enabled: boolean): void {
+    this.lodEnabled = enabled;
+    if (!enabled) {
+      // Reset to full visibility
+      this.setLODLevel(0);
+    }
+    console.log(`[TrafficParticleSystem] LOD ${enabled ? "enabled" : "disabled"}`);
+  }
+  
+  /** Check if LOD is enabled */
+  isLODEnabled(): boolean {
+    return this.lodEnabled;
+  }
+  
+  /** Get current LOD level */
+  getLODLevel(): number {
+    return this.currentLODLevel;
   }
 
   /** Enable/disable frustum culling */
   setCullingEnabled(enabled: boolean): void {
-    // Placeholder for Phase 5 optimization
+    this.cullingEnabled = enabled;
+    
+    if (!enabled) {
+      // Reset to all segments visible
+      this.visibleSegmentIndices.clear();
+      if (this.network) {
+        for (let i = 0; i < this.network.segments.length; i++) {
+          this.visibleSegmentIndices.add(i);
+        }
+      }
+    } else {
+      // Update visible segments immediately
+      this.updateVisibleSegments();
+    }
+    
     console.log(`[TrafficParticleSystem] Culling ${enabled ? "enabled" : "disabled"}`);
+  }
+  
+  /** Check if culling is enabled */
+  isCullingEnabled(): boolean {
+    return this.cullingEnabled;
+  }
+  
+  /** Get count of visible segments */
+  getVisibleSegmentCount(): number {
+    return this.visibleSegmentIndices.size;
+  }
+  
+  /** Get count of visible particles (LOD-affected) */
+  getVisibleParticleCount(): number {
+    return this.particles.filter(p => p.visible).length;
+  }
+  
+  /** Get average frame time for particle updates */
+  getAverageFrameTime(): number {
+    if (this.frameCount === 0) return 0;
+    return this.frameTimeAccumulator / this.frameCount;
+  }
+  
+  /** Reset performance counters */
+  resetPerformanceCounters(): void {
+    this.frameTimeAccumulator = 0;
+    this.frameCount = 0;
   }
 
   /** Clean up resources */
   destroy(): void {
     this.stop();
+    
+    // Remove camera listener
+    if (this.viewer && this.cameraChangeHandler) {
+      this.viewer.camera.changed.removeEventListener(this.cameraChangeHandler);
+      this.cameraChangeHandler = null;
+    }
     
     if (this.pointCollection && this.viewer) {
       this.viewer.scene.primitives.remove(this.pointCollection);
@@ -370,6 +658,7 @@ export class TrafficParticleSystem {
     
     this.particles = [];
     this.network = null;
+    this.visibleSegmentIndices.clear();
     this.viewer = null;
     
     console.log("[TrafficParticleSystem] Destroyed");
