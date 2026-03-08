@@ -583,4 +583,28 @@ export class FlightLayer {
   isFollowing(): boolean {
     return this.following;
   }
+
+  /**
+   * Get the callsign of the currently followed flight
+   */
+  getFollowedCallsign(): string | null {
+    if (!this.following || !this.selectedIcao24) return null;
+    const record = this.recordMap.get(this.selectedIcao24);
+    return record?.callsign || null;
+  }
+
+  /**
+   * Find a flight by callsign (exact match)
+   * @param callsign - The callsign to search for (e.g., "UAL123")
+   * @returns The flight record if found, null otherwise
+   */
+  findByCallsign(callsign: string): FlightRecord | null {
+    const searchCallsign = callsign.toUpperCase().trim();
+    for (const record of this.recordMap.values()) {
+      if (record.callsign.toUpperCase().trim() === searchCallsign) {
+        return record;
+      }
+    }
+    return null;
+  }
 }

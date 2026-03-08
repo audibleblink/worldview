@@ -158,13 +158,13 @@ bun run scripts/verify-phase2.ts
 
 ### Tasks
 
-- [ ] Add `findByCallsign(callsign: string): FlightRecord | null` to `FlightLayer`
-- [ ] Implement flight branch in `handleFollow()`:
+- [x] Add `findByCallsign(callsign: string): FlightRecord | null` to `FlightLayer`
+- [x] Implement flight branch in `handleFollow()`:
   - Apply IATA→ICAO conversion before search
   - Search loaded flights by exact callsign match
   - Call existing `startFollow()` / `stopFollow()`
   - Show success/error feedback
-- [ ] Write integration tests
+- [x] Write integration tests
 
 ### Files to Modify
 
@@ -186,12 +186,12 @@ bun test test/airline-codes.test.ts test/flight-follow.test.ts
 
 ### Checklist
 
-- [ ] `findByCallsign("UAL123")` finds flight with callsign "UAL123"
-- [ ] `:follow UA123` converts to search for "UAL123"
-- [ ] `:follow AAL789` (already ICAO) searches for "AAL789"
-- [ ] Unknown callsign shows: "Flight {callsign} not found"
-- [ ] Toggle behavior works for flights
-- [ ] `bun test` passes
+- [x] `findByCallsign("UAL123")` finds flight with callsign "UAL123"
+- [x] `:follow UA123` converts to search for "UAL123"
+- [x] `:follow AAL789` (already ICAO) searches for "AAL789"
+- [x] Unknown callsign shows: "Flight {callsign} not found"
+- [x] Toggle behavior works for flights
+- [x] `bun test` passes
 
 ### Exit Criteria
 

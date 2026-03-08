@@ -9,6 +9,7 @@ import { addLogEntry } from "./left-panel.ts";
 import { parseCommand, detectIdentifierType } from "./command-parser.ts";
 import { convertIataToIcao } from "../utils/airline-codes.ts";
 import type { SatelliteLayer } from "../layers/satellites.ts";
+import type { FlightLayer } from "../layers/flights.ts";
 
 // Re-export for convenience
 export { parseCommand, detectIdentifierType, type ParsedCommand, type IdentifierType } from "./command-parser.ts";
@@ -24,6 +25,7 @@ export class CommandBar {
   private isExecuting: boolean = false;
   private abortController: AbortController | null = null;
   private satelliteLayer: SatelliteLayer | null = null;
+  private flightLayer: FlightLayer | null = null;
 
   constructor() {
     // Create DOM structure
@@ -178,6 +180,13 @@ export class CommandBar {
    */
   setSatelliteLayer(layer: SatelliteLayer): void {
     this.satelliteLayer = layer;
+  }
+
+  /**
+   * Set the flight layer for follow commands
+   */
+  setFlightLayer(layer: FlightLayer): void {
+    this.flightLayer = layer;
   }
 
   /**
@@ -358,9 +367,38 @@ export class CommandBar {
       // Convert IATA to ICAO if needed
       const icaoCallsign = convertIataToIcao(identifier);
 
-      // TODO: Phase 3 - Search loaded flights by callsign
-      // TODO: Phase 3 - Call startFollow() or stopFollow() based on current state
-      addLogEntry(`[FOLLOW] Flight ${icaoCallsign} (stub)`, "info");
+      // Check if flight layer is available
+      if (!this.flightLayer) {
+        this.showError("Flights not loaded");
+        addLogEntry(`[FOLLOW] Flights not loaded`, "error");
+        return;
+      }
+
+      // Search for flight by callsign
+      const flight = this.flightLayer.findByCallsign(icaoCallsign);
+
+      if (!flight) {
+        this.showError(`Flight ${icaoCallsign} not found`);
+        addLogEntry(`[FOLLOW] Flight ${icaoCallsign} not found`, "error");
+        return;
+      }
+
+      // Check if currently following this flight - toggle behavior
+      const followedCallsign = this.flightLayer.getFollowedCallsign();
+      if (
+        this.flightLayer.isFollowing() &&
+        followedCallsign?.toUpperCase().trim() === icaoCallsign.toUpperCase().trim()
+      ) {
+        this.flightLayer.stopFollow();
+        addLogEntry(`[FOLLOW] Stopped following ${flight.callsign}`, "info");
+        this.showSuccess();
+        return;
+      }
+
+      // Select and follow the flight
+      this.flightLayer.selectFlight(flight.icao24, () => {});
+      this.flightLayer.startFollow();
+      addLogEntry(`[FOLLOW] Following ${flight.callsign}`, "success");
       this.showSuccess();
     }
   }
