@@ -77,10 +77,16 @@ function handleCCTVClick(
 
 /** Handle flight clicks */
 function handleFlightClick(entityId: string, ctx: ClickContext): boolean {
-  if (!ctx.flightLayer.hasIcao(entityId)) return false;
+  // Handle flight label clicks (id format: "label-{icao24}")
+  let icao24 = entityId;
+  if (entityId.startsWith("label-")) {
+    icao24 = entityId.slice(6); // Remove "label-" prefix
+  }
+  
+  if (!ctx.flightLayer.hasIcao(icao24)) return false;
 
-  ctx.flightLayer.selectFlight(entityId, async (record) => {
-    const meta = await fetchAircraftMeta(entityId);
+  ctx.flightLayer.selectFlight(icao24, async (record) => {
+    const meta = await fetchAircraftMeta(icao24);
     showFlightInfoPanel(record, meta, ctx.flightLayer);
   });
   return true;
@@ -88,6 +94,9 @@ function handleFlightClick(entityId: string, ctx: ClickContext): boolean {
 
 /** Handle satellite clicks */
 function handleSatelliteClick(entityId: string, ctx: ClickContext): boolean {
+  // Only handle if the satellite layer knows about this entity
+  if (!ctx.satelliteLayer.hasNoradId(entityId)) return false;
+  
   ctx.satelliteLayer.selectSatellite(entityId, (record, velocity) => {
     showSatelliteInfoPanel(record, velocity, ctx.satelliteLayer);
   });
@@ -171,6 +180,10 @@ export async function init(): Promise<void> {
       },
       Cesium.ScreenSpaceEventType.LEFT_CLICK
     );
+
+    // Disable default double-click zoom behavior to prevent accidental camera changes
+    viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
     console.log("WorldView initialized");
   } catch (error) {

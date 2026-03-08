@@ -82,9 +82,18 @@ export interface ParameterMapping {
 }
 
 /**
+ * Shared FLIR parameter mapping (used by both FLIR and AH64)
+ */
+const FLIR_PARAMETER_MAPPING: ParameterMapping = {
+  PIXELATION: { uniform: "brightness", min: 0.5, max: 1.5, default: 1.0 },
+  DISTORTION: { uniform: "edgeEnhancement", min: 0, max: 1.0, default: 0.3 },
+  INSTABILITY: { uniform: "contrast", min: 0.8, max: 2.0, default: 1.3 },
+};
+
+/**
  * Parameter mappings for each shader mode
  */
-export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "AH64">, ParameterMapping> = {
+export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL">, ParameterMapping> = {
   CRT: {
     PIXELATION: { uniform: "scanlineIntensity", min: 0, max: 0.5, default: 0.15 },
     DISTORTION: { uniform: "barrelDistortion", min: 0, max: 0.2, default: 0.05 },
@@ -95,9 +104,6 @@ export const PARAMETER_MAPPINGS: Record<Exclude<ViewMode, "NORMAL" | "AH64">, Pa
     DISTORTION: { uniform: "vignette", min: 0.3, max: 1.5, default: 0.8 },
     INSTABILITY: { uniform: "noiseAmount", min: 0, max: 0.25, default: 0.08 },
   },
-  FLIR: {
-    PIXELATION: { uniform: "brightness", min: 0.5, max: 1.5, default: 1.0 },
-    DISTORTION: { uniform: "edgeEnhancement", min: 0, max: 1.0, default: 0.3 },
-    INSTABILITY: { uniform: "contrast", min: 0.8, max: 2.0, default: 1.3 },
-  },
+  FLIR: FLIR_PARAMETER_MAPPING,
+  AH64: FLIR_PARAMETER_MAPPING, // Same as FLIR - AH64 just adds reticle overlay
 };

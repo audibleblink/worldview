@@ -286,6 +286,11 @@ export class SatelliteLayer {
     return this.billboardMap.get(noradId);
   }
 
+  /** Check if a norad ID exists in the current satellite records */
+  hasNoradId(noradId: string): boolean {
+    return this.billboardMap.has(noradId);
+  }
+
   getSelectedNoradId(): string | null {
     return this.selectedNoradId;
   }
