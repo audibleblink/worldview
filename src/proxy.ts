@@ -8,11 +8,12 @@
 const PROXY_PORT = 3001;
 const GOOGLE_TILES_URL = "https://tile.googleapis.com";
 const OPENSKY_API_URL = "https://opensky-network.org/api";
+const OVERPASS_API_URL = "https://overpass-api.de/api/interpreter";
 
 // CORS headers used in multiple responses
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 } as const;
 
@@ -286,6 +287,36 @@ Bun.serve({
       } catch (error) {
         console.error("Aircraft metadata proxy error:", error);
         return jsonResponse({ error: "Aircraft metadata proxy error" }, 502);
+      }
+    }
+
+    // OSM Overpass API proxy for road data
+    if (url.pathname === "/api/osm") {
+      if (req.method !== "POST") {
+        return jsonResponse({ error: "POST method required" }, 405);
+      }
+
+      try {
+        const query = await req.text();
+        console.log(`[OSM Proxy] Forwarding Overpass query (${query.length} bytes)`);
+
+        const response = await fetch(OVERPASS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: query,
+        });
+
+        if (!response.ok) {
+          console.error(`[OSM Proxy] Overpass API error: ${response.status} ${response.statusText}`);
+          return jsonResponse({ error: "Overpass API error", status: response.status }, 502);
+        }
+
+        const data = await response.json();
+        console.log(`[OSM Proxy] Received ${data.elements?.length || 0} elements`);
+        return jsonResponse(data);
+      } catch (error) {
+        console.error("[OSM Proxy] Error:", error);
+        return jsonResponse({ error: "OSM proxy error" }, 502);
       }
     }
 
