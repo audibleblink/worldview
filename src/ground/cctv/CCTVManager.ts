@@ -25,6 +25,9 @@ const RETRY_CONFIG = {
   backoffMultiplier: 2,
 };
 
+// Camera marker prefix to distinguish from projected billboards
+const CAMERA_MARKER_PREFIX = "cctv-marker:";
+
 export class CCTVManager {
   private viewer: InstanceType<typeof Cesium.Viewer> | null = null;
   private config: CCTVManagerConfig;
@@ -46,6 +49,12 @@ export class CCTVManager {
   private centerStageCameraId: string | null = null;
   private centerStageOverlay: HTMLElement | null = null;
   private onCenterStageChange: ((cameraId: string | null) => void) | null = null;
+  
+  // Camera markers on map
+  private cameraMarkers: InstanceType<typeof Cesium.BillboardCollection> | null = null;
+  private cameraMarkerTexture: string | null = null;
+  private markerMap: Map<string, InstanceType<typeof Cesium.Billboard>> = new Map();
+  private markersVisible = false;
 
   constructor(config: Partial<CCTVManagerConfig> = {}) {
     this.config = { ...DEFAULT_CCTV_CONFIG, ...config };
@@ -179,7 +188,77 @@ export class CCTVManager {
   /** Initialize with Cesium viewer */
   initialize(viewer: InstanceType<typeof Cesium.Viewer>): void {
     this.viewer = viewer;
+    
+    // Create billboard collection for camera markers
+    this.cameraMarkers = new Cesium.BillboardCollection({ scene: viewer.scene });
+    viewer.scene.primitives.add(this.cameraMarkers);
+    
+    // Create camera icon texture
+    this.cameraMarkerTexture = this.createCameraIconTexture();
+    
     console.log("[CCTVManager] Initialized");
+  }
+  
+  /** Create a camera icon texture for map markers */
+  private createCameraIconTexture(): string {
+    const size = 40;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    
+    const centerX = size / 2;
+    const centerY = size / 2;
+    
+    // Black circle background
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#000000";
+    ctx.fill();
+    
+    // Green border on circle
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Camera body (rounded rectangle)
+    ctx.fillStyle = "#00ff88";
+    const bodyX = centerX - 10;
+    const bodyY = centerY - 6;
+    const bodyW = 20;
+    const bodyH = 12;
+    const radius = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(bodyX + radius, bodyY);
+    ctx.lineTo(bodyX + bodyW - radius, bodyY);
+    ctx.quadraticCurveTo(bodyX + bodyW, bodyY, bodyX + bodyW, bodyY + radius);
+    ctx.lineTo(bodyX + bodyW, bodyY + bodyH - radius);
+    ctx.quadraticCurveTo(bodyX + bodyW, bodyY + bodyH, bodyX + bodyW - radius, bodyY + bodyH);
+    ctx.lineTo(bodyX + radius, bodyY + bodyH);
+    ctx.quadraticCurveTo(bodyX, bodyY + bodyH, bodyX, bodyY + bodyH - radius);
+    ctx.lineTo(bodyX, bodyY + radius);
+    ctx.quadraticCurveTo(bodyX, bodyY, bodyX + radius, bodyY);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Lens (circle)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#000000";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#00ff88";
+    ctx.fill();
+    
+    // Lens highlight
+    ctx.beginPath();
+    ctx.arc(centerX - 1, centerY - 1, 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    
+    return canvas.toDataURL();
   }
 
   /** Set callback for billboard state changes */
@@ -192,9 +271,22 @@ export class CCTVManager {
     this.onCenterStageChange = callback;
   }
 
-  /** Check if a camera ID is a CCTV billboard */
+  /** Check if a camera ID is a CCTV billboard or camera marker */
   isCCTVBillboard(entityId: string): boolean {
-    return this.activeBillboards.has(entityId);
+    return this.activeBillboards.has(entityId) || entityId.startsWith(CAMERA_MARKER_PREFIX);
+  }
+  
+  /** Check if an entity ID is a camera marker */
+  isCameraMarker(entityId: string): boolean {
+    return entityId.startsWith(CAMERA_MARKER_PREFIX);
+  }
+  
+  /** Extract camera ID from marker entity ID */
+  getCameraIdFromMarker(entityId: string): string | null {
+    if (entityId.startsWith(CAMERA_MARKER_PREFIX)) {
+      return entityId.slice(CAMERA_MARKER_PREFIX.length);
+    }
+    return null;
   }
 
   /** Get the currently center-staged camera ID */
@@ -376,10 +468,62 @@ export class CCTVManager {
       }
 
       this.cameras = await response.json();
+      this.updateCameraMarkers();
       return this.cameras;
     } catch (error) {
       console.error("[CCTVManager] Error fetching cameras:", error);
       return [];
+    }
+  }
+  
+  /** Update camera markers on the map based on fetched cameras */
+  private updateCameraMarkers(): void {
+    if (!this.cameraMarkers || !this.cameraMarkerTexture) return;
+    
+    const currentIds = new Set(this.cameras.map(c => c.id));
+    
+    // Remove markers for cameras no longer in view
+    for (const [cameraId, marker] of this.markerMap) {
+      if (!currentIds.has(cameraId)) {
+        this.cameraMarkers.remove(marker);
+        this.markerMap.delete(cameraId);
+      }
+    }
+    
+    // Add markers for new cameras (hidden by default, shown only when layer is visible)
+    for (const camera of this.cameras) {
+      if (!this.markerMap.has(camera.id)) {
+        const marker = this.cameraMarkers.add({
+          position: Cesium.Cartesian3.fromDegrees(camera.longitude, camera.latitude, 10),
+          image: this.cameraMarkerTexture,
+          width: 24,
+          height: 24,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          id: CAMERA_MARKER_PREFIX + camera.id,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          show: this.markersVisible,
+        });
+        this.markerMap.set(camera.id, marker);
+      }
+    }
+  }
+  
+  /** Show camera markers */
+  showCameraMarkers(): void {
+    this.markersVisible = true;
+    if (!this.cameraMarkers) return;
+    for (const marker of this.markerMap.values()) {
+      marker.show = true;
+    }
+  }
+  
+  /** Hide camera markers */
+  hideCameraMarkers(): void {
+    this.markersVisible = false;
+    if (!this.cameraMarkers) return;
+    for (const marker of this.markerMap.values()) {
+      marker.show = false;
     }
   }
 

@@ -369,7 +369,11 @@ export class GroundLayer {
       this.seismic.show();
     }
 
-    // CCTV doesn't have show/hide - billboards are controlled individually
+    // Show CCTV camera markers
+    if (this.cctvVisible) {
+      this.cctv.showCameraMarkers();
+    }
+
     console.log("[GroundLayer] Layer shown");
   }
 
@@ -393,7 +397,9 @@ export class GroundLayer {
     // Hide seismic layer
     this.seismic.hide();
 
-    // Note: CCTV billboards remain active - they have their own lifecycle
+    // Hide CCTV camera markers
+    this.cctv.hideCameraMarkers();
+
     console.log("[GroundLayer] Layer hidden");
   }
 
@@ -447,7 +453,15 @@ export class GroundLayer {
    */
   setCCTVVisible(visible: boolean): void {
     this.cctvVisible = visible;
-    // CCTV visibility is managed per-billboard - this just tracks the setting
+    
+    if (this.isVisible) {
+      if (visible) {
+        this.cctv.showCameraMarkers();
+      } else {
+        this.cctv.hideCameraMarkers();
+      }
+    }
+    
     console.log(`[GroundLayer] CCTV ${visible ? "enabled" : "disabled"}`);
   }
 

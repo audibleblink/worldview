@@ -87,9 +87,24 @@ export async function init(): Promise<void> {
       const entityId = picked?.id?.id ?? (typeof picked?.id === "string" ? picked.id : null);
 
       if (entityId && typeof entityId === "string") {
-        // Check if it's a CCTV billboard
+        // Check if it's a CCTV billboard or camera marker
         const cctvManager = groundLayer.getCCTVManager();
         if (cctvManager.isCCTVBillboard(entityId)) {
+          // Check if it's a camera marker (icon on map)
+          if (cctvManager.isCameraMarker(entityId)) {
+            const cameraId = cctvManager.getCameraIdFromMarker(entityId);
+            if (cameraId) {
+              // Project the camera and open center-stage
+              const camera = cctvManager.getCamera(cameraId);
+              if (camera) {
+                cctvManager.projectCamera(camera).then(() => {
+                  cctvManager.enterCenterStage(cameraId);
+                });
+              }
+            }
+            return;
+          }
+          
           // Check if click hit the close button on the billboard
           if (cctvManager.handleBillboardClick(entityId, click.position, viewer)) {
             return; // Close button was clicked, billboard removed
