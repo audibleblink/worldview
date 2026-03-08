@@ -228,4 +228,11 @@ export function updateLocationTooltip(poiName: string, cityName: string): void {
 
   if (poiEl) poiEl.textContent = poiName;
   if (cityEl) cityEl.textContent = cityName;
+  
+  // Also update compass badge
+  const compassPoiEl = document.getElementById("compass-poi");
+  const compassCityEl = document.getElementById("compass-city");
+  
+  if (compassPoiEl) compassPoiEl.textContent = poiName;
+  if (compassCityEl) compassCityEl.textContent = cityName;
 }
