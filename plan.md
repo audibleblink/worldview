@@ -125,25 +125,25 @@ kill $PROXY_PID
 
 ### Tasks
 
-- [ ] Create `src/layers/ships.ts` with ShipLayer class following flight layer pattern:
-  - [ ] `entityMap: Map<string, Cesium.Entity>` for ship entities
-  - [ ] `recordMap: Map<string, ShipRecord>` for ship data
-  - [ ] `show()` method: fetch ships, create entities, start polling
-  - [ ] `hide()` method: remove entities, stop polling
-  - [ ] `refreshShips()` method: update positions every 8 seconds
-  - [ ] Bounding box calculation from camera viewport
-  - [ ] Fallback bbox when viewport is invalid (camera center + 45°)
-- [ ] Create ship billboards with:
-  - [ ] Ship type icon (5 categories: cargo, tanker, passenger, fishing, other)
-  - [ ] Color tint by ship type
-  - [ ] Rotation to match heading (trueHeading or cog)
-  - [ ] Label with vessel name, speed, course
-- [ ] Implement dead-reckoning interpolation:
-  - [ ] Use `preRender` listener like flights
-  - [ ] Interpolate up to 60 ships between polls
-  - [ ] Cap extrapolation at 60 seconds
-- [ ] Implement `hasMMSI()`, `getRecord()`, `getEntity()` methods
-- [ ] Create placeholder ship icons (simple colored rectangles) in `src/assets/ships/`
+- [x] Create `src/layers/ships.ts` with ShipLayer class following flight layer pattern:
+  - [x] `entityMap: Map<string, Cesium.Entity>` for ship entities
+  - [x] `recordMap: Map<string, ShipRecord>` for ship data
+  - [x] `show()` method: fetch ships, create entities, start polling
+  - [x] `hide()` method: remove entities, stop polling
+  - [x] `refreshShips()` method: update positions every 8 seconds
+  - [x] Bounding box calculation from camera viewport
+  - [x] Fallback bbox when viewport is invalid (camera center + 45°)
+- [x] Create ship billboards with:
+  - [x] Ship type icon (5 categories: cargo, tanker, passenger, fishing, other)
+  - [x] Color tint by ship type
+  - [x] Rotation to match heading (trueHeading or cog)
+  - [x] Label with vessel name, speed, course
+- [x] Implement dead-reckoning interpolation:
+  - [x] Use `preRender` listener like flights
+  - [x] Interpolate up to 60 ships between polls
+  - [x] Cap extrapolation at 60 seconds
+- [x] Implement `hasMMSI()`, `getRecord()`, `getEntity()` methods
+- [x] Create placeholder ship icons (simple colored rectangles) in `src/assets/ships/`
 
 ### Files to Create
 
@@ -186,16 +186,16 @@ kill $SERVER_PID
 
 ### Checklist
 
-- [ ] ShipLayer follows established class pattern (matches FlightLayer)
-- [ ] Ships appear on globe when `show()` is called
-- [ ] Ships have correct icon based on type category
-- [ ] Ships have correct color tint
-- [ ] Ships rotate to match heading
-- [ ] Labels show vessel name, speed, and course
-- [ ] Ships update position every 8 seconds
-- [ ] Dead-reckoning smooths movement between polls
-- [ ] `hide()` removes all ships and stops polling
-- [ ] No memory leaks (entities properly cleaned up)
+- [x] ShipLayer follows established class pattern (matches FlightLayer)
+- [x] Ships appear on globe when `show()` is called
+- [x] Ships have correct icon based on type category
+- [x] Ships have correct color tint
+- [x] Ships rotate to match heading
+- [x] Labels show vessel name, speed, and course
+- [x] Ships update position every 8 seconds
+- [x] Dead-reckoning smooths movement between polls
+- [x] `hide()` removes all ships and stops polling
+- [x] No memory leaks (entities properly cleaned up)
 
 ### Exit Criteria
 
