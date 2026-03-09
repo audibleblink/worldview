@@ -127,6 +127,7 @@ function createCameraItem(camera: Camera): HTMLElement {
     </div>
     <div class="cctv-info">
       <div class="cctv-name">${camera.name}</div>
+      ${camera.roadway ? `<div class="cctv-roadway">${camera.roadway}${camera.direction ? ' · ' + camera.direction : ''}</div>` : ''}
       <div class="cctv-coords">${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}</div>
       <button class="cctv-project-btn ${isProjected ? "active" : ""}">${isProjected ? "REMOVE" : "PROJECT"}</button>
     </div>

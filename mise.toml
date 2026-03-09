@@ -1,0 +1,11 @@
+[tasks.dev]
+description = "Start dev server"
+run = "bun run dev"
+
+[tasks.proxy]
+description = "Start proxy server"
+run = "bun run proxy"
+
+[tasks.start]
+description = "Start dev server and proxy together"
+depends = ["dev", "proxy"]

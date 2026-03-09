@@ -7,11 +7,12 @@ declare const Cesium: typeof import("cesium");
 import type { Camera, BBox, CCTVBillboard, CCTVManagerConfig } from "./types.ts";
 import { DEFAULT_CCTV_CONFIG } from "./types.ts";
 import { logError, logInfo, logWarn } from "../../errors.ts";
+import Hls from "hls.js";
 
 const PROXY_BASE = "http://localhost:3001";
 
 /** Create center-stage overlay HTML */
-function createCenterStageHTML(cameraName: string): string {
+function createCenterStageHTML(cameraName: string, hasVideo: boolean): string {
   return `
     <div class="cctv-center-stage-container">
       <div class="cctv-center-stage-header">
@@ -23,7 +24,8 @@ function createCenterStageHTML(cameraName: string): string {
         </div>
       </div>
       <div class="cctv-center-stage-feed">
-        <canvas id="cctv-center-stage-canvas" width="640" height="480"></canvas>
+        <canvas id="cctv-center-stage-canvas" width="640" height="480"${hasVideo ? ' style="display:none"' : ''}></canvas>
+        ${hasVideo ? '<video id="cctv-center-stage-video" width="640" height="480" autoplay muted playsinline style="background:#000;display:block"></video>' : ''}
       </div>
     </div>
   `;
@@ -68,6 +70,7 @@ export class CCTVManager {
   // Center-stage mode
   private centerStageCameraId: string | null = null;
   private centerStageOverlay: HTMLElement | null = null;
+  private centerStageHls: Hls | null = null;
   private onCenterStageChange: ((cameraId: string | null) => void) | null = null;
   private centerStageRAFId: number | null = null;
   
@@ -377,12 +380,14 @@ export class CCTVManager {
   private createCenterStageOverlay(billboard: CCTVBillboard): void {
     this.removeCenterStageOverlay();
 
-    const cameraName = this.getCamera(billboard.cameraId)?.name ?? billboard.cameraId;
+    const camera = this.getCamera(billboard.cameraId);
+    const cameraName = camera?.name ?? billboard.cameraId;
+    const hasVideo = !!(camera?.videoUrl);
 
     const overlay = document.createElement("div");
     overlay.id = "cctv-center-stage";
     overlay.className = "cctv-center-stage";
-    overlay.innerHTML = createCenterStageHTML(cameraName);
+    overlay.innerHTML = createCenterStageHTML(cameraName, hasVideo);
 
     // Wire up button handlers
     this.wireUpCenterStageButtons(overlay);
@@ -391,7 +396,11 @@ export class CCTVManager {
     container.appendChild(overlay);
     this.centerStageOverlay = overlay;
 
-    this.startCenterStageRendering(billboard);
+    if (hasVideo && camera?.videoUrl) {
+      this.startHLSPlayback(camera.videoUrl, billboard);
+    } else {
+      this.startCenterStageRendering(billboard);
+    }
   }
 
   /** Wire up center-stage overlay button handlers */
@@ -428,6 +437,9 @@ export class CCTVManager {
       this.centerStageRAFId = null;
     }
     
+    // Clean up HLS instance
+    this.destroyHLS();
+    
     if (this.centerStageOverlay) {
       this.centerStageOverlay.remove();
       this.centerStageOverlay = null;
@@ -459,6 +471,71 @@ export class CCTVManager {
     };
 
     render();
+  }
+
+  /** Start HLS video playback in center-stage mode */
+  private startHLSPlayback(videoUrl: string, billboard: CCTVBillboard): void {
+    const video = document.getElementById("cctv-center-stage-video") as HTMLVideoElement | null;
+    if (!video) {
+      // Fallback to canvas rendering
+      this.fallbackToCanvas(billboard);
+      return;
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+
+      hls.loadSource(videoUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {
+          logWarn("CCTV", "HLS autoplay blocked, user interaction needed");
+        });
+      });
+
+      hls.on(Hls.Events.ERROR, (_event: string, data: { fatal: boolean; type: string; details: string }) => {
+        if (data.fatal) {
+          logError("CCTV", `HLS fatal error: ${data.type} - ${data.details}`);
+          this.destroyHLS();
+          this.fallbackToCanvas(billboard);
+        }
+      });
+
+      this.centerStageHls = hls;
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Native HLS support (Safari)
+      video.src = videoUrl;
+      video.play().catch(() => {
+        logWarn("CCTV", "Native HLS autoplay blocked");
+      });
+    } else {
+      // No HLS support - fallback to canvas
+      logWarn("CCTV", "HLS not supported, falling back to static refresh");
+      this.fallbackToCanvas(billboard);
+    }
+  }
+
+  /** Fall back to canvas-based rendering when HLS is unavailable */
+  private fallbackToCanvas(billboard: CCTVBillboard): void {
+    const canvas = document.getElementById("cctv-center-stage-canvas") as HTMLCanvasElement | null;
+    const video = document.getElementById("cctv-center-stage-video") as HTMLVideoElement | null;
+
+    if (canvas) canvas.style.display = "";
+    if (video) video.style.display = "none";
+
+    this.startCenterStageRendering(billboard);
+  }
+
+  /** Destroy the active HLS instance */
+  private destroyHLS(): void {
+    if (this.centerStageHls) {
+      this.centerStageHls.destroy();
+      this.centerStageHls = null;
+    }
   }
 
   /** Fetch cameras within the given viewport */
@@ -914,7 +991,10 @@ export class CCTVManager {
 
   /** Clean up all resources */
   destroy(): void {
-    // Exit center-stage first
+    // Clean up HLS first
+    this.destroyHLS();
+    
+    // Exit center-stage
     this.exitCenterStage();
     
     // Remove all active billboards

@@ -12,6 +12,12 @@ export interface Camera {
   longitude: number;
   streamUrl: string;
   status: "live" | "offline";
+  /** Roadway name from NY511 (e.g., "I-278/Bruckner Expressway") */
+  roadway?: string;
+  /** Direction of travel from NY511 (e.g., "Northbound"), omitted if "Unknown" */
+  direction?: string;
+  /** HLS video stream URL from NY511 */
+  videoUrl?: string;
 }
 
 /** Bounding box for viewport filtering */

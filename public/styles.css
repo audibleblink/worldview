@@ -1365,6 +1365,15 @@ select option {
   max-width: 140px;
 }
 
+.cctv-roadway {
+  font-size: 10px;
+  color: #4a9e8a;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cctv-coords {
   font-size: 7px;
   color: var(--color-text-muted);
@@ -1511,6 +1520,15 @@ select option {
   display: block;
   max-width: 100%;
   max-height: 70vh;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+#cctv-center-stage-video {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  background: #000;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
 }

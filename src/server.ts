@@ -9,6 +9,7 @@ const PORT = 3000;
 const ROOT = import.meta.dir + "/..";
 const CESIUM_PATH = join(ROOT, "node_modules/cesium/Build/Cesium");
 const SATELLITE_JS_PATH = join(ROOT, "node_modules/satellite.js/dist");
+const HLS_JS_PATH = join(ROOT, "node_modules/hls.js/dist");
 const PUBLIC_PATH = join(ROOT, "public");
 
 console.log(`Starting WorldView dev server on port ${PORT}...`);
@@ -18,6 +19,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html",
   ".css": "text/css",
   ".js": "application/javascript",
+  ".mjs": "application/javascript",
   ".ts": "application/javascript",
   ".json": "application/json",
   ".png": "image/png",
@@ -52,6 +54,7 @@ const serveTranspiledTS = async (filePath: string): Promise<Response | null> => 
 // Route handlers for different path prefixes
 const routeHandlers: Record<string, (pathname: string) => Promise<Response>> = {
   "/satellite.js/": (p) => serveFile(join(SATELLITE_JS_PATH, p.slice(14)), `satellite.js asset not found: ${p}`),
+  "/hls.js/": (p) => serveFile(join(HLS_JS_PATH, p.slice(8)), `hls.js asset not found: ${p}`),
   "/cesium/": (p) => serveFile(join(CESIUM_PATH, p.slice(8)), `Cesium asset not found: ${p}`),
 };
 
