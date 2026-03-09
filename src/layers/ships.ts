@@ -7,7 +7,7 @@
 declare const Cesium: typeof import("cesium");
 
 import { lookAtTarget, unlockCamera, getViewportBBox, getCameraCenter, type BBox } from "../camera.ts";
-import { logError, logInfo } from "../errors.ts";
+import { logError, logInfo, logWarn } from "../errors.ts";
 import type { ShipRecord } from "../proxy/aisstream.ts";
 
 // Re-export ShipRecord for consumers
@@ -15,6 +15,8 @@ export type { ShipRecord };
 
 // Constants
 const SHIP_UPDATE_INTERVAL = 8_000;       // 8 seconds between polls
+const SHIP_RATE_LIMITED_INTERVAL = 15_000; // 15 seconds when rate limited
+const SHIP_RATE_LIMIT_RECOVERY_MS = 60_000; // 60 seconds before resuming normal polling
 const SHIP_INTERP_CAP = 60;               // seconds max dead-reckoning
 const SHIP_FOLLOW_RANGE = 10_000;         // meters
 const SHIP_FOLLOW_PITCH = -30;            // degrees
@@ -22,6 +24,7 @@ const SHIP_LABEL_VISIBLE_DISTANCE = 150_000; // meters - labels hidden beyond th
 const SHIP_INTERP_SKIP_FRAMES = 2;        // interpolate every N frames
 const MAX_INTERP_SHIPS = 60;              // max ships to interpolate per frame
 const MAX_VISIBLE_SHIPS = 100;
+const VIEWPORT_FALLBACK_DEGREES = 20;     // fallback bbox size when viewport unavailable
 
 // Billboard settings
 const BILLBOARD_SCALE = 0.5;
@@ -210,10 +213,22 @@ function filterNearestShips(
   return withDistance.slice(0, maxCount).map((item) => item.record);
 }
 
+/** Response from /ships endpoint with connection status */
+interface ShipsApiResponse {
+  ships: ShipRecord[];
+  count: number;
+  truncated: boolean;
+  totalInBbox: number;
+  connected: boolean;
+  error?: string;
+}
+
 /**
  * Fetch ships from proxy server
+ * Returns response with ships array and metadata
+ * Throws error on network failure; returns empty array with connected=false on API errors
  */
-export async function fetchShips(bbox?: BBox): Promise<ShipRecord[]> {
+export async function fetchShips(bbox?: BBox): Promise<ShipsApiResponse> {
   let url = "http://localhost:3001/ships";
   
   if (bbox) {
@@ -227,12 +242,31 @@ export async function fetchShips(bbox?: BBox): Promise<ShipRecord[]> {
   }
 
   const response = await fetch(url);
+  const data = await response.json();
+
+  // For 503 errors, return the response (contains connected: false)
+  if (response.status === 503) {
+    return {
+      ships: data.ships ?? [],
+      count: data.count ?? 0,
+      truncated: data.truncated ?? false,
+      totalInBbox: data.totalInBbox ?? 0,
+      connected: false,
+      error: data.error,
+    };
+  }
+
   if (!response.ok) {
     throw new Error(`Failed to fetch ships: ${response.status}`);
   }
 
-  const data = await response.json();
-  return data.ships ?? [];
+  return {
+    ships: data.ships ?? [],
+    count: data.count ?? 0,
+    truncated: data.truncated ?? false,
+    totalInBbox: data.totalInBbox ?? 0,
+    connected: data.connected ?? true,
+  };
 }
 
 export class ShipLayer {
@@ -242,47 +276,113 @@ export class ShipLayer {
   private interpolatedPositions: Map<string, Cesium.Cartesian3> = new Map();
   private updateInterval: ReturnType<typeof setInterval> | null = null;
   private onCountUpdate: ((n: number | null) => void) | null = null;
+  private onError: (() => void) | null = null;
   private selectedMmsi: string | null = null;
   private externalDeselectCallback: (() => void) | null = null;
   private following: boolean = false;
   private interpFrameCount: number = 0;
   private interpTickRemove: (() => void) | null = null;
   private followTickRemove: (() => void) | null = null;
+  private isRateLimited: boolean = false;
+  private rateLimitRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastConnected: boolean = true;
 
-  constructor(viewer: Cesium.Viewer, onCountUpdate?: (n: number | null) => void) {
+  constructor(
+    viewer: Cesium.Viewer, 
+    onCountUpdate?: (n: number | null) => void,
+    onError?: () => void
+  ) {
     this.viewer = viewer;
     this.onCountUpdate = onCountUpdate ?? null;
+    this.onError = onError ?? null;
   }
 
   /**
    * Get bounding box from camera viewport with fallback
    */
   private getBoundingBox(): BBox {
-    // Try to get viewport bbox
+    // Try to get viewport bbox using computeViewRectangle
+    const viewRect = this.viewer.camera.computeViewRectangle();
+    
+    if (viewRect) {
+      return {
+        west: Cesium.Math.toDegrees(viewRect.west),
+        south: Cesium.Math.toDegrees(viewRect.south),
+        east: Cesium.Math.toDegrees(viewRect.east),
+        north: Cesium.Math.toDegrees(viewRect.north),
+      };
+    }
+
+    // Try to get viewport bbox using pickEllipsoid corners
     const viewportBbox = getViewportBBox(this.viewer);
     
     if (viewportBbox) {
       return viewportBbox;
     }
 
-    // Fallback: camera center + 45 degrees
+    // Fallback: camera center + 20 degrees (as per Phase 5 spec)
     const center = getCameraCenter(this.viewer);
     if (center) {
+      logWarn("SHIPS", `Viewport unavailable, using camera center fallback (${center.lat.toFixed(2)}°, ${center.lon.toFixed(2)}°)`);
       return {
-        west: center.lon - 45,
-        east: center.lon + 45,
-        south: center.lat - 45,
-        north: center.lat + 45,
+        west: center.lon - VIEWPORT_FALLBACK_DEGREES,
+        east: center.lon + VIEWPORT_FALLBACK_DEGREES,
+        south: center.lat - VIEWPORT_FALLBACK_DEGREES,
+        north: center.lat + VIEWPORT_FALLBACK_DEGREES,
       };
     }
 
     // Ultimate fallback: global bbox
+    logWarn("SHIPS", "No camera center available, using global bbox");
     return {
       west: -180,
       east: 180,
       south: -90,
       north: 90,
     };
+  }
+
+  /**
+   * Get the current polling interval based on rate limit status
+   */
+  private getCurrentPollingInterval(): number {
+    return this.isRateLimited ? SHIP_RATE_LIMITED_INTERVAL : SHIP_UPDATE_INTERVAL;
+  }
+
+  /**
+   * Handle rate limit detection and recovery
+   */
+  private handleRateLimit(): void {
+    if (!this.isRateLimited) {
+      this.isRateLimited = true;
+      logWarn("SHIPS", "Rate limited - using cached data");
+      
+      // Reschedule polling at slower rate
+      this.restartPolling();
+
+      // Schedule recovery after 60 seconds
+      if (this.rateLimitRecoveryTimeout) {
+        clearTimeout(this.rateLimitRecoveryTimeout);
+      }
+      this.rateLimitRecoveryTimeout = setTimeout(() => {
+        this.isRateLimited = false;
+        logInfo("SHIPS", "Resuming normal polling frequency");
+        this.restartPolling();
+      }, SHIP_RATE_LIMIT_RECOVERY_MS);
+    }
+  }
+
+  /**
+   * Restart the polling interval with current rate
+   */
+  private restartPolling(): void {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+    }
+    this.updateInterval = setInterval(
+      () => this.refreshShips(),
+      this.getCurrentPollingInterval()
+    );
   }
 
   /**
@@ -295,11 +395,22 @@ export class ShipLayer {
     const bbox = this.getBoundingBox();
 
     // Fetch initial ship data
-    const allRecords = await fetchShips(bbox);
+    const response = await fetchShips(bbox);
+    
+    // Check for connection/auth errors
+    if (!response.connected) {
+      if (response.error) {
+        logError("SHIPS", response.error);
+      }
+      this.onError?.();
+      throw new Error(response.error || "Ship tracking unavailable");
+    }
+    
+    this.lastConnected = response.connected;
 
     // Filter to nearest ships only
     const records = filterNearestShips(
-      allRecords,
+      response.ships,
       this.viewer.camera.positionWC,
       MAX_VISIBLE_SHIPS
     );
@@ -310,7 +421,10 @@ export class ShipLayer {
     }
 
     // Start polling for updates
-    this.updateInterval = setInterval(() => this.refreshShips(), SHIP_UPDATE_INTERVAL);
+    this.updateInterval = setInterval(
+      () => this.refreshShips(),
+      this.getCurrentPollingInterval()
+    );
 
     // Register preRender listener for position interpolation
     const interpListener = this.viewer.scene.preRender.addEventListener(() => {
@@ -336,6 +450,13 @@ export class ShipLayer {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
     }
+
+    // Clear rate limit recovery timeout
+    if (this.rateLimitRecoveryTimeout) {
+      clearTimeout(this.rateLimitRecoveryTimeout);
+      this.rateLimitRecoveryTimeout = null;
+    }
+    this.isRateLimited = false;
 
     // Remove interpolation preRender listener
     if (this.interpTickRemove) {
@@ -366,11 +487,31 @@ export class ShipLayer {
       // Get bounding box for query
       const bbox = this.getBoundingBox();
 
-      const allRecords = await fetchShips(bbox);
+      const response = await fetchShips(bbox);
+
+      // Check for rate limiting (503 with existing cached data)
+      if (!response.connected && this.entityMap.size > 0) {
+        this.handleRateLimit();
+        // Continue using cached data - don't clear entities
+        return;
+      }
+
+      // Check for connection errors when we have no data
+      if (!response.connected && this.entityMap.size === 0) {
+        logError("SHIPS", response.error || "Connection lost");
+        this.onError?.();
+        return;
+      }
+
+      // Track connection state changes
+      if (!this.lastConnected && response.connected) {
+        logInfo("SHIPS", "Connection restored");
+      }
+      this.lastConnected = response.connected;
 
       // Filter to nearest ships only
       const records = filterNearestShips(
-        allRecords,
+        response.ships,
         this.viewer.camera.positionWC,
         MAX_VISIBLE_SHIPS
       );
@@ -425,6 +566,10 @@ export class ShipLayer {
       this.onCountUpdate?.(this.entityMap.size);
     } catch (error) {
       logError("SHIPS", "Refresh error", error);
+      // On network error, keep using cached data
+      if (this.entityMap.size > 0) {
+        logWarn("SHIPS", "Using cached data due to network error");
+      }
     }
   }
 

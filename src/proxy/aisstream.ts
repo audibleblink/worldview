@@ -121,9 +121,17 @@ export class AISStreamClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private evictionInterval: ReturnType<typeof setInterval> | null = null;
   private isConnecting = false;
+  private authFailed = false;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+  }
+
+  /**
+   * Check if authentication has failed
+   */
+  hasAuthFailed(): boolean {
+    return this.authFailed;
   }
 
   /**
@@ -168,6 +176,17 @@ export class AISStreamClient {
         console.log(`[AISStream] WebSocket closed (code: ${event.code})`);
         this.isConnecting = false;
         this.ws = null;
+
+        // Detect authentication failure (code 1008 = policy violation, 4001-4099 = custom auth errors)
+        if (event.code === 1008 || (event.code >= 4001 && event.code <= 4099) || event.code === 4401) {
+          this.authFailed = true;
+          console.error("[SHIPS] AISStream authentication failed");
+          // Don't reconnect on auth failure - it won't help
+          return;
+        }
+
+        // Continue serving cached data during reconnection
+        console.log(`[AISStream] Continuing to serve ${this.shipBuffer.size} cached ships during reconnection`);
         this.scheduleReconnect();
       };
 
@@ -186,18 +205,25 @@ export class AISStreamClient {
    * Schedule reconnection with exponential backoff
    */
   private scheduleReconnect(): void {
+    // Don't reconnect if auth failed
+    if (this.authFailed) {
+      return;
+    }
+
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
 
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s max
-    const delays = [1000, 2000, 4000, 8000, 16000, 30000];
-    const delay = delays[Math.min(this.reconnectAttempts, delays.length - 1)];
-
-    console.log(`[AISStream] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts + 1})`);
+    const delays = [1000, 2000, 4000, 8000, 16000, 30000] as const;
+    const delayIndex = Math.min(this.reconnectAttempts, delays.length - 1);
+    const delay = delays[delayIndex]!;
     this.reconnectAttempts++;
 
+    console.log(`[AISStream] Reconnection attempt ${this.reconnectAttempts} in ${delay / 1000}s`);
+
     this.reconnectTimeout = setTimeout(() => {
+      console.log(`[AISStream] Attempting reconnection (attempt ${this.reconnectAttempts})...`);
       this.connect();
     }, delay);
   }

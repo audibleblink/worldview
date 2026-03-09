@@ -74,6 +74,19 @@ Bun.serve({
           count: 0,
           truncated: false,
           totalInBbox: 0,
+          connected: false,
+        }, 503);
+      }
+
+      // Check for authentication failure
+      if (aisClient.hasAuthFailed()) {
+        return jsonResponse({
+          error: "AISStream authentication failed - check API key",
+          ships: [],
+          count: 0,
+          truncated: false,
+          totalInBbox: 0,
+          connected: false,
         }, 503);
       }
 
@@ -91,7 +104,11 @@ Bun.serve({
       const bbox: BoundingBox = { minLat, maxLat, minLon, maxLon };
       const response = aisClient.getShips(bbox);
 
-      return jsonResponse(response);
+      // Add connection status to response
+      return jsonResponse({
+        ...response,
+        connected: aisClient.isConnected(),
+      });
     }
 
     // FlightAware route lookup

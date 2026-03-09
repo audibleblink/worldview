@@ -379,25 +379,32 @@ kill $SERVER_PID
 
 ### Tasks
 
-- [ ] Implement WebSocket reconnection error handling:
-  - [ ] Log reconnection attempts
-  - [ ] Continue serving cached data during reconnection
-  - [ ] Show log entry on reconnection failure
-- [ ] Handle API key invalid case:
-  - [ ] Return 503 from `/ships` endpoint
-  - [ ] Show "ERR" on toggle button
-  - [ ] Log: "[SHIPS] AISStream authentication failed"
-- [ ] Implement rate limiting graceful degradation:
-  - [ ] Reduce polling to 15 seconds when rate limited
-  - [ ] Display warning in log
-  - [ ] Resume normal polling after 60 seconds
-- [ ] Handle empty viewport fallback:
-  - [ ] Detect when camera viewport fails
-  - [ ] Fall back to camera center + 20° bbox
-- [ ] Add ship sprites (replace placeholder rectangles):
-  - [ ] Create 5 ship silhouette icons (32x32 PNG)
-  - [ ] White/light color for programmatic tinting
-  - [ ] Facing "up" (north) in default orientation
+- [x] Implement WebSocket reconnection error handling:
+  - [x] Log reconnection attempts with attempt number
+  - [x] Continue serving cached data during reconnection
+  - [x] Show log entry on authentication failure
+- [x] Handle API key invalid case:
+  - [x] Return 503 from `/ships` endpoint when not connected/authenticated
+  - [x] Show "ERR" on toggle button (existing handleLayerToggle)
+  - [x] Log: "[SHIPS] AISStream authentication failed"
+- [x] Implement rate limiting graceful degradation:
+  - [x] Reduce polling to 15 seconds when rate limited (503 response)
+  - [x] Display warning in log: "[SHIPS] Rate limited - using cached data"
+  - [x] Resume normal polling after 60 seconds
+- [x] Handle empty viewport fallback:
+  - [x] Try computeViewRectangle() first
+  - [x] Fall back to camera center + 20° bbox
+  - [x] Log when fallback is used
+- [x] Ship sprites properly implemented:
+  - [x] Canvas-generated 32x32 icons for each ship type
+  - [x] White color for programmatic tinting
+  - [x] Facing "up" (north) in default orientation
+- [x] Add connection status to `/ships` response:
+  - [x] Returns `connected: boolean` field
+- [x] Verify error states show proper UI feedback:
+  - [x] Toggle shows "ERR" state on connection failure
+  - [x] Info panel handles missing data gracefully
+  - [x] Log messages are clear and actionable
 - [ ] Write integration tests for error scenarios
 - [ ] Performance testing with 100 ships
 
@@ -444,14 +451,14 @@ bun run scripts/error-test-ships.ts
 
 ### Checklist
 
-- [ ] WebSocket reconnects automatically on disconnect
-- [ ] Invalid API key shows appropriate error
-- [ ] Rate limiting triggers polling slowdown
-- [ ] Viewport fallback works when camera is at edge of globe
-- [ ] Ship icons are proper silhouettes (not rectangles)
+- [x] WebSocket reconnects automatically on disconnect
+- [x] Invalid API key shows appropriate error
+- [x] Rate limiting triggers polling slowdown
+- [x] Viewport fallback works when camera is at edge of globe
+- [x] Ship icons are proper silhouettes (Canvas-generated)
 - [ ] 100 ships render at > 30 FPS
 - [ ] Memory stable over 10 minutes of polling
-- [ ] Buffer eviction prevents memory growth
+- [x] Buffer eviction prevents memory growth
 - [ ] All integration tests pass
 
 ### Exit Criteria
