@@ -6,11 +6,12 @@
 // Cesium is loaded as a UMD global via <script src="/cesium/Cesium.js">
 declare const Cesium: typeof import("cesium");
 import { initGlobe } from "./globe.ts";
-import { initShell, updateSatelliteCount, updateFlightCount, updateCameraCount, addEscapeHandler } from "./ui/shell.ts";
+import { initShell, updateSatelliteCount, updateFlightCount, updateShipCount, updateCameraCount, addEscapeHandler } from "./ui/shell.ts";
 import { setViewer, flyToPOIByIndex } from "./pois.ts";
 import { shaderManager } from "./shaders/index.ts";
 import { SatelliteLayer, loadAllTLEs } from "./layers/satellites.ts";
 import { FlightLayer, fetchAircraftMeta } from "./layers/flights.ts";
+import { ShipLayer } from "./layers/ships.ts";
 import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } from "./ui/sat-info-panel.ts";
 import { showFlightInfoPanel, hideFlightInfoPanel, resetFlightFollowButton } from "./ui/flight-info-panel.ts";
 import { GroundLayer } from "./ground/index.ts";
@@ -39,6 +40,7 @@ function extractEntityId(picked: any): string | null {
 interface ClickContext {
   groundLayer: GroundLayer;
   flightLayer: FlightLayer;
+  shipLayer: ShipLayer;
   satelliteLayer: SatelliteLayer;
   viewer: import("cesium").Viewer;
 }
@@ -92,6 +94,23 @@ function handleFlightClick(entityId: string, ctx: ClickContext): boolean {
   return true;
 }
 
+/** Handle ship clicks */
+function handleShipClick(entityId: string, ctx: ClickContext): boolean {
+  // Handle ship entity clicks (id format: "ship-{mmsi}")
+  let mmsi = entityId;
+  if (entityId.startsWith("ship-")) {
+    mmsi = entityId.slice(5); // Remove "ship-" prefix
+  }
+
+  if (!ctx.shipLayer.hasMMSI(mmsi)) return false;
+
+  ctx.shipLayer.selectShip(mmsi, (record) => {
+    // TODO: Phase 4 will add showShipInfoPanel(record, ctx.shipLayer);
+    console.log("[SHIPS] Selected:", record.name || record.mmsi);
+  });
+  return true;
+}
+
 /** Handle satellite clicks */
 function handleSatelliteClick(entityId: string, ctx: ClickContext): boolean {
   // Only handle if the satellite layer knows about this entity
@@ -107,6 +126,7 @@ function handleSatelliteClick(entityId: string, ctx: ClickContext): boolean {
 function handleEmptyClick(ctx: ClickContext): void {
   ctx.satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
   ctx.flightLayer.deselectFlight(hideFlightInfoPanel);
+  ctx.shipLayer.deselectShip();
   ctx.groundLayer.getCCTVManager().exitCenterStage();
 }
 
@@ -123,6 +143,7 @@ export async function init(): Promise<void> {
 
     const satelliteLayer = new SatelliteLayer(viewer, updateSatelliteCount);
     const flightLayer = new FlightLayer(viewer, updateFlightCount);
+    const shipLayer = new ShipLayer(viewer, updateShipCount);
 
     // Initialize ground layer
     const groundLayer = new GroundLayer();
@@ -144,14 +165,15 @@ export async function init(): Promise<void> {
       hideFlightInfoPanel();
     });
 
-    initShell(viewer, { satelliteLayer, loadAllTLEs, flightLayer, groundLayer });
+    initShell(viewer, { satelliteLayer, loadAllTLEs, flightLayer, groundLayer, shipLayer });
 
-    // Escape stops follow mode for both satellites and flights, and exits center-stage
+    // Escape stops follow mode for satellites, flights, and ships, and exits center-stage
     addEscapeHandler(() => {
       satelliteLayer.stopFollow();
       resetFollowButton();
       flightLayer.stopFollow();
       resetFlightFollowButton();
+      shipLayer.stopFollow();
       groundLayer.getCCTVManager().exitCenterStage();
     });
 
@@ -161,7 +183,7 @@ export async function init(): Promise<void> {
     (window as Window & { shaderManager?: typeof shaderManager }).shaderManager = shaderManager;
 
     // Click-to-select handler
-    const clickCtx: ClickContext = { groundLayer, flightLayer, satelliteLayer, viewer };
+    const clickCtx: ClickContext = { groundLayer, flightLayer, shipLayer, satelliteLayer, viewer };
 
     viewer.screenSpaceEventHandler.setInputAction(
       (click: { position: { x: number; y: number } }) => {
@@ -176,6 +198,7 @@ export async function init(): Promise<void> {
         // Try each handler in order - first match wins
         if (handleCCTVClick(entityId, click.position, clickCtx)) return;
         if (handleFlightClick(entityId, clickCtx)) return;
+        if (handleShipClick(entityId, clickCtx)) return;
         handleSatelliteClick(entityId, clickCtx);
       },
       Cesium.ScreenSpaceEventType.LEFT_CLICK

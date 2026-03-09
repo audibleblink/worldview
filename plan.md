@@ -211,22 +211,22 @@ kill $SERVER_PID
 
 ### Tasks
 
-- [ ] Add ship layer state to `src/ui/left-panel.ts`:
+- [x] Add ship layer state to `src/ui/left-panel.ts`:
   ```typescript
   const ship = {
     layer: null as ShipLayer | null,
     active: false,
   };
   ```
-- [ ] Add "SHIPS" toggle row to `createToggles()` HTML
-- [ ] Create `wireUpShipToggle()` using existing `handleLayerToggle()` pattern
-- [ ] Update `initLeftPanel()` to accept `shipLayer` option
-- [ ] Update `src/ui/shell.ts` to pass ship layer to left panel
-- [ ] Add `ShipLayer` to ClickContext in `src/main.ts`
-- [ ] Create `handleShipClick()` function in `src/main.ts`
-- [ ] Add ship click handler to click chain (after CCTV, before satellites)
-- [ ] Implement ship selection highlight (yellow silhouette, scale increase)
-- [ ] Add ship deselection to `handleEmptyClick()`
+- [x] Add "SHIPS" toggle row to `createToggles()` HTML
+- [x] Create `wireUpShipToggle()` using existing `handleLayerToggle()` pattern
+- [x] Update `initLeftPanel()` to accept `shipLayer` option
+- [x] Update `src/ui/shell.ts` to pass ship layer to left panel
+- [x] Add `ShipLayer` to ClickContext in `src/main.ts`
+- [x] Create `handleShipClick()` function in `src/main.ts`
+- [x] Add ship click handler to click chain (after CCTV, before satellites)
+- [x] Implement ship selection highlight (yellow silhouette, scale increase)
+- [x] Add ship deselection to `handleEmptyClick()`
 
 ### Files to Modify
 
@@ -267,15 +267,15 @@ kill $SERVER_PID
 
 ### Checklist
 
-- [ ] "SHIPS" toggle appears in left panel
-- [ ] Toggle follows OFF → LOADING → ON pattern
-- [ ] Toggle shows "ERR" on failure
-- [ ] Ships appear when toggle is ON
-- [ ] Ships disappear when toggle is OFF
-- [ ] Clicking ship highlights it (yellow silhouette, larger scale)
-- [ ] Clicking empty space deselects ship
-- [ ] Ship layer count badge updates in shell
-- [ ] Log entries appear: "[SHIPS] Layer active", "[SHIPS] Layer disabled"
+- [x] "SHIPS" toggle appears in left panel
+- [x] Toggle follows OFF → LOADING → ON pattern
+- [x] Toggle shows "ERR" on failure
+- [x] Ships appear when toggle is ON
+- [x] Ships disappear when toggle is OFF
+- [x] Clicking ship highlights it (yellow silhouette, larger scale)
+- [x] Clicking empty space deselects ship
+- [x] Ship layer count badge updates in shell
+- [x] Log entries appear: "[SHIPS] Layer active", "[SHIPS] Layer disabled"
 
 ### Exit Criteria
 

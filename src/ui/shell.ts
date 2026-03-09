@@ -64,6 +64,7 @@ const TOP_BAR_HTML = `
   <div class="top-bar-center">
     <span id="sat-tracking-counter" class="hidden">TRACKING: 0 SATS</span>
     <span id="flight-tracking-counter" class="hidden">TRACKING: 0 FLIGHTS</span>
+    <span id="ship-tracking-counter" class="hidden">TRACKING: 0 SHIPS</span>
     <span id="camera-tracking-counter" class="hidden">CAMERAS: 0</span>
   </div>
   <div class="top-bar-right">
@@ -228,6 +229,21 @@ export function updateFlightCount(n: number | null): void {
     counter.classList.add("hidden");
   } else {
     counter.textContent = `TRACKING: ${n} FLIGHTS`;
+    counter.classList.remove("hidden");
+  }
+}
+
+/**
+ * Update the ship TRACKING counter in the top bar.
+ * Pass a number to show "TRACKING: N SHIPS"; pass null to hide the counter.
+ */
+export function updateShipCount(n: number | null): void {
+  const counter = document.getElementById("ship-tracking-counter");
+  if (!counter) return;
+  if (n === null) {
+    counter.classList.add("hidden");
+  } else {
+    counter.textContent = `TRACKING: ${n} SHIPS`;
     counter.classList.remove("hidden");
   }
 }

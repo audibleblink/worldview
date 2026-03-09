@@ -18,6 +18,7 @@ import {
 import { updateLocationTooltip } from "./bottom-bar.ts";
 import type { SatelliteLayer, SatelliteRecord } from "../layers/satellites.ts";
 import type { FlightLayer } from "../layers/flights.ts";
+import type { ShipLayer } from "../layers/ships.ts";
 import { CCTVManager, CCTVPanel } from "../ground/cctv/index.ts";
 import { GroundLayer } from "../ground/index.ts";
 import type { StyleMode } from "../ground/traffic/particleStyles.ts";
@@ -48,6 +49,12 @@ const ground = {
   styleMode: "heatmap" as StyleMode,
 };
 
+// Ship layer state
+const ship = {
+  layer: null as ShipLayer | null,
+  active: false,
+};
+
 // Map view layer state
 const mapView = {
   active: false,
@@ -71,6 +78,7 @@ export interface LeftPanelOptions {
   loadAllTLEs?: () => Promise<SatelliteRecord[]>;
   flightLayer?: FlightLayer;
   groundLayer?: GroundLayer;
+  shipLayer?: ShipLayer;
 }
 
 export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void {
@@ -81,6 +89,9 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
 
   flight.layer = options?.flightLayer ?? null;
   flight.active = false;
+
+  ship.layer = options?.shipLayer ?? null;
+  ship.active = false;
 
   // Initialize ground layer (may be provided externally or created here)
   ground.layer = options?.groundLayer ?? null;
@@ -127,6 +138,7 @@ export function initLeftPanel(viewer: Viewer, options?: LeftPanelOptions): void 
   wireUpPOINavigation();
   wireUpSatelliteToggle();
   wireUpFlightToggle();
+  wireUpShipToggle();
   wireUpGroundToggle();
   wireUpMapViewToggle();
   wireUpViewportChangeListener(viewer);
@@ -184,6 +196,10 @@ function createToggles(): HTMLElement {
     <div class="toggle-row">
       <span>FLIGHTS</span>
       <button class="toggle-btn" id="flight-toggle">OFF</button>
+    </div>
+    <div class="toggle-row">
+      <span>SHIPS</span>
+      <button class="toggle-btn" id="ship-toggle">OFF</button>
     </div>
     <div class="toggle-row">
       <span>GROUND</span>
@@ -327,6 +343,15 @@ function wireUpFlightToggle(): void {
 
   btn.addEventListener("click", () => handleLayerToggle(btn, flight, flight.layer!, {
     logPrefix: "FLIGHTS",
+  }));
+}
+
+function wireUpShipToggle(): void {
+  const btn = document.getElementById("ship-toggle") as HTMLButtonElement | null;
+  if (!btn || !ship.layer) return;
+
+  btn.addEventListener("click", () => handleLayerToggle(btn, ship, ship.layer!, {
+    logPrefix: "SHIPS",
   }));
 }
 
