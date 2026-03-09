@@ -592,11 +592,11 @@ void main() {
   // AH64 Reticle Overlay
   // ═══════════════════════════════════════════════════════════════════════════
   float reticleVal = ah64_drawReticle(uv, colorTextureDimensions);
-  flirColor = mix(flirColor, vec3(1.0), reticleVal * reticleOpacity);
+  flirColor = mix(flirColor, vec3(0.0, 1.0, 0.3), reticleVal * reticleOpacity);
 
   // Heading compass tape
   float tape = ah64_headingTape(uv, u_headingDeg, colorTextureDimensions);
-  flirColor = mix(flirColor, vec3(1.0), tape * reticleOpacity);
+  flirColor = mix(flirColor, vec3(0.0, 1.0, 0.3), tape * reticleOpacity);
 
   out_FragColor = vec4(flirColor, 1.0);
 }
