@@ -1138,6 +1138,85 @@ select option {
 }
 
 /* ============================================
+   Ship Info Panel
+   ============================================ */
+.ship-info-panel {
+  position: absolute;
+  top: calc(var(--spacing-md) + 520px);
+  right: calc(var(--panel-width) + var(--spacing-md));
+  width: 260px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid #3B82F6;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: #3B82F6;
+  z-index: 300;
+  pointer-events: all;
+}
+
+.ship-info-panel.hidden {
+  display: none;
+}
+
+.ship-info-header {
+  background: rgba(59, 130, 246, 0.08);
+  border-bottom-color: #3B82F6;
+}
+
+.ship-info-title {
+  color: #3B82F6;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ship-info-panel .sat-info-row {
+  border-bottom-color: rgba(59, 130, 246, 0.1);
+}
+
+.ship-info-panel .sat-info-label {
+  color: var(--color-text-dim);
+}
+
+.ship-info-panel .sat-info-value {
+  color: #3B82F6;
+}
+
+.ship-info-panel .sat-info-follow-btn {
+  border-color: #3B82F6;
+  color: #3B82F6;
+  margin-bottom: var(--spacing-xs);
+}
+
+.ship-info-panel .sat-info-follow-btn:hover {
+  background: #3B82F6;
+  color: var(--color-bg);
+}
+
+.ship-info-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.ship-info-external-link {
+  display: block;
+  text-align: center;
+  color: var(--color-text-dim);
+  font-size: 9px;
+  text-decoration: none;
+  padding: var(--spacing-xs);
+  transition: color 0.15s ease;
+  letter-spacing: 0.5px;
+}
+
+.ship-info-external-link:hover {
+  color: #3B82F6;
+  text-decoration: underline;
+}
+
+/* ============================================
    CCTV Panel
    ============================================ */
 .cctv-panel {

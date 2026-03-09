@@ -14,6 +14,7 @@ import { FlightLayer, fetchAircraftMeta } from "./layers/flights.ts";
 import { ShipLayer } from "./layers/ships.ts";
 import { showSatelliteInfoPanel, hideSatelliteInfoPanel, resetFollowButton } from "./ui/sat-info-panel.ts";
 import { showFlightInfoPanel, hideFlightInfoPanel, resetFlightFollowButton } from "./ui/flight-info-panel.ts";
+import { showShipInfoPanel, hideShipInfoPanel, resetShipFollowButton } from "./ui/ship-info-panel.ts";
 import { GroundLayer } from "./ground/index.ts";
 
 // POI navigation key mappings: q→0, w→1, e→2, r→3, t→4
@@ -105,8 +106,7 @@ function handleShipClick(entityId: string, ctx: ClickContext): boolean {
   if (!ctx.shipLayer.hasMMSI(mmsi)) return false;
 
   ctx.shipLayer.selectShip(mmsi, (record) => {
-    // TODO: Phase 4 will add showShipInfoPanel(record, ctx.shipLayer);
-    console.log("[SHIPS] Selected:", record.name || record.mmsi);
+    showShipInfoPanel(record, ctx.shipLayer);
   });
   return true;
 }
@@ -126,7 +126,7 @@ function handleSatelliteClick(entityId: string, ctx: ClickContext): boolean {
 function handleEmptyClick(ctx: ClickContext): void {
   ctx.satelliteLayer.deselectSatellite(hideSatelliteInfoPanel);
   ctx.flightLayer.deselectFlight(hideFlightInfoPanel);
-  ctx.shipLayer.deselectShip();
+  ctx.shipLayer.deselectShip(hideShipInfoPanel);
   ctx.groundLayer.getCCTVManager().exitCenterStage();
 }
 
@@ -174,6 +174,7 @@ export async function init(): Promise<void> {
       flightLayer.stopFollow();
       resetFlightFollowButton();
       shipLayer.stopFollow();
+      resetShipFollowButton();
       groundLayer.getCCTVManager().exitCenterStage();
     });
 

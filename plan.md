@@ -291,23 +291,23 @@ kill $SERVER_PID
 
 ### Tasks
 
-- [ ] Create `src/ui/ship-info-panel.ts` following flight-info-panel pattern:
-  - [ ] Panel HTML with ship-specific fields
-  - [ ] `showShipInfoPanel(record, layer)` function
-  - [ ] `hideShipInfoPanel()` function
-  - [ ] FOLLOW/UNFOLLOW button with toggle logic
-  - [ ] Close button
-  - [ ] MarineTraffic external link
-- [ ] Implement ship follow mode in ShipLayer:
-  - [ ] `startFollow()` using preRender listener pattern
-  - [ ] `stopFollow()` with camera unlock
-  - [ ] `isFollowing()` state check
-  - [ ] `getCurrentPosition()` for smooth tracking
-- [ ] Wire up info panel to click handler:
-  - [ ] Show panel on ship select
-  - [ ] Hide panel on ship deselect
-- [ ] Add escape handler for ship follow mode in main.ts
-- [ ] Add `resetShipFollowButton()` export
+- [x] Create `src/ui/ship-info-panel.ts` following flight-info-panel pattern:
+  - [x] Panel HTML with ship-specific fields
+  - [x] `showShipInfoPanel(record, layer)` function
+  - [x] `hideShipInfoPanel()` function
+  - [x] FOLLOW/UNFOLLOW button with toggle logic
+  - [x] Close button
+  - [x] MarineTraffic external link
+- [x] Implement ship follow mode in ShipLayer:
+  - [x] `startFollow()` using preRender listener pattern
+  - [x] `stopFollow()` with camera unlock
+  - [x] `isFollowing()` state check
+  - [x] `getCurrentPosition()` for smooth tracking
+- [x] Wire up info panel to click handler:
+  - [x] Show panel on ship select
+  - [x] Hide panel on ship deselect
+- [x] Add escape handler for ship follow mode in main.ts
+- [x] Add `resetShipFollowButton()` export
 
 ### Files to Create
 
@@ -355,15 +355,15 @@ kill $SERVER_PID
 
 ### Checklist
 
-- [ ] Info panel shows on ship selection
-- [ ] Panel displays: vessel name, MMSI, type, position, speed, course, heading, status
-- [ ] Navigation status displays human-readable text
-- [ ] FOLLOW button starts camera tracking
-- [ ] UNFOLLOW button stops tracking
-- [ ] Escape key exits follow mode
-- [ ] MarineTraffic link opens correct vessel page
-- [ ] Close button hides panel and deselects ship
-- [ ] Panel styling matches flight-info-panel
+- [x] Info panel shows on ship selection
+- [x] Panel displays: vessel name, MMSI, type, position, speed, course, heading, status
+- [x] Navigation status displays human-readable text
+- [x] FOLLOW button starts camera tracking
+- [x] UNFOLLOW button stops tracking
+- [x] Escape key exits follow mode
+- [x] MarineTraffic link opens correct vessel page
+- [x] Close button hides panel and deselects ship
+- [x] Panel styling matches flight-info-panel
 
 ### Exit Criteria
 
