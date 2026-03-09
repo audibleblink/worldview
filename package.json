@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "cesium": "^1.139.1",
+    "hls.js": "^1.6.15",
     "satellite.js": "^6.0.2"
   }
 }

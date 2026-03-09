@@ -18,8 +18,11 @@ export interface CCTVCamera {
   longitude: number;
   streamUrl: string;
   status: "live" | "offline";
-  source: "austin" | "caltrans";
+  source: "austin" | "caltrans" | "ny511";
   imageUrl?: string;
+  roadway?: string;
+  direction?: string;
+  videoUrl?: string;
 }
 
 interface AustinCameraData {
@@ -55,6 +58,19 @@ interface CaltransCameraData {
   };
 }
 
+interface NY511CameraData {
+  Latitude: number;
+  Longitude: number;
+  ID: string;
+  Name: string;
+  DirectionOfTravel: string;
+  RoadwayName: string;
+  Url: string;
+  VideoUrl: string | null;
+  Disabled: boolean;
+  Blocked: boolean;
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -63,6 +79,7 @@ const AUSTIN_CAMERA_API = "https://data.austintexas.gov/resource/b4k4-adkb.json"
 const CALTRANS_DISTRICTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CALTRANS_API_BASE = "https://cwwp2.dot.ca.gov/data";
 const CAMERAS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const NY511_CACHE_TTL = 60 * 60 * 1000; // 1 hour (positions rarely change)
 const CCTV_THUMBNAIL_TTL = 1000; // 1 second
 const CCTV_CACHE_DIR = "./cache/cctv";
 
@@ -76,6 +93,8 @@ export class CCTVProxyManager {
   private austinCacheTime = 0;
   private caltransCameras: CCTVCamera[] = [];
   private caltransCacheTime = 0;
+  private ny511Cameras: CCTVCamera[] = [];
+  private ny511CacheTime = 0;
 
   // Thumbnail caches
   private thumbnailCache = new Map<string, { data: Uint8Array; timestamp: number; contentType: string }>();
@@ -91,8 +110,9 @@ export class CCTVProxyManager {
     await Promise.all([
       this.fetchAustinCameras(),
       this.fetchCaltransCameras(),
+      this.loadNY511Cameras(),
     ]);
-    console.log("[CCTV] Camera proxy ready - fetched Austin + Caltrans cameras");
+    console.log("[CCTV] Camera proxy ready - fetched Austin + Caltrans + NY511 cameras");
   }
 
   // --------------------------------------------------------------------------
@@ -189,16 +209,54 @@ export class CCTVProxyManager {
     }
   }
 
-  async fetchAllCameras(source?: "austin" | "caltrans"): Promise<CCTVCamera[]> {
+  async loadNY511Cameras(): Promise<CCTVCamera[]> {
+    if (this.ny511Cameras.length > 0 && Date.now() - this.ny511CacheTime < NY511_CACHE_TTL) {
+      return this.ny511Cameras;
+    }
+
+    try {
+      const filePath = new URL("../data/511ny.json", import.meta.url).pathname;
+      const data: NY511CameraData[] = await Bun.file(filePath).json();
+
+      this.ny511Cameras = data
+        .filter(cam => !cam.Disabled && !cam.Blocked)
+        .filter(cam => cam.Latitude !== 0 && cam.Longitude !== 0)
+        .map(cam => ({
+          id: `ny511-${cam.ID}`,
+          name: cam.Name,
+          latitude: cam.Latitude,
+          longitude: cam.Longitude,
+          streamUrl: cam.Url,
+          status: "live" as const,
+          source: "ny511" as const,
+          imageUrl: cam.Url,
+          roadway: cam.RoadwayName,
+          direction: cam.DirectionOfTravel !== "Unknown" ? cam.DirectionOfTravel : undefined,
+          videoUrl: cam.VideoUrl || undefined,
+        }));
+
+      this.ny511CacheTime = Date.now();
+      console.log(`[CCTV] Loaded ${this.ny511Cameras.length} cameras from NY511 data`);
+
+      return this.ny511Cameras;
+    } catch (error) {
+      console.error("[CCTV] Error loading NY511 cameras:", error);
+      return this.ny511Cameras;
+    }
+  }
+
+  async fetchAllCameras(source?: "austin" | "caltrans" | "ny511"): Promise<CCTVCamera[]> {
     if (source === "austin") return this.fetchAustinCameras();
     if (source === "caltrans") return this.fetchCaltransCameras();
+    if (source === "ny511") return this.loadNY511Cameras();
 
-    const [austin, caltrans] = await Promise.all([
+    const [austin, caltrans, ny511] = await Promise.all([
       this.fetchAustinCameras(),
       this.fetchCaltransCameras(),
+      this.loadNY511Cameras(),
     ]);
 
-    return [...austin, ...caltrans];
+    return [...austin, ...caltrans, ...ny511];
   }
 
   // --------------------------------------------------------------------------
@@ -244,7 +302,7 @@ export class CCTVProxyManager {
 
   /** Handle GET /api/cctv/cameras */
   async handleCameraList(url: URL): Promise<Response> {
-    const sourceParam = url.searchParams.get("source") as "austin" | "caltrans" | null;
+    const sourceParam = url.searchParams.get("source") as "austin" | "caltrans" | "ny511" | null;
     const cameras = await this.fetchAllCameras(sourceParam || undefined);
     const bboxParam = url.searchParams.get("bbox");
 
