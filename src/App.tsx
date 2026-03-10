@@ -9,6 +9,7 @@
 
 import { CesiumProvider } from "./cesium/CesiumProvider";
 import { LayerRenderer } from "./layers/LayerRenderer";
+import { ShaderSystem } from "./shaders/ShaderSystem";
 import { Shell } from "./ui/ShellComponent";
 
 // Import layer registrations - these must be imported to register layers
@@ -49,6 +50,9 @@ export function App() {
         maximumScreenSpaceError: 16,
       }}
     >
+      {/* Shader post-processing system - connects store to Cesium PostProcessStages */}
+      <ShaderSystem />
+
       {/* Layer components render to Cesium, not DOM */}
       <LayerRenderer />
       
