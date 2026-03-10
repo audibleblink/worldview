@@ -28,6 +28,8 @@ export interface UIState {
   rightPanelOpen: boolean;
   commandMode: boolean;
   currentCity: City | null;
+  currentCityIndex: number;
+  currentPOIIndex: number;
 }
 
 // Initial state
@@ -36,6 +38,8 @@ const initialState: UIState = {
   rightPanelOpen: true,
   commandMode: false,
   currentCity: null,
+  currentCityIndex: 0,
+  currentPOIIndex: 0,
 };
 
 // Create the store
@@ -90,6 +94,20 @@ export function toggleCommandMode(): void {
  */
 export function setCurrentCity(city: City | null): void {
   setUI("currentCity", city);
+}
+
+/**
+ * Set the current city index (shared between BottomBar and LeftPanel)
+ */
+export function setCurrentCityIndex(index: number): void {
+  setUI("currentCityIndex", index);
+}
+
+/**
+ * Set the current POI index (shared between BottomBar and LeftPanel)
+ */
+export function setCurrentPOIIndex(index: number): void {
+  setUI("currentPOIIndex", index);
 }
 
 // Export readonly state

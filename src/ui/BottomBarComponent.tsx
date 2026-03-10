@@ -3,8 +3,10 @@
  * Style presets, mode switcher, city tabs, and location tooltip
  */
 
-import { createSignal, createMemo, For, onMount } from "solid-js";
+import { createMemo, For, onMount } from "solid-js";
 import { shaders, setShader, type ShaderMode } from "../stores/shaders";
+import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
+import { useCesium } from "../cesium/useCesium";
 import poisData from "../data/pois.json";
 
 // Types for POI data
@@ -39,18 +41,17 @@ function getModeDisplayName(mode: ViewMode): string {
   return mode.toUpperCase();
 }
 
+declare const Cesium: typeof import("cesium");
+
 /**
  * BottomBar component
  */
 export function BottomBar() {
-  // Current city and POI (synced with LeftPanel state)
-  // In a full implementation, this would come from a shared store
-  const [activeCityIndex, setActiveCityIndex] = createSignal(0);
-  const [currentPOIIndex, setCurrentPOIIndex] = createSignal(0);
+  const { viewer } = useCesium();
 
-  // Derived state
-  const currentCity = createMemo(() => cities[activeCityIndex()]);
-  const currentPOI = createMemo(() => currentCity()?.pois[currentPOIIndex()]);
+  // Derived state from shared store
+  const currentCity = createMemo(() => cities[ui.currentCityIndex]);
+  const currentPOI = createMemo(() => currentCity()?.pois[ui.currentPOIIndex]);
 
   // Active view mode derived from shaders store
   const activeMode = createMemo<ViewMode>(() => {
@@ -68,10 +69,39 @@ export function BottomBar() {
 
   /** Handle city tab click */
   function handleCityClick(index: number): void {
-    setActiveCityIndex(index);
+    setCurrentCityIndex(index);
     setCurrentPOIIndex(0);
-    // In full implementation, this would trigger camera fly-to via store
     console.log(`[BottomBar] Selected city: ${cities[index]?.name}`);
+
+    // Fly to first POI of selected city
+    const firstPOI = cities[index]?.pois[0];
+    if (firstPOI) {
+      flyToPOI(firstPOI);
+    }
+  }
+
+  /** Fly the camera to a POI */
+  function flyToPOI(poi: POI): void {
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
+
+    const pitch = poi.pitch ?? -45;
+    const pitchRad = Math.abs(pitch) * (Math.PI / 180);
+    const latOffset = (poi.altitude / 111000) * Math.tan(pitchRad);
+
+    v.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        poi.lng,
+        poi.lat - latOffset,
+        poi.altitude
+      ),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(pitch),
+        roll: 0,
+      },
+      duration: 2,
+    });
   }
 
   onMount(() => {
@@ -103,7 +133,7 @@ export function BottomBar() {
         <For each={CITY_ABBREVS}>
           {(abbrev, index) => (
             <button
-              class={`city-tab ${index() === activeCityIndex() ? "active" : ""}`}
+              class={`city-tab ${index() === ui.currentCityIndex ? "active" : ""}`}
               data-city-index={index()}
               onClick={() => handleCityClick(index())}
             >

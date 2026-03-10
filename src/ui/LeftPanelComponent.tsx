@@ -10,6 +10,7 @@ import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/s
 import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
 import { satelliteState, toggleCategory } from "../layers/satellites/store";
 import type { SatelliteCategory } from "../layers/satellites/types";
+import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
 import poisData from "../data/pois.json";
 import { useCesium } from "../cesium/useCesium";
 
@@ -77,24 +78,20 @@ let logIdCounter = 0;
 export function LeftPanel() {
   const { viewer } = useCesium();
 
-  // Navigation state
-  const [currentCityIndex, setCurrentCityIndex] = createSignal(0);
-  const [currentPOIIndex, setCurrentPOIIndex] = createSignal(0);
-
   // System log entries
   const [logEntries, setLogEntries] = createSignal<LogEntry[]>([
     { id: logIdCounter++, message: "[INIT] System ready", type: "success" },
     { id: logIdCounter++, message: "[INFO] Google 3D Tiles active", type: "info" },
   ]);
 
-  // Derived state
-  const currentCity = createMemo(() => cities[currentCityIndex()]);
-  const currentPOI = createMemo(() => currentCity()?.pois[currentPOIIndex()]);
+  // Derived state from shared store
+  const currentCity = createMemo(() => cities[ui.currentCityIndex]);
+  const currentPOI = createMemo(() => currentCity()?.pois[ui.currentPOIIndex]);
   const poiCount = createMemo(() => currentCity()?.pois.length ?? 0);
 
   // Navigation helpers
-  const canGoPrev = createMemo(() => currentPOIIndex() > 0);
-  const canGoNext = createMemo(() => currentPOIIndex() < poiCount() - 1);
+  const canGoPrev = createMemo(() => ui.currentPOIIndex > 0);
+  const canGoNext = createMemo(() => ui.currentPOIIndex < poiCount() - 1);
 
   /** Add a log entry */
   function addLogEntry(message: string, type: LogType = "info"): void {
@@ -149,7 +146,7 @@ export function LeftPanel() {
   /** Navigate to previous POI */
   function handlePrevPOI(): void {
     if (canGoPrev()) {
-      const newIndex = currentPOIIndex() - 1;
+      const newIndex = ui.currentPOIIndex - 1;
       setCurrentPOIIndex(newIndex);
       const poi = currentCity()?.pois[newIndex];
       if (poi) {
@@ -162,7 +159,7 @@ export function LeftPanel() {
   /** Navigate to next POI */
   function handleNextPOI(): void {
     if (canGoNext()) {
-      const newIndex = currentPOIIndex() + 1;
+      const newIndex = ui.currentPOIIndex + 1;
       setCurrentPOIIndex(newIndex);
       const poi = currentCity()?.pois[newIndex];
       if (poi) {
@@ -218,7 +215,7 @@ export function LeftPanel() {
       {/* City Selector */}
       <div class="city-selector panel-section">
         <label>LOCATION</label>
-        <select id="city-dropdown" value={currentCityIndex()} onChange={handleCityChange}>
+        <select id="city-dropdown" value={ui.currentCityIndex} onChange={handleCityChange}>
           <For each={cities}>
             {(city, index) => (
               <option value={index()}>{city.name}</option>
