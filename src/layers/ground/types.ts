@@ -27,6 +27,9 @@ export interface Camera {
   longitude: number;
   url?: string;
   source?: string;
+  status?: string;
+  roadway?: string;
+  direction?: string;
 }
 
 /** CCTV Billboard configuration */

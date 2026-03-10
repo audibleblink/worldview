@@ -13,6 +13,7 @@ import type { SatelliteCategory } from "../layers/satellites/types";
 import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
 import poisData from "../data/pois.json";
 import { useCesium } from "../cesium/useCesium";
+import { CCTVCameraListPanel } from "./panels/CCTVCameraListPanel";
 
 declare const Cesium: typeof import("cesium");
 
@@ -334,6 +335,9 @@ export function LeftPanel() {
         <button class="action-btn" disabled>AUTO CAL</button>
         <button class="action-btn" disabled>ALIGN - DRAPE</button>
       </div>
+
+      {/* CCTV Camera List - always visible */}
+      <CCTVCameraListPanel />
 
       {/* System Log */}
       <div class="system-log">

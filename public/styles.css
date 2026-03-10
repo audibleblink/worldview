@@ -911,6 +911,17 @@ select option {
   flex-direction: column;
 }
 
+/* ============================================
+   CCTV Camera List Panel (left bar)
+   ============================================ */
+.cctv-list-panel {
+  border: 1px solid var(--color-border);
+  background: rgba(0, 10, 15, 0.6);
+  margin-bottom: var(--spacing-md);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
 .cctv-header {
   font-size: 9px;
   color: var(--color-text-dim);
