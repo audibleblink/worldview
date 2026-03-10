@@ -44,42 +44,47 @@ const MODEL_MIN_PIXEL_SIZE = 64;
 const DEG_TO_RAD = Math.PI / 180;
 const METERS_PER_DEG = 111_320;
 
-/** OpenSky state array index constants */
-const OPENSKY = {
-  ICAO24: 0,
-  CALLSIGN: 1,
-  LONGITUDE: 5,
-  LATITUDE: 6,
-  BARO_ALTITUDE: 7,
-  ON_GROUND: 8,
-  VELOCITY: 9,
-  TRUE_TRACK: 10,
-  VERTICAL_RATE: 11,
-} as const;
+/**
+ * Shape of the transformed state objects returned by the proxy's /flights endpoint.
+ * The proxy pre-processes raw OpenSky arrays into named-property objects.
+ */
+interface ProxyFlightState {
+  icao24: string;
+  callsign: string | null;
+  longitude: number;
+  latitude: number;
+  altitude: number | null;
+  velocity: number | null;
+  heading: number | null;
+  verticalRate: number | null;
+  onGround: boolean;
+  lastContact: number;
+}
 
 /**
- * Parse OpenSky state vector array into FlightRecord
+ * Parse a proxy-transformed flight state object into FlightRecord.
+ *
+ * The proxy (/src/server/routes/flights.ts) returns pre-processed objects
+ * (not raw OpenSky arrays), so we read named properties directly.
  */
-function parseOpenSkyState(state: unknown[]): FlightRecord | null {
-  const icao24 = state[OPENSKY.ICAO24] as string | null;
-  const longitude = state[OPENSKY.LONGITUDE] as number | null;
-  const latitude = state[OPENSKY.LATITUDE] as number | null;
-  const onGround = state[OPENSKY.ON_GROUND] as boolean;
+function parseProxyFlightState(state: ProxyFlightState): FlightRecord | null {
+  const { icao24, longitude, latitude, onGround } = state;
 
-  // Filter out records with missing critical data or on ground
+  // Filter out records with missing critical data or on ground (proxy already
+  // filters ground traffic, but be defensive here too)
   if (!icao24 || longitude === null || latitude === null || onGround) {
     return null;
   }
 
   return {
     icao24,
-    callsign: (state[OPENSKY.CALLSIGN] as string | null)?.trim() ?? "",
+    callsign: state.callsign?.trim() ?? "",
     longitude,
     latitude,
-    altitude: (state[OPENSKY.BARO_ALTITUDE] as number | null) ?? 0,
-    velocity: (state[OPENSKY.VELOCITY] as number | null) ?? 0,
-    heading: (state[OPENSKY.TRUE_TRACK] as number | null) ?? 0,
-    verticalRate: (state[OPENSKY.VERTICAL_RATE] as number | null) ?? 0,
+    altitude: state.altitude ?? 0,
+    velocity: state.velocity ?? 0,
+    heading: state.heading ?? 0,
+    verticalRate: state.verticalRate ?? 0,
     onGround,
     lastUpdate: Date.now(),
   };
@@ -206,7 +211,7 @@ export function FlightLayer() {
 
     const records: FlightRecord[] = [];
     for (const state of data.states) {
-      const record = parseOpenSkyState(state);
+      const record = parseProxyFlightState(state as ProxyFlightState);
       if (record) {
         records.push(record);
       }
@@ -385,7 +390,8 @@ export function FlightLayer() {
         }
       }
 
-      console.log(`[FlightLayer] Refreshed: ${entityMap.size}/${total} flights`);
+      console.log(`[FlightLayer] API returned ${total} total states, filtered to ${records.length} flights`);
+      console.log(`[FlightLayer] Entity map has ${entityMap.size} entities`);
     } catch (error) {
       console.error("[FlightLayer] Refresh error:", error);
     }
