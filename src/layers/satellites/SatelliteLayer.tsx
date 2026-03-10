@@ -136,13 +136,12 @@ function propagateAll(records: SatelliteRecord[], date: Date): SatellitePosition
 }
 
 /**
- * Compute orbital path for a satellite (one full orbit)
+ * Compute orbital path for a satellite (next 24 hours)
  */
 function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[] {
-  // Period in minutes: satrec.no is mean motion in rad/min → T = 2π / no
-  const periodMinutes = (2 * Math.PI) / record.satrec.no;
-  const stepMinutes = 1;
-  const steps = Math.ceil(periodMinutes / stepMinutes);
+  const totalMinutes = 24 * 60; // 24 hours
+  const stepMinutes = 2; // 2-minute steps for 720 points (smooth enough)
+  const steps = Math.ceil(totalMinutes / stepMinutes);
   const now = new Date();
   const positions: Cesium.Cartesian3[] = [];
 

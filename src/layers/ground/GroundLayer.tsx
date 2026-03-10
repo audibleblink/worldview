@@ -35,10 +35,8 @@ export function GroundLayer() {
         <TrafficLayer />
       </Show>
 
-      {/* CCTV camera markers - billboard collection */}
-      <Show when={groundState.cctvEnabled}>
-        <CCTVLayer />
-      </Show>
+      {/* CCTV camera markers - always rendered when ground layer is active */}
+      <CCTVLayer />
 
       {/* Seismic/earthquake visualization - animated rings */}
       <Show when={groundState.seismicEnabled}>

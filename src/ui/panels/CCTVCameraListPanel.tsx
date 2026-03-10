@@ -4,7 +4,7 @@
  * Always visible in the left bar regardless of ground layer toggle state.
  */
 
-import { createSignal, createEffect, on, onCleanup, For, Show } from "solid-js";
+import { createSignal, createEffect, createMemo, on, onCleanup, For, Show } from "solid-js";
 import { useCesium } from "../../cesium/useCesium";
 import { groundState, setCameras, setCenterStageCamera } from "../../layers/ground/store";
 import { PROXY_ENDPOINTS } from "../../config";
@@ -182,6 +182,19 @@ export function CCTVCameraListPanel() {
     if (debounceTimer) clearTimeout(debounceTimer);
   });
 
+  // Sort cameras so projected (center-staged) cameras appear first
+  const sortedCameras = createMemo(() => {
+    const cams = cameras();
+    const projectedId = groundState.centerStageCameraId;
+    if (!projectedId) return cams;
+
+    return [...cams].sort((a, b) => {
+      const aProjected = a.id === projectedId ? 0 : 1;
+      const bProjected = b.id === projectedId ? 0 : 1;
+      return aProjected - bProjected;
+    });
+  });
+
   /**
    * Build thumbnail URL with cache-busting version
    */
@@ -209,7 +222,7 @@ export function CCTVCameraListPanel() {
           <div class="cctv-empty">NO CAMERAS IN VIEWPORT</div>
         </Show>
         <Show when={!loading() && !tooHigh() && cameras().length > 0}>
-          <For each={cameras()}>
+          <For each={sortedCameras()}>
             {(camera) => (
               <div
                 class={`cctv-item ${groundState.centerStageCameraId === camera.id ? "projected" : ""}`}

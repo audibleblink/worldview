@@ -244,8 +244,6 @@ export function CCTVLayer() {
    * Handle camera movement with debounce
    */
   function handleCameraChange(): void {
-    if (!groundState.cctvEnabled) return;
-
     if (viewportDebounceTimer) {
       clearTimeout(viewportDebounceTimer);
     }
@@ -258,27 +256,12 @@ export function CCTVLayer() {
   // Update markers when camera data changes
   createEffect(
     on(cameras, () => {
-      if (groundState.cctvEnabled) {
-        updateMarkers();
-      }
+      updateMarkers();
     })
   );
 
-  // Show/hide markers based on enabled state
-  createEffect(
-    on(
-      () => groundState.cctvEnabled,
-      (enabled) => {
-        const count = markerCollection.count();
-        for (let i = 0; i < count; i++) {
-          const billboard = markerCollection.collection?.get(i);
-          if (billboard) {
-            billboard.show = enabled;
-          }
-        }
-      }
-    )
-  );
+  // Markers are always visible when the ground layer is active
+  // (cctvEnabled sub-toggle no longer hides billboard markers)
 
   // Set up camera listener and initial fetch
   createEffect(() => {
