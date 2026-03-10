@@ -8,6 +8,7 @@
 import { registerLayer } from "../registry";
 import { GroundLayer } from "./GroundLayer";
 
+// Register the ground layer
 registerLayer({
   id: "ground",
   name: "Ground",
@@ -15,3 +16,8 @@ registerLayer({
   component: GroundLayer,
   defaultEnabled: true,
 });
+
+// Export store and types for external use
+export { groundState, toggleSubLayer, setSubLayerEnabled, setTrafficStyle, setCameras, setEarthquakes, setCenterStageCamera } from "./store.ts";
+export type { GroundState } from "./store.ts";
+export type { Camera, EarthquakeData, StyleMode, GroundSubLayer, TrafficParticle, CCTVMarker } from "./types.ts";

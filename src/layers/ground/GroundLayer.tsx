@@ -1,32 +1,51 @@
 /**
- * WorldView - Ground Layer (Stub)
+ * WorldView - Ground Layer Orchestrator
  *
- * Phase 3 stub component that logs mount/unmount for testing.
- * Full implementation will be added in Phase 7.
+ * Renders ground-level features based on store toggles:
+ * - Traffic particles (animated flow along roads)
+ * - CCTV camera markers
+ * - Seismic/earthquake visualization
  */
 
-import { onMount, onCleanup } from "solid-js";
+import { Show, onMount, onCleanup } from "solid-js";
+import { groundState } from "./store.ts";
+import { TrafficLayer } from "./TrafficLayer.tsx";
+import { CCTVLayer } from "./CCTVLayer.tsx";
+import { SeismicLayer } from "./SeismicLayer.tsx";
 
 /**
- * GroundLayer - Renders ground features on the globe
+ * GroundLayer - Orchestrates ground-level sub-layers
  *
- * Currently a stub that logs lifecycle events.
- * Phase 7 will add sub-layers:
- * - Traffic particle system
- * - CCTV cameras
- * - Seismic/earthquake data
+ * Uses `<Show>` for conditional sub-layer rendering based on store state.
+ * Each sub-layer manages its own lifecycle and cleanup.
  */
 export function GroundLayer() {
   onMount(() => {
-    console.log("[GroundLayer] mounted");
+    console.log("[GroundLayer] Mounted");
   });
 
   onCleanup(() => {
-    console.log("[GroundLayer] unmounted");
+    console.log("[GroundLayer] Unmounted");
   });
 
-  // Layers don't render DOM - they add primitives to Cesium
-  return null;
+  return (
+    <>
+      {/* Traffic particle system - animated flow along roads */}
+      <Show when={groundState.trafficEnabled}>
+        <TrafficLayer />
+      </Show>
+
+      {/* CCTV camera markers - billboard collection */}
+      <Show when={groundState.cctvEnabled}>
+        <CCTVLayer />
+      </Show>
+
+      {/* Seismic/earthquake visualization - animated rings */}
+      <Show when={groundState.seismicEnabled}>
+        <SeismicLayer />
+      </Show>
+    </>
+  );
 }
 
 export default GroundLayer;

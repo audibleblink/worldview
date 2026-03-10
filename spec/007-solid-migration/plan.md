@@ -331,29 +331,29 @@
 
 ### Tasks
 
-- [ ] Create `src/layers/ground/store.ts`
+- [x] Create `src/layers/ground/store.ts`
   - Ground-specific store: `{ trafficEnabled, cctvEnabled, seismicEnabled, earthquakes, cctvCameras }`
   - Mutations: `toggleSubLayer(name)`, `setEarthquakes(data)`, `setCameras(data)`
-- [ ] Implement traffic sub-layer:
+- [x] Implement traffic sub-layer:
   - Port `TrafficParticleSystem.ts`, `OSMFetcher.ts`, `RoadNetwork.ts`
   - Wrap in reactive component, use `usePreRender` for particle animation
   - Cleanup particles on unmount
-- [ ] Implement CCTV sub-layer:
+- [x] Implement CCTV sub-layer:
   - Port `CCTVManager.ts`, `CCTVBillboard.ts`
   - **Use `BillboardCollection`** for camera markers (Blocklist #3)
   - **NO `toDataURL()` for texture updates** — pass canvas directly to billboard image (Blocklist #2)
   - Reactive billboard management
   - Port center-stage mode for video viewing
   - Cleanup on unmount
-- [ ] Implement seismic sub-layer:
+- [x] Implement seismic sub-layer:
   - Port `EarthquakeLayer.ts`, `USGSFetcher.ts`, `RingAnimation.ts`
   - Reactive entity creation for earthquakes
   - Ring animation via `usePreRender`
   - Cleanup on unmount
-- [ ] Create `src/layers/ground/GroundLayer.tsx` orchestrator
+- [x] Create `src/layers/ground/GroundLayer.tsx` orchestrator
   - Renders sub-layers based on ground store toggles
   - Uses `<Show>` for conditional sub-layer rendering
-- [ ] Verify proxy endpoints: `/api/cctv/cameras`, `/api/cctv/stream/:id`, `/api/osm`
+- [x] Verify proxy endpoints: `/api/cctv/cameras`, `/api/cctv/stream/:id`, `/api/osm`
 
 ### Verification
 
@@ -376,31 +376,31 @@
 
 ### Tasks
 
-- [ ] Create `src/App.tsx`
+- [x] Create `src/App.tsx`
   - Root component: `<CesiumProvider>` → `<Shell>` → `<LayerRenderer>`
-- [ ] Create `src/ui/Shell.tsx`
+- [x] Create `src/ui/Shell.tsx`
   - Port layout from `src/ui/shell.ts`
   - Top bar: classification watermark, clock, telemetry counters
   - Compass, vignette overlay
   - Reads UI store for panel visibility
   - Keyboard shortcuts via `onMount` / `onCleanup`
-- [ ] Create `src/ui/LeftPanel.tsx`
+- [x] Create `src/ui/LeftPanel.tsx`
   - Port from `src/ui/left-panel.ts`
   - City selector (reads from `pois.json`)
   - POI navigation
   - Layer toggles (reads layer registry, toggles layers store)
   - CCTV panel integration
-- [ ] Create `src/ui/RightPanel.tsx`
+- [x] Create `src/ui/RightPanel.tsx`
   - Port from `src/ui/right-panel.ts`
   - Shader/effect controls (reads/writes shaders store)
   - Live readouts: lat/lng/alt/GSD/NIIRS (reads camera store or computes from viewer)
-- [ ] Create `src/ui/BottomBar.tsx`
+- [x] Create `src/ui/BottomBar.tsx`
   - Port from `src/ui/bottom-bar.ts`
   - Mode switcher tabs
   - City tabs
   - Location tooltip (coordinates under cursor)
-- [ ] Port `src/ui/performance-monitor.ts` as a SolidJS component
-- [ ] Ensure all UI updates are reactive (no manual DOM manipulation)
+- [x] Port `src/ui/performance-monitor.ts` as a SolidJS component
+- [x] Ensure all UI updates are reactive (no manual DOM manipulation)
 
 ### Verification
 
