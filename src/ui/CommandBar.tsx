@@ -8,9 +8,11 @@ import { createSignal, createEffect, onMount, onCleanup, Show } from "solid-js";
 import { ui, setCommandMode } from "../stores/ui";
 import { setFollowTarget, setFreeCamera } from "../stores/camera";
 import { selectEntity, clearSelection } from "../stores/selection";
-import { geocode, getAltitudeForType } from "../geocoder";
-import { flyTo } from "../globe";
+import { useCesium } from "../cesium/useCesium";
 import { PROXY_BASE_URL } from "../config";
+
+// Use global Cesium from script tag
+declare const Cesium: typeof import("cesium");
 
 // ============================================
 // Command Parser (from command-parser.ts)
@@ -116,15 +118,178 @@ function convertIataToIcao(callsign: string): string {
 }
 
 // ============================================
+// Geocoding (inline from geocoder.ts)
+// ============================================
+
+interface GeoResult {
+  lat: number;
+  lng: number;
+  name: string;
+  type: "country" | "region" | "city" | "address" | "poi" | "coords" | "airport";
+}
+
+// Airport database - loaded dynamically
+let airports: Record<string, { name: string; lat: number; lng: number }> = {};
+let airportsLoaded = false;
+
+async function loadAirports(): Promise<void> {
+  if (airportsLoaded) return;
+  try {
+    const response = await fetch('/src/data/airports.json');
+    airports = await response.json();
+    airportsLoaded = true;
+  } catch (e) {
+    console.error('Failed to load airports database:', e);
+  }
+}
+
+// Initialize airports on module load
+loadAirports();
+
+// Coordinate parsing patterns
+const DECIMAL_WITH_COMMA = /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/;
+const DECIMAL_WITH_DIRECTION = /^(\d+\.?\d*)\s*([NS])\s*,?\s*(\d+\.?\d*)\s*([EW])$/i;
+const SIGNED_DECIMAL_NO_COMMA = /^(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$/;
+
+function parseCoordinates(input: string): { lat: number; lng: number } | null {
+  const trimmed = input.trim();
+
+  let match = trimmed.match(DECIMAL_WITH_COMMA);
+  if (match) {
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  match = trimmed.match(DECIMAL_WITH_DIRECTION);
+  if (match) {
+    let lat = parseFloat(match[1]);
+    let lng = parseFloat(match[3]);
+    if (match[2].toUpperCase() === "S") lat = -lat;
+    if (match[4].toUpperCase() === "W") lng = -lng;
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  match = trimmed.match(SIGNED_DECIMAL_NO_COMMA);
+  if (match) {
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
+}
+
+function lookupAirport(code: string): { lat: number; lng: number; name: string } | null {
+  const upperCode = code.trim().toUpperCase();
+  const airport = airports[upperCode];
+  return airport ? { lat: airport.lat, lng: airport.lng, name: airport.name } : null;
+}
+
+function mapGoogleTypeToGeoType(types: string[]): GeoResult["type"] {
+  for (const type of types) {
+    switch (type) {
+      case "country": return "country";
+      case "administrative_area_level_1": return "region";
+      case "locality":
+      case "postal_code":
+      case "sublocality": return "city";
+      case "street_address":
+      case "route":
+      case "premise": return "address";
+      case "point_of_interest":
+      case "establishment": return "poi";
+    }
+  }
+  return "city";
+}
+
+function getAltitudeForType(type: GeoResult["type"]): number {
+  switch (type) {
+    case "country":
+    case "region": return 500_000;
+    case "city": return 50_000;
+    case "address":
+    case "poi": return 1_000;
+    case "coords": return 10_000;
+    case "airport": return 5_000;
+    default: return 50_000;
+  }
+}
+
+async function geocode(query: string): Promise<GeoResult | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const coords = parseCoordinates(trimmed);
+  if (coords) {
+    return { lat: coords.lat, lng: coords.lng, name: trimmed, type: "coords" };
+  }
+
+  if (/^[a-zA-Z]{3}$/.test(trimmed)) {
+    const airport = lookupAirport(trimmed);
+    if (airport) {
+      return { lat: airport.lat, lng: airport.lng, name: airport.name, type: "airport" };
+    }
+  }
+
+  try {
+    const response = await fetch(`${PROXY_BASE_URL}/geocode?address=${encodeURIComponent(trimmed)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const result = data.results?.[0];
+    const location = result?.geometry?.location;
+    if (!data.ok || !location?.lat || !location?.lng) return null;
+    return {
+      lat: location.lat,
+      lng: location.lng,
+      name: result.formatted_address || trimmed,
+      type: mapGoogleTypeToGeoType(result.types || []),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
 // Command Bar Component
 // ============================================
 
 export function CommandBar() {
+  const { viewer } = useCesium();
+  
   const [input, setInput] = createSignal("");
   const [error, setError] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
   let inputRef: HTMLInputElement | undefined;
+
+  /**
+   * Fly to a location using the Cesium viewer
+   */
+  function flyTo(longitude: number, latitude: number, height: number, duration = 2, pitch = -45): void {
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
+
+    // Offset latitude south to compensate for oblique pitch looking north
+    const latOffset = pitch === -90 ? 0 : (height / 111000) * Math.tan(Math.abs(pitch) * Math.PI / 180);
+    
+    v.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(longitude, latitude - latOffset, height),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(pitch),
+        roll: 0,
+      },
+      duration,
+    });
+  }
 
   // Focus input when command mode becomes active
   createEffect(() => {

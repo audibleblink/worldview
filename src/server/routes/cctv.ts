@@ -15,7 +15,7 @@ import {
   corsResponse,
   CORS_HEADERS,
 } from "../types.ts";
-import { encodePNG, drawText, drawBorder } from "../../proxy/png.ts";
+import { encodePNG, drawText, drawBorder } from "../utils/png.ts";
 
 // ============================================================================
 // Types

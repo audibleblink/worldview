@@ -569,23 +569,25 @@
 
 ### Tasks
 
-- [ ] Remove old frontend files:
+- [x] Remove old frontend files:
   - `src/main.ts` (replaced by `src/index.tsx`)
   - `src/globe.ts` (replaced by `CesiumProvider`)
   - `src/camera.ts` (replaced by `useCamera`)
   - `src/pois.ts` (data moved, logic in UI components)
+  - `src/geocoder.ts` (inlined into CommandBar.tsx)
+  - `src/errors.ts` (no longer used)
   - `src/layers/satellites.ts` (replaced by SolidJS layer)
   - `src/layers/flights.ts` (replaced by SolidJS layer)
   - `src/layers/ships.ts` (replaced by SolidJS layer)
   - `src/layers/mapView.ts` (replaced or integrated)
-  - `src/ground/` entire directory (replaced by SolidJS ground layer)
-  - `src/shaders/*.ts` old files (replaced by SolidJS shader system)
+  - `src/ground/` old manager files removed, utilities kept for new layers
+  - `src/shaders/index.ts` simplified to export only SolidJS system
   - `src/ui/*.ts` old files (replaced by SolidJS UI components)
-- [ ] Remove `src/server.ts` if dev server approach changed, or update it
-- [ ] Update `public/index.html` to remove any old script tags or import maps that are no longer needed
-- [ ] Remove old test files that reference deleted modules
-- [ ] Remove or update scripts in `scripts/` that reference old code
-- [ ] Verify no dead imports or broken references remain
+- [x] Remove `src/proxy/` directory (replaced by `src/server/`)
+- [x] Remove `src/proxy.ts` re-export file
+- [x] Update `public/index.html` to remove unused cesium-container div
+- [x] Update scripts in `scripts/` that reference old code (flights-acceptance.ts)
+- [x] Verify no dead imports or broken references remain
 
 ### Verification
 
