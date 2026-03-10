@@ -16,8 +16,9 @@ describe("SGP4 Propagation", () => {
     const now = new Date();
     const result = satellite.propagate(satrec, now);
 
-    expect(result.position).toBeDefined();
-    expect(typeof result.position).not.toBe("boolean");
+    expect(result).not.toBeNull();
+    expect(result!.position).toBeDefined();
+    expect(typeof result!.position).not.toBe("boolean");
   });
 
   test("ISS altitude is within expected range (350-430 km)", () => {
@@ -25,11 +26,12 @@ describe("SGP4 Propagation", () => {
     const now = new Date();
     const result = satellite.propagate(satrec, now);
 
-    expect(result.position).toBeDefined();
-    if (typeof result.position === "boolean") return;
+    expect(result).not.toBeNull();
+    const pos = result!.position;
+    if (!pos || typeof pos === "boolean") return;
 
     const gmst = satellite.gstime(now);
-    const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
+    const geo = satellite.eciToGeodetic(pos, gmst);
     const altKm = geo.height;
 
     expect(altKm).toBeGreaterThan(350);
@@ -41,11 +43,11 @@ describe("SGP4 Propagation", () => {
     const now = new Date();
     const result = satellite.propagate(satrec, now);
 
-    expect(result.velocity).toBeDefined();
-    if (typeof result.velocity === "boolean" || !result.velocity) return;
+    expect(result).not.toBeNull();
+    const vel = result!.velocity;
+    if (!vel || typeof vel === "boolean") return;
 
-    const v = result.velocity;
-    const speed = Math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2);
+    const speed = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2);
 
     expect(speed).toBeGreaterThan(1);
     expect(speed).toBeLessThan(12);

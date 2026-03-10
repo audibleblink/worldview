@@ -1,14 +1,14 @@
-[tasks.dev]
+[tasks.frontend]
 description = "Start frontend dev server (port 3000)"
 run = "bun run --hot src/server.ts"
 
-[tasks.server]
+[tasks.backend]
 description = "Start backend API server (port 3001)"
 run = "bun run --hot src/server/index.ts"
 
-[tasks.start]
+[tasks.dev]
 description = "Start both dev and backend servers"
-depends = ["dev", "server"]
+depends = ["frontend", "backend"]
 
 [tasks.build]
 description = "Production build"
@@ -36,12 +36,7 @@ run = "bunx tsc --noEmit"
 
 [tasks.verify]
 description = "Run full verification suite (typecheck + tests + build)"
-run = """
-echo "=== TypeScript Check ===" && bunx tsc --noEmit && \
-echo "\n=== Unit Tests ===" && bun test && \
-echo "\n=== Production Build ===" && bun run scripts/build.ts && \
-echo "\n=== All checks passed ==="
-"""
+depends = ["typecheck", "test", "build"]
 
 [tasks.clean]
 description = "Clean build artifacts"
