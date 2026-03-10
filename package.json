@@ -4,13 +4,7 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
-  "scripts": {
-    "dev": "bun run --hot src/server.ts",
-    "server": "bun run --hot src/server/index.ts",
-    "build": "bun run scripts/build.ts",
-    "typecheck": "tsc --noEmit",
-    "verify": "bun run scripts/verify-phase13.ts"
-  },
+
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-typescript": "^7.28.5",

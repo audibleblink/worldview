@@ -11,6 +11,7 @@ const ROOT = import.meta.dir + "/..";
 const CESIUM_PATH = join(ROOT, "node_modules/cesium/Build/Cesium");
 const SATELLITE_JS_PATH = join(ROOT, "node_modules/satellite.js/dist");
 const HLS_JS_PATH = join(ROOT, "node_modules/hls.js/dist");
+const SOLID_JS_PATH = join(ROOT, "node_modules/solid-js");
 const PUBLIC_PATH = join(ROOT, "public");
 
 console.log(`Starting WorldView dev server on port ${PORT}...`);
@@ -45,12 +46,79 @@ const serveFile = async (filePath: string, notFoundMsg: string): Promise<Respons
     : new Response(notFoundMsg, { status: 404 });
 };
 
+/**
+ * Rewrite relative imports to include file extensions for browser ES modules.
+ * Converts "./Foo" to "./Foo.tsx" or "./Foo.ts" based on what exists.
+ */
+const rewriteImports = async (code: string, currentFilePath: string): Promise<string> => {
+  const dir = currentFilePath.slice(0, currentFilePath.lastIndexOf("/"));
+  
+  // Match various import/export patterns with relative paths
+  // 1. import { x } from "./path"
+  // 2. import x from "./path"
+  // 3. import "./path" (side-effect)
+  // 4. export { x } from "./path"
+  const importFromRegex = /(import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*,?\s*)*\s*from\s+['"])(\.[^'"]+)(['"])/g;
+  const sideEffectImportRegex = /(import\s+['"])(\.[^'"]+)(['"])/g;
+  const exportFromRegex = /(export\s+(?:\{[^}]*\}|\*)\s+from\s+['"])(\.[^'"]+)(['"])/g;
+  
+  const resolveExtension = async (importPath: string): Promise<string> => {
+    // Skip if already has extension
+    if (/\.(tsx?|js|mjs|json|css)$/.test(importPath)) {
+      return importPath;
+    }
+    
+    // Try .tsx first, then .ts, then /index.tsx, then /index.ts
+    const basePath = join(dir, importPath);
+    const candidates = [
+      { path: basePath + ".tsx", ext: ".tsx" },
+      { path: basePath + ".ts", ext: ".ts" },
+      { path: join(basePath, "index.tsx"), ext: "/index.tsx" },
+      { path: join(basePath, "index.ts"), ext: "/index.ts" },
+    ];
+    
+    for (const { path, ext } of candidates) {
+      if (await Bun.file(path).exists()) {
+        return importPath + ext;
+      }
+    }
+    
+    // Fallback: assume .tsx
+    return importPath + ".tsx";
+  };
+  
+  // Collect all matches and their replacements
+  const replacements: Map<string, string> = new Map();
+  
+  const processMatches = async (regex: RegExp) => {
+    for (const match of code.matchAll(regex)) {
+      const [full, prefix, importPath, suffix] = match;
+      const resolved = await resolveExtension(importPath);
+      replacements.set(full, prefix + resolved + suffix);
+    }
+  };
+  
+  await processMatches(importFromRegex);
+  await processMatches(sideEffectImportRegex);
+  await processMatches(exportFromRegex);
+  
+  // Apply all replacements
+  let result = code;
+  for (const [original, replacement] of replacements) {
+    result = result.replace(original, replacement);
+  }
+  
+  return result;
+};
+
 /** Transpile TypeScript file on the fly */
 const serveTranspiledTS = async (filePath: string): Promise<Response | null> => {
   const file = Bun.file(filePath);
   if (!(await file.exists())) return null;
   const transpiler = new Bun.Transpiler({ loader: "ts" });
-  return new Response(transpiler.transformSync(await file.text()), {
+  let code = transpiler.transformSync(await file.text());
+  code = await rewriteImports(code, filePath);
+  return new Response(code, {
     headers: { "Content-Type": "application/javascript" },
   });
 };
@@ -75,13 +143,30 @@ const serveTranspiledTSX = async (filePath: string): Promise<Response | null> =>
     return new Response("Transpilation failed", { status: 500 });
   }
   
-  return new Response(result.code, {
+  // Rewrite relative imports to include extensions
+  const code = await rewriteImports(result.code, filePath);
+  
+  return new Response(code, {
     headers: { "Content-Type": "application/javascript" },
   });
 };
 
+// Map solid-js subpath imports to their dist files
+const solidJsResolver = (pathname: string): Promise<Response> => {
+  const subpath = pathname.slice(10); // remove "/solid-js/"
+  if (subpath === "solid.js") {
+    return serveFile(join(SOLID_JS_PATH, "dist/dev.js"), `solid-js not found`);
+  } else if (subpath === "web.js") {
+    return serveFile(join(SOLID_JS_PATH, "web/dist/dev.js"), `solid-js/web not found`);
+  } else if (subpath === "store.js") {
+    return serveFile(join(SOLID_JS_PATH, "store/dist/dev.js"), `solid-js/store not found`);
+  }
+  return serveFile(join(SOLID_JS_PATH, subpath), `solid-js asset not found: ${pathname}`);
+};
+
 // Route handlers for different path prefixes
 const routeHandlers: Record<string, (pathname: string) => Promise<Response>> = {
+  "/solid-js/": solidJsResolver,
   "/satellite.js/": (p) => serveFile(join(SATELLITE_JS_PATH, p.slice(14)), `satellite.js asset not found: ${p}`),
   "/hls.js/": (p) => serveFile(join(HLS_JS_PATH, p.slice(8)), `hls.js asset not found: ${p}`),
   "/cesium/": (p) => serveFile(join(CESIUM_PATH, p.slice(8)), `Cesium asset not found: ${p}`),
@@ -116,9 +201,16 @@ Bun.serve({
       if (response) return response;
     }
 
-    // Serve JSON files from src/
+    // Serve JSON files from src/ as ES modules (wrap in export default)
     if (pathname.startsWith("/src/") && pathname.endsWith(".json")) {
-      return serveFile(join(ROOT, pathname), `JSON file not found: ${pathname}`);
+      const file = Bun.file(join(ROOT, pathname));
+      if (await file.exists()) {
+        const json = await file.text();
+        return new Response(`export default ${json};`, {
+          headers: { "Content-Type": "application/javascript" },
+        });
+      }
+      return new Response(`JSON file not found: ${pathname}`, { status: 404 });
     }
 
     // Serve public assets (including models/)

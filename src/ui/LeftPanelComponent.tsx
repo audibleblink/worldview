@@ -6,6 +6,8 @@
 import { createSignal, createMemo, For, Show, onMount } from "solid-js";
 import { layers, toggleLayer, type LayerId } from "../stores/layers";
 import { getAllLayers } from "../layers/registry";
+import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/store";
+import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
 import poisData from "../data/pois.json";
 
 // Types for POI data
@@ -116,6 +118,21 @@ export function LeftPanel() {
     addLogEntry(`[${id.toUpperCase()}] Layer ${isEnabled ? "disabled" : "enabled"}`);
   }
 
+  /** Toggle a ground sub-layer */
+  function handleToggleSubLayer(subLayer: GroundSubLayer): void {
+    toggleSubLayer(subLayer);
+    const stateKey = `${subLayer}Enabled` as keyof typeof groundState;
+    const isEnabled = !groundState[stateKey]; // State will toggle
+    addLogEntry(`[GROUND] ${subLayer.toUpperCase()} ${isEnabled ? "OFF" : "ON"}`);
+  }
+
+  /** Cycle traffic style mode */
+  function handleCycleTrafficStyle(): void {
+    const nextStyle: StyleMode = groundState.trafficStyle === "heatmap" ? "terminal" : "heatmap";
+    setTrafficStyle(nextStyle);
+    addLogEntry(`[GROUND] Style: ${nextStyle.toUpperCase()}`);
+  }
+
   onMount(() => {
     console.log("[LeftPanel] Mounted");
   });
@@ -161,15 +178,52 @@ export function LeftPanel() {
       <div class="toggles panel-section">
         <For each={LAYER_CONFIGS}>
           {(config) => (
-            <div class="toggle-row">
-              <span>{config.name}</span>
-              <button
-                class={`toggle-btn ${layers[config.id] ? "on" : ""}`}
-                onClick={() => handleToggleLayer(config.id)}
-              >
-                {layers[config.id] ? "ON" : "OFF"}
-              </button>
-            </div>
+            <>
+              <div class="toggle-row">
+                <span>{config.name}</span>
+                <button
+                  class={`toggle-btn ${layers[config.id] ? "on" : ""}`}
+                  onClick={() => handleToggleLayer(config.id)}
+                >
+                  {layers[config.id] ? "ON" : "OFF"}
+                </button>
+              </div>
+              
+              {/* Ground sub-layer toggles */}
+              <Show when={config.id === "ground" && layers.ground}>
+                <div class="ground-options-row">
+                  <div class="sub-toggle-row">
+                    <button
+                      class={`toggle-btn sub-toggle ${groundState.trafficEnabled ? "on" : ""}`}
+                      onClick={() => handleToggleSubLayer("traffic")}
+                    >
+                      TRAFFIC
+                    </button>
+                    <button
+                      class={`toggle-btn style-toggle ${groundState.trafficEnabled ? "" : "disabled"}`}
+                      onClick={handleCycleTrafficStyle}
+                      disabled={!groundState.trafficEnabled}
+                    >
+                      {groundState.trafficStyle.toUpperCase()}
+                    </button>
+                  </div>
+                  <div class="sub-toggle-row">
+                    <button
+                      class={`toggle-btn sub-toggle ${groundState.cctvEnabled ? "on" : ""}`}
+                      onClick={() => handleToggleSubLayer("cctv")}
+                    >
+                      CCTV
+                    </button>
+                    <button
+                      class={`toggle-btn sub-toggle ${groundState.seismicEnabled ? "on" : ""}`}
+                      onClick={() => handleToggleSubLayer("seismic")}
+                    >
+                      SEISMIC
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </>
           )}
         </For>
 

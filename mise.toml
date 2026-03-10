@@ -14,10 +14,35 @@ depends = ["dev", "server"]
 description = "Production build"
 run = "bun run scripts/build.ts"
 
-[tasks.verify]
-description = "Run migration verification tests"
-run = "bun run scripts/verify-phase13.ts"
+[tasks.test]
+description = "Run unit tests"
+run = "bun test src/__tests__/satellites.test.ts src/__tests__/flights.test.ts src/__tests__/stores.test.ts"
+
+[tasks."test:all"]
+description = "Run all tests including integration (requires server)"
+run = "bun test"
+
+[tasks."test:integration"]
+description = "Run integration tests (requires server on port 3001)"
+run = "bun test src/__tests__/integration.test.ts"
+
+[tasks."test:watch"]
+description = "Run unit tests in watch mode"
+run = "bun test --watch src/__tests__/satellites.test.ts src/__tests__/flights.test.ts src/__tests__/stores.test.ts"
 
 [tasks.typecheck]
 description = "Run TypeScript type checking"
 run = "bunx tsc --noEmit"
+
+[tasks.verify]
+description = "Run full verification suite (typecheck + tests + build)"
+run = """
+echo "=== TypeScript Check ===" && bunx tsc --noEmit && \
+echo "\n=== Unit Tests ===" && bun test && \
+echo "\n=== Production Build ===" && bun run scripts/build.ts && \
+echo "\n=== All checks passed ==="
+"""
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "rm -rf dist node_modules/.cache"
