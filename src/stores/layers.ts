@@ -16,12 +16,12 @@ export interface LayerState {
 
 export type LayerId = keyof LayerState;
 
-// Initial state with all layers enabled by default
+// Initial state with all layers disabled by default
 const initialState: LayerState = {
-  satellites: true,
-  flights: true,
-  ships: true,
-  ground: true,
+  satellites: false,
+  flights: false,
+  ships: false,
+  ground: false,
 };
 
 // Create the store
