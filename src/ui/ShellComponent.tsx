@@ -11,6 +11,7 @@ import { RightPanel } from "./RightPanelComponent";
 import { BottomBar } from "./BottomBarComponent";
 import { PerformanceMonitor } from "./PerformanceMonitorComponent";
 import { CommandBar } from "./CommandBar";
+import { CCTVPanel } from "./panels/CCTVPanel";
 
 // View mode shortcuts (keyboard numbers 1-5)
 const MODE_SHORTCUTS: Record<string, ShaderMode | null> = {
@@ -245,6 +246,9 @@ export function Shell() {
 
       {/* Command Bar (vim-style, activated with : key) */}
       <CommandBar />
+
+      {/* CCTV Panel (shown when a camera is selected) */}
+      <CCTVPanel />
     </>
   );
 }

@@ -1765,3 +1765,66 @@ select option {
 .hidden {
   display: none !important;
 }
+
+/* ============================================
+   CCTV Panel
+   ============================================ */
+.cctv-panel {
+  position: fixed;
+  bottom: calc(var(--bottom-bar-height) + 12px);
+  right: 20px;
+  width: 420px;
+  background: var(--color-bg-panel);
+  border: 1px solid rgba(0, 255, 136, 0.5);
+  z-index: 200;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
+}
+
+.cctv-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+  background: rgba(0, 20, 10, 0.8);
+}
+
+.cctv-panel-title {
+  font-family: var(--font-mono);
+  color: #00ff88;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 340px;
+}
+
+.cctv-panel-close {
+  background: none;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  color: #00ff88;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.cctv-panel-close:hover {
+  background: rgba(0, 255, 136, 0.15);
+}
+
+.cctv-panel-content {
+  background: #000;
+  line-height: 0;
+}
+
+.cctv-video {
+  width: 100%;
+  display: block;
+  max-height: 280px;
+  background: #000;
+}

@@ -299,6 +299,40 @@ export function CCTVLayer() {
     });
   });
 
+  // Set up click handler for camera selection
+  createEffect(() => {
+    if (!ready()) return;
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
+
+    const handler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
+
+    handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const pickedObject = v.scene.pick(click.position);
+
+      if (Cesium.defined(pickedObject)) {
+        const billboard = pickedObject.id;
+        if (billboard && typeof billboard.id === "string" && billboard.id.startsWith("cctv-marker:")) {
+          const cameraId = billboard.id.replace("cctv-marker:", "");
+          console.log("[CCTVLayer] Selected camera:", cameraId);
+          setCenterStageCamera(cameraId);
+          return;
+        }
+      }
+
+      // Clicked empty space - close panel if open
+      if (groundState.centerStageCameraId) {
+        setCenterStageCamera(null);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    onCleanup(() => {
+      if (!handler.isDestroyed()) {
+        handler.destroy();
+      }
+    });
+  });
+
   // Cleanup
   onCleanup(() => {
     if (viewportDebounceTimer) {
