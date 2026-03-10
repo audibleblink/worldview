@@ -7,6 +7,13 @@
 
 import { render } from "solid-js/web";
 import { CesiumProvider } from "./cesium/CesiumProvider";
+import { LayerRenderer } from "./layers/LayerRenderer";
+
+// Import layer registrations - these must be imported to register layers
+import "./layers/satellites";
+import "./layers/flights";
+import "./layers/ships";
+import "./layers/ground";
 
 /**
  * App component - wrapped in CesiumProvider for Cesium access
@@ -15,6 +22,11 @@ import { CesiumProvider } from "./cesium/CesiumProvider";
  * - Creates the Cesium Viewer
  * - Loads Google 3D Tiles
  * - Provides context for useCesium, usePreRender, useCamera, etc.
+ *
+ * The LayerRenderer:
+ * - Reads the layers store for visibility
+ * - Renders enabled layer components
+ * - Handles mount/unmount when layers toggle
  */
 function App() {
   return (
@@ -24,8 +36,9 @@ function App() {
         maximumScreenSpaceError: 16,
       }}
     >
-      {/* Globe renders via CesiumProvider */}
-      {/* Future phases will add LayerRenderer, UI Shell, etc. here */}
+      {/* Layer components render to Cesium, not DOM */}
+      <LayerRenderer />
+      {/* Future phases will add UI Shell here */}
     </CesiumProvider>
   );
 }

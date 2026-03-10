@@ -168,27 +168,27 @@
 
 ### Tasks
 
-- [ ] Create `src/layers/registry.ts`
+- [x] Create `src/layers/registry.ts`
   - `LayerDefinition` type: `{ id, name, icon, component, store?, defaultEnabled }`
   - `registerLayer(def)` function: adds to internal map
   - `getLayer(id)`, `getAllLayers()`, `getEnabledLayers()` queries
   - Wire `defaultEnabled` into the layers store initial state
-- [ ] Create `src/layers/LayerRenderer.tsx`
+- [x] Create `src/layers/LayerRenderer.tsx`
   - SolidJS component that reads layers store
   - For each enabled layer, renders its `component`
   - Uses `<Show>` / `<For>` for conditional rendering
   - Handles mount/unmount cleanly (layer components `onCleanup`)
-- [ ] Create stub layer components for initial testing:
+- [x] Create stub layer components for initial testing:
   - `src/layers/satellites/SatelliteLayer.tsx` — empty component, logs mount/unmount
   - `src/layers/flights/FlightLayer.tsx` — empty component, logs mount/unmount
   - `src/layers/ships/ShipLayer.tsx` — empty component, logs mount/unmount
   - `src/layers/ground/GroundLayer.tsx` — empty component, logs mount/unmount
-- [ ] Create registration files for each layer:
+- [x] Create registration files for each layer:
   - `src/layers/satellites/index.ts` — calls `registerLayer()`
   - `src/layers/flights/index.ts`
   - `src/layers/ships/index.ts`
   - `src/layers/ground/index.ts`
-- [ ] Wire `<LayerRenderer>` into `App.tsx` inside `<CesiumProvider>`
+- [x] Wire `<LayerRenderer>` into `App.tsx` inside `<CesiumProvider>`
 
 ### Verification
 
