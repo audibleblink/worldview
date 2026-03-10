@@ -211,10 +211,10 @@
 
 ### Tasks
 
-- [ ] Create `src/layers/satellites/store.ts`
+- [x] Create `src/layers/satellites/store.ts`
   - Satellite-specific store: `{ records, hiddenCategories, followingNoradId, lastUpdated }`
   - Mutations: `setSatellites(records)`, `toggleCategory(cat)`, `followSatellite(id)`
-- [ ] Implement `src/layers/satellites/SatelliteLayer.tsx`
+- [x] Implement `src/layers/satellites/SatelliteLayer.tsx`
   - Port TLE fetch logic — **use `PROXY_BASE_URL` from config.ts** (Blocklist #6)
   - Port SGP4 propagation loop (use `usePreRender` for per-frame position updates)
   - **Use `createBillboardCollection`** — NOT Entity API (Blocklist #3)
@@ -224,8 +224,8 @@
   - **Use `useFollowMode` hook** — NOT copy-pasted preRender listener (Blocklist #5)
   - Port orbital path rendering
   - All listeners cleaned up via `onCleanup`
-- [ ] Wire satellite store data into the selection store when a satellite is selected
-- [ ] Verify proxy `/tle` endpoint still serves TLE data
+- [x] Wire satellite store data into the selection store when a satellite is selected
+- [x] Verify proxy `/tle` endpoint still serves TLE data
 
 ### Verification
 
@@ -252,10 +252,10 @@
 
 ### Tasks
 
-- [ ] Create `src/layers/flights/store.ts`
+- [x] Create `src/layers/flights/store.ts`
   - Flight-specific store: `{ flights, selectedIcao24, followingIcao24, lastUpdated }`
   - Mutations: `setFlights(records)`, `selectFlight(icao24)`, `followFlight(icao24)`
-- [ ] Implement `src/layers/flights/FlightLayer.tsx`
+- [x] Implement `src/layers/flights/FlightLayer.tsx`
   - Port OpenSky fetch + polling — **use `PROXY_BASE_URL` from config.ts** (Blocklist #6)
   - Port entity creation with 3D aircraft models — **use local `/models/aircraft.glb`** (Blocklist #4)
   - Entity API is acceptable here (MAX_VISIBLE_FLIGHTS = 50, 3D models need Entity)
@@ -266,8 +266,8 @@
   - Port selection → update selection store
   - **Use `useFollowMode` hook** — NOT copy-pasted preRender listener (Blocklist #5)
   - Cleanup all entities and listeners via `onCleanup`
-- [ ] Wire flight data into selection store
-- [ ] Verify proxy `/flights` and `/flight-route/:callsign` endpoints work
+- [x] Wire flight data into selection store
+- [x] Verify proxy `/flights` and `/flight-route/:callsign` endpoints work
 
 ### Verification
 
