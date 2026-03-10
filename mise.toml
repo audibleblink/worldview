@@ -1,11 +1,23 @@
 [tasks.dev]
-description = "Start dev server"
-run = "bun run dev"
+description = "Start frontend dev server (port 3000)"
+run = "bun run --hot src/server.ts"
 
-[tasks.proxy]
-description = "Start proxy server"
-run = "bun run proxy"
+[tasks.server]
+description = "Start backend API server (port 3001)"
+run = "bun run --hot src/server/index.ts"
 
 [tasks.start]
-description = "Start dev server and proxy together"
-depends = ["dev", "proxy"]
+description = "Start both dev and backend servers"
+depends = ["dev", "server"]
+
+[tasks.build]
+description = "Production build"
+run = "bun run scripts/build.ts"
+
+[tasks.verify]
+description = "Run migration verification tests"
+run = "bun run scripts/verify-phase13.ts"
+
+[tasks.typecheck]
+description = "Run TypeScript type checking"
+run = "bunx tsc --noEmit"
