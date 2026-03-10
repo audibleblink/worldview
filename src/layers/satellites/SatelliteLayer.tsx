@@ -436,6 +436,17 @@ export function SatelliteLayer() {
     const noradId = selectedNoradId();
     if (!noradId) return;
 
+    const record = getSatelliteByNoradId(noradId);
+    if (!record) return;
+
+    // Warm up position cache if not yet populated (e.g. selected via command bar before first update)
+    if (!satellitePositions.has(noradId)) {
+      const positions = propagateAll([record], new Date());
+      if (positions[0]) {
+        satellitePositions.set(noradId, positions[0].cartesian);
+      }
+    }
+
     followSatellite(noradId);
 
     track(

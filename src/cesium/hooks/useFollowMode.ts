@@ -26,6 +26,8 @@ export interface FollowOptions {
   range?: number;
   /** If true, target is at ground/sea level below the actual position */
   useGroundLevel?: boolean;
+  /** If false, skip the initial flyTo animation and activate follow immediately (default: true) */
+  flyToFirst?: boolean;
 }
 
 export interface UseFollowModeReturn {
@@ -146,8 +148,36 @@ export function useFollowMode(): UseFollowModeReturn {
     useGroundLevel = options.useGroundLevel ?? false;
     lastCamPos = null;
 
-    setIsFollowing(true);
-    console.log("[useFollowMode] Follow mode started");
+    const position = getPosition();
+    const v = viewer();
+
+    // Fly to target first (default on), then activate continuous follow in complete callback
+    if (position && v && !v.isDestroyed() && options.flyToFirst !== false) {
+      let target = position;
+      if (useGroundLevel) {
+        const cartographic = Cesium.Cartographic.fromCartesian(position);
+        target = Cesium.Cartesian3.fromRadians(
+          cartographic.longitude,
+          cartographic.latitude,
+          0
+        );
+      }
+
+      v.camera.flyToBoundingSphere(
+        new Cesium.BoundingSphere(target, currentRange),
+        {
+          offset: new Cesium.HeadingPitchRange(currentHeading, currentPitch, currentRange),
+          duration: 1.5,
+          complete: () => {
+            setIsFollowing(true);
+            console.log("[useFollowMode] Follow mode started (after flyTo)");
+          },
+        }
+      );
+    } else {
+      setIsFollowing(true);
+      console.log("[useFollowMode] Follow mode started");
+    }
   };
 
   /**
