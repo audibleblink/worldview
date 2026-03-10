@@ -127,20 +127,20 @@
 
 ### Tasks
 
-- [ ] Create `src/stores/layers.ts`
+- [x] Create `src/stores/layers.ts`
   - `createStore` with layer visibility map: `{ satellites: bool, flights: bool, ships: bool, ground: bool }`
   - `toggleLayer(id)`, `setLayerEnabled(id, bool)` mutations
-- [ ] Create `src/stores/selection.ts`
+- [x] Create `src/stores/selection.ts`
   - `createStore` with `{ type, id, data }` as per PRD
   - `selectEntity(type, id)`, `clearSelection()` mutations
   - Structured for future event-sourcing (mutations go through named functions)
-- [ ] Create `src/stores/camera.ts`
+- [x] Create `src/stores/camera.ts`
   - `createStore` with `{ mode, target, position }` (mode: 'free' | 'follow' | 'orbit')
   - `setFollowTarget(type, id)`, `setFreeCamera()` mutations
-- [ ] Create `src/stores/ui.ts`
+- [x] Create `src/stores/ui.ts`
   - `createStore` with `{ leftPanelOpen, rightPanelOpen, commandMode, currentCity }`
   - Toggle mutations
-- [ ] Create `src/stores/shaders.ts`
+- [x] Create `src/stores/shaders.ts`
   - `createStore` with `{ active, intensity, parameters }` as per PRD
   - `setShader(name)`, `setIntensity(n)` mutations
   - Port parameter mapping from `src/shaders/types.ts`
