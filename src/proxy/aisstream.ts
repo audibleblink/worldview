@@ -23,7 +23,15 @@ export interface ShipRecord {
   timestamp: number;      // Last update epoch (ms)
 }
 
-/** AISStream PositionReport message format */
+/** Ship dimension data from AIS */
+interface ShipDimension {
+  A: number; // Distance from GPS to bow
+  B: number; // Distance from GPS to stern
+  C: number; // Distance from GPS to port
+  D: number; // Distance from GPS to starboard
+}
+
+/** AISStream message format (supports multiple message types) */
 interface AISStreamMessage {
   MessageType: string;
   MetaData: {
@@ -39,7 +47,20 @@ interface AISStreamMessage {
       Sog: number;
       TrueHeading: number;
       NavigationalStatus: number;
-      ShipType?: number;
+    };
+    ShipStaticData?: {
+      Type: number;
+      Name: string;
+      CallSign: string;
+      ImoNumber: number;
+      Destination: string;
+      Dimension: ShipDimension;
+      MaximumStaticDraught: number;
+    };
+    StandardClassBPositionReport?: {
+      Cog: number;
+      Sog: number;
+      TrueHeading: number;
     };
   };
 }
@@ -154,13 +175,16 @@ export class AISStreamClient {
         this.reconnectAttempts = 0;
 
         // Send subscription message
+        // Subscribe to PositionReport for position/speed/heading,
+        // ShipStaticData for ship type/name/destination,
+        // and StandardClassBPositionReport for Class B transponders
         const subscription = {
           APIKey: this.apiKey,
           BoundingBoxes: [[[-90, -180], [90, 180]]],
-          FilterMessageTypes: ["PositionReport"],
+          FilterMessageTypes: ["PositionReport", "ShipStaticData", "StandardClassBPositionReport"],
         };
         this.ws!.send(JSON.stringify(subscription));
-        console.log("[AISStream] Subscription sent (global coverage)");
+        console.log("[AISStream] Subscription sent (global coverage, PositionReport + ShipStaticData + StandardClassBPositionReport)");
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
@@ -234,36 +258,117 @@ export class AISStreamClient {
   private handleMessage(data: string): void {
     try {
       const msg: AISStreamMessage = JSON.parse(data);
-
-      if (msg.MessageType !== "PositionReport") {
-        return;
-      }
-
       const { MetaData, Message } = msg;
-      const posReport = Message.PositionReport;
 
-      if (!posReport || !MetaData) {
-        return;
-      }
+      if (!MetaData) return;
 
       const mmsi = String(MetaData.MMSI);
-      const shipType = posReport.ShipType ?? 0;
 
-      const record: ShipRecord = {
-        mmsi,
-        name: MetaData.ShipName?.trim() || mmsi,
-        shipType,
-        shipTypeCategory: shipTypeToCategory(shipType),
-        latitude: MetaData.latitude,
-        longitude: MetaData.longitude,
-        cog: posReport.Cog ?? 0,
-        sog: posReport.Sog ?? 0,
-        trueHeading: posReport.TrueHeading ?? 511,
-        navStatus: posReport.NavigationalStatus ?? 15,
-        timestamp: Date.now(),
-      };
+      // Handle ShipStaticData - contains ship type, name, destination
+      if (msg.MessageType === "ShipStaticData" && Message.ShipStaticData) {
+        const staticData = Message.ShipStaticData;
+        const existing = this.shipBuffer.get(mmsi);
+        
+        if (existing) {
+          // Update existing record with static data
+          existing.shipType = staticData.Type;
+          existing.shipTypeCategory = shipTypeToCategory(staticData.Type);
+          if (staticData.Name?.trim()) {
+            existing.name = staticData.Name.trim();
+          }
+          existing.timestamp = Date.now();
+        } else {
+          // Create new record with static data (position will come from PositionReport)
+          // Use metadata position as fallback
+          const record: ShipRecord = {
+            mmsi,
+            name: staticData.Name?.trim() || MetaData.ShipName?.trim() || mmsi,
+            shipType: staticData.Type,
+            shipTypeCategory: shipTypeToCategory(staticData.Type),
+            latitude: MetaData.latitude || 0,
+            longitude: MetaData.longitude || 0,
+            cog: 0,
+            sog: 0,
+            trueHeading: 511,
+            navStatus: 15,
+            timestamp: Date.now(),
+          };
+          this.shipBuffer.set(mmsi, record);
+        }
+        return;
+      }
 
-      this.shipBuffer.set(mmsi, record);
+      // Handle PositionReport - contains position, speed, heading
+      if (msg.MessageType === "PositionReport" && Message.PositionReport) {
+        const posReport = Message.PositionReport;
+        const existing = this.shipBuffer.get(mmsi);
+
+        if (existing) {
+          // Update existing record with position data
+          existing.latitude = MetaData.latitude;
+          existing.longitude = MetaData.longitude;
+          existing.cog = posReport.Cog ?? existing.cog;
+          existing.sog = posReport.Sog ?? existing.sog;
+          existing.trueHeading = posReport.TrueHeading ?? existing.trueHeading;
+          existing.navStatus = posReport.NavigationalStatus ?? existing.navStatus;
+          existing.timestamp = Date.now();
+          // Update name from metadata if we don't have a good one
+          if (existing.name === mmsi && MetaData.ShipName?.trim()) {
+            existing.name = MetaData.ShipName.trim();
+          }
+        } else {
+          // Create new record - ship type will come from ShipStaticData later
+          const record: ShipRecord = {
+            mmsi,
+            name: MetaData.ShipName?.trim() || mmsi,
+            shipType: 0, // Will be updated when ShipStaticData arrives
+            shipTypeCategory: "other",
+            latitude: MetaData.latitude,
+            longitude: MetaData.longitude,
+            cog: posReport.Cog ?? 0,
+            sog: posReport.Sog ?? 0,
+            trueHeading: posReport.TrueHeading ?? 511,
+            navStatus: posReport.NavigationalStatus ?? 15,
+            timestamp: Date.now(),
+          };
+          this.shipBuffer.set(mmsi, record);
+        }
+        return;
+      }
+
+      // Handle StandardClassBPositionReport - similar to PositionReport but for Class B transponders
+      if (msg.MessageType === "StandardClassBPositionReport" && Message.StandardClassBPositionReport) {
+        const posReport = Message.StandardClassBPositionReport;
+        const existing = this.shipBuffer.get(mmsi);
+
+        if (existing) {
+          existing.latitude = MetaData.latitude;
+          existing.longitude = MetaData.longitude;
+          existing.cog = posReport.Cog ?? existing.cog;
+          existing.sog = posReport.Sog ?? existing.sog;
+          existing.trueHeading = posReport.TrueHeading ?? existing.trueHeading;
+          existing.timestamp = Date.now();
+          if (existing.name === mmsi && MetaData.ShipName?.trim()) {
+            existing.name = MetaData.ShipName.trim();
+          }
+        } else {
+          const record: ShipRecord = {
+            mmsi,
+            name: MetaData.ShipName?.trim() || mmsi,
+            shipType: 0,
+            shipTypeCategory: "other",
+            latitude: MetaData.latitude,
+            longitude: MetaData.longitude,
+            cog: posReport.Cog ?? 0,
+            sog: posReport.Sog ?? 0,
+            trueHeading: posReport.TrueHeading ?? 511,
+            navStatus: 0, // Class B doesn't have nav status
+            timestamp: Date.now(),
+          };
+          this.shipBuffer.set(mmsi, record);
+        }
+        return;
+      }
     } catch (error) {
       // Silently ignore parse errors - AISStream can send malformed messages occasionally
     }

@@ -585,6 +585,7 @@ export class CCTVManager {
           height: 24,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           id: CAMERA_MARKER_PREFIX + camera.id,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           show: this.markersVisible,

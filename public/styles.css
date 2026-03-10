@@ -1183,6 +1183,15 @@ select option {
   color: #3B82F6;
 }
 
+.ship-info-panel .ship-info-link {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ship-info-panel .ship-info-link:hover {
+  text-decoration: underline;
+}
+
 .ship-info-panel .sat-info-follow-btn {
   border-color: #3B82F6;
   color: #3B82F6;

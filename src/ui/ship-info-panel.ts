@@ -65,7 +65,7 @@ function getOrCreatePanel(): HTMLElement {
     <div class="sat-info-body">
       <div class="sat-info-row">
         <span class="sat-info-label">MMSI</span>
-        <span class="sat-info-value" id="ship-info-mmsi">—</span>
+        <a class="sat-info-value ship-info-link" id="ship-info-mmsi" href="#" target="_blank" rel="noopener">—</a>
       </div>
       <div class="sat-info-row">
         <span class="sat-info-label">TYPE</span>
@@ -138,8 +138,12 @@ export function showShipInfoPanel(
   const vesselName = record.name || record.mmsi;
   setField("ship-info-name", vesselName);
 
-  // Populate fields
-  setField("ship-info-mmsi", record.mmsi);
+  // Populate MMSI with link to myshiptracking.com
+  const mmsiLink = document.getElementById("ship-info-mmsi") as HTMLAnchorElement | null;
+  if (mmsiLink) {
+    mmsiLink.textContent = record.mmsi;
+    mmsiLink.href = `https://myshiptracking.com/da/?mmsi=${record.mmsi}`;
+  }
   setField("ship-info-type", shipTypeToDisplayText(record.shipTypeCategory));
   setField("ship-info-position", formatPosition(record.latitude, record.longitude));
   setField("ship-info-speed", `${record.sog.toFixed(1)} kn`);

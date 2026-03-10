@@ -269,6 +269,9 @@ export async function fetchShips(bbox?: BBox): Promise<ShipsApiResponse> {
   };
 }
 
+// Debounce delay for camera movement (ms)
+const CAMERA_MOVE_DEBOUNCE_MS = 1500;
+
 export class ShipLayer {
   private viewer: Cesium.Viewer;
   private entityMap: Map<string, Cesium.Entity> = new Map();
@@ -286,6 +289,9 @@ export class ShipLayer {
   private isRateLimited: boolean = false;
   private rateLimitRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
   private lastConnected: boolean = true;
+  private cameraMoveRemove: (() => void) | null = null;
+  private cameraMoveDebounce: ReturnType<typeof setTimeout> | null = null;
+  private lastBbox: BBox | null = null;
 
   constructor(
     viewer: Cesium.Viewer, 
@@ -386,6 +392,49 @@ export class ShipLayer {
   }
 
   /**
+   * Check if the bounding box has changed significantly (viewport moved)
+   */
+  private hasBboxChangedSignificantly(newBbox: BBox): boolean {
+    if (!this.lastBbox) return true;
+
+    // Calculate the center of each bbox
+    const lastCenterLat = (this.lastBbox.north + this.lastBbox.south) / 2;
+    const lastCenterLon = (this.lastBbox.east + this.lastBbox.west) / 2;
+    const newCenterLat = (newBbox.north + newBbox.south) / 2;
+    const newCenterLon = (newBbox.east + newBbox.west) / 2;
+
+    // Check if center moved by more than 25% of the viewport size
+    const lastHeight = this.lastBbox.north - this.lastBbox.south;
+    const lastWidth = this.lastBbox.east - this.lastBbox.west;
+    const threshold = Math.min(lastHeight, lastWidth) * 0.25;
+
+    const latDiff = Math.abs(newCenterLat - lastCenterLat);
+    const lonDiff = Math.abs(newCenterLon - lastCenterLon);
+
+    return latDiff > threshold || lonDiff > threshold;
+  }
+
+  /**
+   * Handle camera movement - debounce and refresh ships for new viewport
+   */
+  private onCameraMove(): void {
+    // Clear any pending debounce
+    if (this.cameraMoveDebounce) {
+      clearTimeout(this.cameraMoveDebounce);
+    }
+
+    this.cameraMoveDebounce = setTimeout(() => {
+      const newBbox = this.getBoundingBox();
+      
+      // Only refresh if viewport changed significantly
+      if (this.hasBboxChangedSignificantly(newBbox)) {
+        logInfo("SHIPS", "Viewport changed - refreshing ships");
+        this.refreshShips();
+      }
+    }, CAMERA_MOVE_DEBOUNCE_MS);
+  }
+
+  /**
    * Show the ship layer - fetch data and render billboard entities
    */
   async show(): Promise<void> {
@@ -432,6 +481,15 @@ export class ShipLayer {
     });
     this.interpTickRemove = () => interpListener();
 
+    // Register camera movement listener for viewport-based updates
+    const cameraMoveListener = this.viewer.camera.moveEnd.addEventListener(() => {
+      this.onCameraMove();
+    });
+    this.cameraMoveRemove = () => cameraMoveListener();
+
+    // Store initial bbox
+    this.lastBbox = bbox;
+
     // Notify count
     this.onCountUpdate?.(this.entityMap.size);
   }
@@ -464,6 +522,18 @@ export class ShipLayer {
       this.interpTickRemove = null;
     }
 
+    // Remove camera movement listener
+    if (this.cameraMoveRemove) {
+      this.cameraMoveRemove();
+      this.cameraMoveRemove = null;
+    }
+
+    // Clear camera move debounce
+    if (this.cameraMoveDebounce) {
+      clearTimeout(this.cameraMoveDebounce);
+      this.cameraMoveDebounce = null;
+    }
+
     // Remove all entities from viewer
     for (const entity of this.entityMap.values()) {
       this.viewer.entities.remove(entity);
@@ -474,6 +544,7 @@ export class ShipLayer {
     this.recordMap.clear();
     this.interpolatedPositions.clear();
     this.selectedMmsi = null;
+    this.lastBbox = null;
 
     // Notify count cleared
     this.onCountUpdate?.(null);
@@ -561,6 +632,9 @@ export class ShipLayer {
           this.interpolatedPositions.delete(mmsi);
         }
       }
+
+      // Store bbox for change detection
+      this.lastBbox = bbox;
 
       // Notify count
       this.onCountUpdate?.(this.entityMap.size);
