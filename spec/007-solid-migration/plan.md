@@ -63,47 +63,47 @@
 
 ### Tasks
 
-- [ ] Create `src/cesium/CesiumProvider.tsx`
+- [x] Create `src/cesium/CesiumProvider.tsx`
   - SolidJS context provider
   - Creates `Cesium.Viewer` in `onMount`, destroys in `onCleanup`
   - Accepts viewer options as props
   - Loads Google 3D Tiles (port logic from `src/globe.ts`)
-- [ ] Create `src/cesium/useCesium.ts`
+- [x] Create `src/cesium/useCesium.ts`
   - Hook returning viewer instance from context
   - Throws if used outside provider
-- [ ] Create `src/cesium/hooks/usePreRender.ts`
+- [x] Create `src/cesium/hooks/usePreRender.ts`
   - Subscribes to `scene.preRender` event
   - Auto-unsubscribes via `onCleanup`
-- [ ] Create `src/cesium/hooks/useCamera.ts`
+- [x] Create `src/cesium/hooks/useCamera.ts`
   - Reactive camera state (position, heading, pitch, roll)
   - `flyTo`, `lookAt`, `unlock` methods (port from `src/camera.ts`)
-- [ ] Create `src/cesium/hooks/useSelection.ts`
+- [x] Create `src/cesium/hooks/useSelection.ts`
   - Subscribes to `viewer.selectedEntityChanged`
   - Auto-unsubscribes via `onCleanup`
-- [ ] Create `src/cesium/createEntity.ts`
+- [x] Create `src/cesium/createEntity.ts`
   - Reactive entity binding: accepts accessor returning entity options
   - Creates entity on viewer, updates reactively via `createEffect`
   - **Position updates MUST mutate existing properties** via `property.setValue()`, never allocate new `ConstantPositionProperty` (Blocklist #1)
   - Returns entity reference, destroys on `onCleanup`
-- [ ] Create `src/cesium/createBillboardCollection.ts`
+- [x] Create `src/cesium/createBillboardCollection.ts`
   - Reactive `BillboardCollection` binding for high-count layers (100+ items)
   - Manages collection lifecycle, billboard add/remove
   - Single draw call regardless of billboard count
   - **This is the required API for satellites and ships** (Blocklist #3)
-- [ ] Create `src/cesium/createPointCollection.ts`
+- [x] Create `src/cesium/createPointCollection.ts`
   - Reactive `PointPrimitiveCollection` binding for traffic particles
   - Batched updates, LOD support
-- [ ] Create `src/cesium/createPrimitive.ts`
+- [x] Create `src/cesium/createPrimitive.ts`
   - Reactive primitive binding
   - Add/remove from `scene.primitives`
-- [ ] Create `src/cesium/hooks/useFollowMode.ts`
+- [x] Create `src/cesium/hooks/useFollowMode.ts`
   - **Single shared implementation** of camera follow mode (Blocklist #5)
   - `track(position, options)` — starts following with heading/pitch/range
   - `stop()` — returns to free camera
   - Uses single preRender listener, user-orbit detection, proper cleanup
   - Replaces the 3 copy-pasted implementations from old code
-- [ ] Update `src/index.tsx` to wrap app in `<CesiumProvider>` and render globe
-- [ ] Port Cesium viewer configuration from `src/globe.ts` into provider options
+- [x] Update `src/index.tsx` to wrap app in `<CesiumProvider>` and render globe
+- [x] Port Cesium viewer configuration from `src/globe.ts` into provider options
 
 ### Verification
 

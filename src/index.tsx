@@ -1,29 +1,32 @@
 /**
  * WorldView - SolidJS Entry Point
- * 
- * Minimal entry point to verify SolidJS is working.
- * This will be expanded in Phase 1+ to include CesiumProvider and full app.
+ *
+ * Main entry point wrapping the app in CesiumProvider.
+ * The globe renders via the provider, with all Cesium hooks available to children.
  */
 
 import { render } from "solid-js/web";
+import { CesiumProvider } from "./cesium/CesiumProvider";
 
 /**
- * Minimal App component to verify SolidJS rendering
+ * App component - wrapped in CesiumProvider for Cesium access
+ *
+ * The CesiumProvider:
+ * - Creates the Cesium Viewer
+ * - Loads Google 3D Tiles
+ * - Provides context for useCesium, usePreRender, useCamera, etc.
  */
 function App() {
   return (
-    <div style={{ 
-      display: "flex", 
-      "justify-content": "center", 
-      "align-items": "center",
-      height: "100vh",
-      "font-family": "monospace",
-      "font-size": "2rem",
-      color: "#00ff00",
-      "background-color": "#0a0a0a",
-    }}>
-      <h1>WorldView</h1>
-    </div>
+    <CesiumProvider
+      options={{
+        msaaSamples: 4,
+        maximumScreenSpaceError: 16,
+      }}
+    >
+      {/* Globe renders via CesiumProvider */}
+      {/* Future phases will add LayerRenderer, UI Shell, etc. here */}
+    </CesiumProvider>
   );
 }
 
