@@ -32,7 +32,7 @@ export interface GroundState {
 
 const initialState: GroundState = {
   trafficEnabled: false,
-  cctvEnabled: false,
+  cctvEnabled: true,
   seismicEnabled: false,
   trafficStyle: "heatmap",
   cctvCameras: [],
