@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { CCTVProxyManager } from "../src/proxy/cctv";
+import { CCTVProxyManager } from "../src/server/routes/cctv";
 
 const rawData: any[] = await Bun.file("./src/data/511ny.json").json();
 

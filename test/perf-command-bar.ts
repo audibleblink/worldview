@@ -1,22 +1,19 @@
 /**
- * Performance test for Command Bar
+ * Performance test for Command Bar utilities
  * Run with: bun run test/perf-command-bar.ts
  * 
  * This is a simple benchmark - not a unit test.
- * Tests that command bar operations complete within acceptable time.
+ * Tests that geocoding operations complete within acceptable time.
  */
 
 // Performance thresholds (in ms)
 const THRESHOLDS = {
-  showHide: 50,      // Command bar show/hide should be <50ms
-  parseCommand: 1,   // Command parsing should be <1ms
   lookupAirport: 1,  // Airport lookup should be <1ms
   parseCoords: 1,    // Coordinate parsing should be <1ms
 };
 
 // Import test functions
-import { parseCommand } from "../src/ui/command-parser";
-import { lookupAirport, parseCoordinates } from "../src/geocoder";
+import { lookupAirport, parseCoordinates } from "../src/utils/geocoder";
 
 function measure(name: string, fn: () => void, iterations = 1000): number {
   const start = performance.now();
@@ -28,22 +25,7 @@ function measure(name: string, fn: () => void, iterations = 1000): number {
   return perOp;
 }
 
-console.log("Command Bar Performance Test\n" + "=".repeat(40) + "\n");
-
-// Test parseCommand performance
-const parseCommandTime = measure("parseCommand", () => {
-  parseCommand("goto San Francisco");
-  parseCommand("home");
-  parseCommand("help");
-  parseCommand("invalid");
-});
-
-console.log(`parseCommand: ${parseCommandTime.toFixed(3)}ms per operation`);
-if (parseCommandTime > THRESHOLDS.parseCommand) {
-  console.log(`  WARNING: Exceeds threshold of ${THRESHOLDS.parseCommand}ms`);
-} else {
-  console.log(`  PASS: Within threshold of ${THRESHOLDS.parseCommand}ms`);
-}
+console.log("Geocoder Performance Test\n" + "=".repeat(40) + "\n");
 
 // Test lookupAirport performance
 const airportTime = measure("lookupAirport", () => {
@@ -53,7 +35,7 @@ const airportTime = measure("lookupAirport", () => {
   lookupAirport("XXX");
 });
 
-console.log(`\nlookupAirport: ${airportTime.toFixed(3)}ms per operation`);
+console.log(`lookupAirport: ${airportTime.toFixed(3)}ms per operation`);
 if (airportTime > THRESHOLDS.lookupAirport) {
   console.log(`  WARNING: Exceeds threshold of ${THRESHOLDS.lookupAirport}ms`);
 } else {
@@ -78,7 +60,6 @@ if (coordsTime > THRESHOLDS.parseCoords) {
 // Summary
 console.log("\n" + "=".repeat(40));
 const allPass = 
-  parseCommandTime <= THRESHOLDS.parseCommand &&
   airportTime <= THRESHOLDS.lookupAirport &&
   coordsTime <= THRESHOLDS.parseCoords;
 

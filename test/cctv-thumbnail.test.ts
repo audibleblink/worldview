@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeAll, mock } from "bun:test";
-import { CCTVProxyManager, type CCTVCamera } from "../src/proxy/cctv";
+import { CCTVProxyManager, type CCTVCamera } from "../src/server/routes/cctv";
 import { unlink } from "node:fs/promises";
 
 // Shared manager instance for tests that just read camera data

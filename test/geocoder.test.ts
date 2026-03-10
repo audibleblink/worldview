@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { parseCoordinates, lookupAirport, geocode, getAltitudeForType } from "../src/geocoder";
+import { parseCoordinates, lookupAirport, geocode, getAltitudeForType } from "../src/utils/geocoder";
 
 // Test parseCoordinates
 test("parseCoordinates - decimal with comma", () => {

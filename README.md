@@ -6,18 +6,16 @@ Photorealistic 3D globe. Live satellite tracking. Military and commercial flight
 
 > Inspired by [Bilawal Sidhu's WorldView project](https://www.spatialintelligence.ai/p/i-built-a-spy-satellite-simulator).
 
-Basically just told Claude to look at `./spec/init.txt` while enabling playright and yt-dlp. The said "make it"
-
-
 ---
 
 ## Stack
 
 - **Runtime:** Bun
+- **Framework:** SolidJS (fine-grained reactivity)
 - **3D Renderer:** CesiumJS + Google Photorealistic 3D Tiles
 - **Language:** TypeScript
 - **Styling:** Vanilla CSS
-- **Proxy:** Bun HTTP server (keeps Google API key server-side)
+- **Backend:** Bun.serve with caching and route maps
 
 ---
 
@@ -26,6 +24,7 @@ Basically just told Claude to look at `./spec/init.txt` while enabling playright
 ### 1. Prerequisites
 
 - [Bun](https://bun.sh) installed (`curl -fsSL https://bun.sh/install | bash`)
+- [mise](https://mise.jdx.dev/) (optional, for task running)
 - A Google Maps Tile API key (see below)
 
 ### 2. Google Maps Tile API Key
@@ -35,31 +34,45 @@ Basically just told Claude to look at `./spec/init.txt` while enabling playright
 3. Enable the **Map Tiles API**
 4. Go to **Credentials** → **Create API Key**
 5. Restrict the key to the Map Tiles API
-6. Add to `.env` at the project root:
+6. Copy `.env.example` to `.env` and add your key:
 
+```bash
+cp .env.example .env
+# Edit .env and add your GOOGLE_MAPS_TILE_API_KEY
 ```
-GOOGLE_MAPS_TILE_API_KEY=your_key_here
-```
-
-`.env` is already in `.gitignore` — do not commit it.
 
 ### 3. Install & Run
 
 ```bash
 bun install
-bun run dev
-```
 
-This starts:
-- Frontend dev server on `http://localhost:3000`
-- Tile proxy server on `http://localhost:3001`
+# Start both servers (using mise)
+mise run start
+
+# Or start them separately:
+mise run server   # Backend API (port 3001)
+mise run dev      # Frontend dev server (port 3000)
+
+# Or using bun directly:
+bun run server    # Backend API (port 3001)
+bun run dev       # Frontend dev server (port 3000)
+```
 
 Open `http://localhost:3000` in Chrome or Firefox.
 
-### 4. Build
+### 4. Build for Production
 
 ```bash
 bun run build
+```
+
+Output goes to `dist/`.
+
+### 5. Other Commands
+
+```bash
+bun run typecheck   # Run TypeScript type checking
+bun run verify      # Run migration verification tests
 ```
 
 ---
@@ -74,6 +87,24 @@ bun run build
 | `Q W E R T` | Jump to POIs 1–5 of the current city |
 | PREV / NEXT buttons | Cycle POIs within current city |
 | City tabs (bottom) | Quick-jump to any of the 8 cities |
+| `1 2 3 4 5` | Switch shader modes (Normal, CRT, NVG, FLIR, AH64) |
+| `F` | Toggle FPS counter |
+| `[` `]` | Toggle left/right panels |
+| `:` | Open command bar (vim-style) |
+| `Escape` | Close panels, stop follow mode |
+
+### Command Bar
+
+Press `:` to open, then type:
+
+| Command | Action |
+|---|---|
+| `:goto NYC` | Fly to New York City |
+| `:goto 40.7,-74.0` | Fly to coordinates |
+| `:follow ISS` | Follow the ISS satellite |
+| `:follow UAL123` | Follow a flight by callsign |
+| `:home` | Return to default view |
+| `:help` | Show available commands |
 
 ### Cities & POIs
 
@@ -93,35 +124,79 @@ bun run build
 ## Project Structure
 
 ```
-tbd
+src/
+├── index.tsx                 # Entry point
+├── App.tsx                   # Root component
+├── config.ts                 # Shared constants (PROXY_BASE_URL, etc.)
+├── cesium/                   # Cesium bindings
+│   ├── CesiumProvider.tsx    # Context provider, viewer lifecycle
+│   ├── useCesium.ts          # Hook to access viewer
+│   ├── createEntity.ts       # Reactive entity binding
+│   ├── createBillboardCollection.ts  # For high-count layers
+│   ├── createPointCollection.ts      # For traffic particles
+│   └── hooks/
+│       ├── usePreRender.ts   # preRender subscription
+│       ├── useCamera.ts      # Camera state/controls
+│       ├── useSelection.ts   # Entity selection
+│       └── useFollowMode.ts  # Shared camera-follow utility
+├── stores/
+│   ├── layers.ts             # Layer visibility
+│   ├── selection.ts          # Selected entity
+│   ├── camera.ts             # Camera mode, target
+│   ├── ui.ts                 # Panel visibility, command mode
+│   └── shaders.ts            # Active post-processing effects
+├── layers/
+│   ├── registry.ts           # Layer registration system
+│   ├── LayerRenderer.tsx     # Renders enabled layers
+│   ├── satellites/           # Satellite tracking (TLE/SGP4)
+│   ├── flights/              # Aircraft tracking (OpenSky)
+│   ├── ships/                # Ship tracking (AIS)
+│   └── ground/               # Traffic, CCTV, earthquakes
+├── ui/
+│   ├── Shell.tsx             # Main layout
+│   ├── LeftPanel.tsx         # Layer controls, POIs
+│   ├── RightPanel.tsx        # Shader controls, readouts
+│   ├── BottomBar.tsx         # Mode switcher, city tabs
+│   ├── CommandBar.tsx        # Vim-style input
+│   └── panels/               # Entity info panels
+├── shaders/
+│   ├── ShaderSystem.tsx      # Reactive shader management
+│   ├── crt.ts, nvg.ts, flir.ts, ah64.ts  # GLSL shaders
+│   └── types.ts              # Shader types
+└── server/
+    ├── index.ts              # Bun.serve entry with route map
+    ├── cache.ts              # TTL cache + request coalescing
+    ├── middleware.ts         # Error boundary, logging, CORS
+    └── routes/               # API route handlers
 ```
-
----
-
-## Roadmap
-
-| Milestone | Description | Status |
-|---|---|---|
-| 1 — Globe Foundation | 3D globe, camera nav, POI fly-to, UI shell | In planning |
-| 2 — Shader Pipeline | CRT, NVG, FLIR, cel-shading post-processing | Planned |
-| 3 — Satellite Layer | CelesTrak TLE, orbital rendering, click-to-track | Planned |
-| 4 — Flight Layer | OpenSky commercial + ADS-B military flights | Planned |
-| 5 — Ground Layer | OSM traffic particles, CCTV feed projection | Planned |
-| 6 — Timeline Playback | OSINT snapshot recording + replay system | Planned |
 
 ---
 
 ## Data Sources
 
-| Feed | Source | Used In |
+| Feed | Source | Layer |
 |---|---|---|
-| Photorealistic 3D Tiles | Google Maps Tile API | Milestone 1+ |
-| Satellite orbits | CelesTrak TLE | Milestone 3 |
-| Commercial flights | OpenSky Network | Milestone 4 |
-| Military flights | ADS-B Exchange | Milestone 4 |
-| Street network | OpenStreetMap Overpass API | Milestone 5 |
-| CCTV cameras | Austin public traffic cams | Milestone 5 |
-| Seismic activity | USGS Earthquake API | Milestone 5 |
+| Photorealistic 3D Tiles | Google Maps Tile API | Globe |
+| Satellite orbits | CelesTrak TLE | Satellites |
+| Commercial flights | OpenSky Network | Flights |
+| Ship tracking | AISStream | Ships |
+| Street network | OpenStreetMap Overpass | Traffic |
+| CCTV cameras | Austin/Caltrans/NY511 | Ground |
+| Seismic activity | USGS Earthquake API | Ground |
+
+---
+
+## Environment Variables
+
+See `.env.example` for all options:
+
+| Variable | Required | Description |
+|---|---|---|
+| `GOOGLE_MAPS_TILE_API_KEY` | Yes | Google Maps API key for 3D tiles |
+| `AISSTREAM_API_KEY` | No | AISStream API key for ship tracking |
+| `PROXY_BASE_URL` | No | Backend URL (default: `http://localhost:3001`) |
+| `DEV_SERVER_PORT` | No | Frontend port (default: `3000`) |
+| `PROXY_SERVER_PORT` | No | Backend port (default: `3001`) |
 
 ---
 
@@ -129,5 +204,6 @@ tbd
 
 - [Bilawal Sidhu — I Built a Spy Satellite Simulator](https://www.spatialintelligence.ai/p/i-built-a-spy-satellite-simulator)
 - [YouTube walkthrough — original build](https://www.youtube.com/watch?v=rXvU7bPJ8n4)
-- [YouTube — Operation Epic Fury reconstruction](https://www.youtube.com/watch?v=0p8o7AeHDzg)
 - [Google Maps Tile API docs](https://developers.google.com/maps/documentation/tile)
+- [SolidJS documentation](https://www.solidjs.com/docs/latest)
+- [CesiumJS documentation](https://cesium.com/learn/cesiumjs/ref-doc/)
