@@ -506,39 +506,39 @@
 
 ### Tasks
 
-- [ ] Create `src/server/cache.ts`
+- [x] Create `src/server/cache.ts`
   - `TTLCache<K, V>` class with configurable TTL and optional LRU eviction
   - `coalesce<T>(key, fetcher)` — if a fetch is in-flight for `key`, return the same promise
   - Used by TLE (5min), OpenSky (10s), Geocode (LRU)
   - **This eliminates upstream rate-limit exhaustion** (Blocklist #8)
-- [ ] Create `src/server/middleware.ts`
+- [x] Create `src/server/middleware.ts`
   - `withErrorBoundary(handler)` — catches all errors, returns consistent error response
   - `withCORS(handler)` — adds CORS headers
   - `withLogging(handler)` — request/response logging
-- [ ] Create `src/server/types.ts`
+- [x] Create `src/server/types.ts`
   - Extend existing response helpers: add `errorResponse(message, status)`, `imageResponse(data, type)`, `textResponse(text)`
   - Standardize error shape: always `{ error: string, status: number }`
-- [ ] Refactor `src/server/index.ts`
+- [x] Refactor `src/server/index.ts`
   - **Use Bun.serve `routes` object** — NOT if/else chain (Blocklist #7)
   - Move Google Tiles to explicit `/tiles/:z/:x/:y` — no catch-all
   - Apply middleware to all handlers
-- [ ] Refactor `src/server/routes/tle.ts`
+- [x] Refactor `src/server/routes/tle.ts`
   - Add 5-minute TTL cache per group
   - Add request coalescing for concurrent identical fetches
-- [ ] Refactor `src/server/routes/flights.ts`
+- [x] Refactor `src/server/routes/flights.ts`
   - Add 10-second TTL cache for OpenSky `/states/all`
   - **Transform data server-side**: strip unused fields, filter ground-only aircraft
   - Add LRU eviction to metadata cache (was unbounded)
-- [ ] Refactor `src/server/routes/geocode.ts`
+- [x] Refactor `src/server/routes/geocode.ts`
   - Add LRU cache (max 1000 entries)
   - Standardize error response shape to match other endpoints
-- [ ] Refactor `src/server/routes/cctv.ts`
+- [x] Refactor `src/server/routes/cctv.ts`
   - Use `imageResponse()` helper instead of manual Response construction
   - Remove `as unknown as BlobPart` casts (Blocklist #11)
-- [ ] Refactor `src/server/websocket/ships.ts` (AISStream)
+- [x] Refactor `src/server/websocket/ships.ts` (AISStream)
   - Add heartbeat monitoring: if no message in 30s, force reconnect
   - Add parse-error counter instead of silent catch
-- [ ] Verify all CCTV responses use `corsResponse()` helper (5 instances currently bypass it)
+- [x] Verify all CCTV responses use `corsResponse()` helper (5 instances currently bypass it)
 
 ### Verification
 
