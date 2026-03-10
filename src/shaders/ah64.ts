@@ -360,7 +360,7 @@ function createCompositeShader(flirShader: string, _reticleOpacity: number): str
 
   // Extract FLIR main body
   const flirMainMatch = flirShader.match(/void main\(\)\s*\{([\s\S]*)\}/);
-  const flirMainBody = flirMainMatch ? flirMainMatch[1] : "";
+  const flirMainBody: string = flirMainMatch?.[1] ?? "";
 
   // Build composite shader
   return `

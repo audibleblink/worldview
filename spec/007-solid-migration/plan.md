@@ -468,16 +468,16 @@
 
 ### Tasks
 
-- [ ] Create `src/shaders/index.ts`
+- [x] Create `src/shaders/index.ts`
   - Shader registry: maps shader names to their `PostProcessStage` configurations
   - Port `ShaderManager` crossfade logic as a reactive effect
-- [ ] Port shader GLSL files:
+- [x] Port shader GLSL files:
   - `src/shaders/crt.ts` — CRT effect (scanlines, chromatic aberration, barrel distortion)
   - `src/shaders/nvg.ts` — Night vision goggles
   - `src/shaders/flir.ts` — Forward-looking infrared
   - `src/shaders/ah64.ts` — Apache HUD overlay
   - `src/shaders/normal.ts` — Pass-through (shader off)
-- [ ] Create reactive shader effect:
+- [x] Create reactive shader effect:
   - `createEffect` watches `shaderState.active`
   - On change: remove old `PostProcessStage`, add new one with crossfade
   - **Parameter changes MUST modify uniform values on existing stage** — never recreate stage (Blocklist #9)

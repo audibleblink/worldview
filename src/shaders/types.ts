@@ -32,6 +32,9 @@ export interface ShaderConfig {
 /**
  * Create a ShaderConfig from a fragment shader and parameters.
  * Automatically generates uniform getters from the parameters object.
+ *
+ * The uniform getters close over the parameters object by reference,
+ * so updating the object will update the uniforms (Blocklist #9 compliant).
  */
 export function createShaderConfig<T extends Record<string, number>>(
   fragmentShader: string,
@@ -40,12 +43,39 @@ export function createShaderConfig<T extends Record<string, number>>(
 ): ShaderConfig {
   const merged = { ...defaults, ...params };
   const uniforms: Record<string, () => number> = {};
-  
+
   for (const key in merged) {
+    // Closure reads from merged object at call time, not capture time
+    // This allows external updates to the merged object to be reflected
     uniforms[key] = () => merged[key];
   }
-  
+
   return { fragmentShader, uniforms, parameters: merged };
+}
+
+/**
+ * Create a ShaderConfig with a mutable parameters object.
+ * This variant stores the parameters object by reference so that
+ * external code can mutate it and uniform reads will reflect changes.
+ *
+ * This is the preferred approach for reactive shader systems where
+ * parameters are updated frequently (Blocklist #9: never recreate stage).
+ */
+export function createMutableShaderConfig<T extends Record<string, number>>(
+  fragmentShader: string,
+  defaults: T,
+  params: T
+): ShaderConfig {
+  // params is passed by reference - mutations will be visible to uniform getters
+  const uniforms: Record<string, () => number> = {};
+
+  for (const key in defaults) {
+    const defaultValue = defaults[key] ?? 0;
+    // Read from params at call time - allows runtime mutation
+    uniforms[key] = () => params[key] ?? defaultValue;
+  }
+
+  return { fragmentShader, uniforms, parameters: params };
 }
 
 /**

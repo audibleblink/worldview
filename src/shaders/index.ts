@@ -17,11 +17,14 @@ import { createAH64Config, AH64_DEFAULTS, setAH64Viewer } from "./ah64.ts";
 
 // Re-export types
 export type { ViewMode, ShaderConfig, ShaderManagerInterface, ParameterMapping } from "./types.ts";
-export { PARAMETER_MAPPINGS } from "./types.ts";
+export { PARAMETER_MAPPINGS, createMutableShaderConfig } from "./types.ts";
 export { CRT_DEFAULTS, createCRTConfig } from "./crt.ts";
 export { NVG_DEFAULTS, createNVGConfig } from "./nvg.ts";
 export { FLIR_DEFAULTS, createFLIRConfig } from "./flir.ts";
 export { AH64_DEFAULTS, createAH64Config } from "./ah64.ts";
+
+// Re-export reactive SolidJS shader system
+export { useShaderSystem, ShaderSystem } from "./ShaderSystem";
 
 type Viewer = import("cesium").Viewer;
 type PostProcessStage = import("cesium").PostProcessStage;
