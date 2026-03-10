@@ -88,26 +88,27 @@ if (existsSync(modelsSource)) {
   console.warn("  WARNING: Models not found at", modelsSource);
 }
 
-// Build proxy server (separate bundle)
-console.log("Bundling proxy server...");
-const proxyResult = await Bun.build({
-  entrypoints: [join(ROOT, "src/proxy.ts")],
+// Build server (separate bundle) - now located at src/server/index.ts
+console.log("Bundling server...");
+const serverResult = await Bun.build({
+  entrypoints: [join(ROOT, "src/server/index.ts")],
   outdir: DIST,
   target: "bun",
   format: "esm",
   minify: false,
   naming: {
-    entry: "proxy.js",
+    entry: "server.js",
   },
 });
 
-if (proxyResult.success) {
-  console.log("  Created: proxy.js");
+if (serverResult.success) {
+  console.log("  Created: server.js");
 } else {
-  console.warn("  WARNING: Proxy build failed");
+  console.warn("  WARNING: Server build failed");
+  serverResult.logs.forEach((log) => console.warn(log));
 }
 
 console.log("\nBuild complete! Output in ./dist/");
 console.log("\nTo run production:");
 console.log("  1. Serve ./dist/ with any static file server");
-console.log("  2. Run: bun ./dist/proxy.js");
+console.log("  2. Run: bun ./dist/server.js");

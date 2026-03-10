@@ -6,11 +6,42 @@
 declare const Cesium: typeof import("cesium");
 
 // Re-export types from the existing ground modules
-export type { Camera, BBox, CCTVBillboard, CCTVManagerConfig } from "../../ground/cctv/types.ts";
 export type { EarthquakeData } from "../../ground/seismic/USGSFetcher.ts";
 export type { RoadSegment } from "../../ground/traffic/RoadNetwork.ts";
 export type { RawOSMWay, BoundingBox } from "../../ground/traffic/OSMFetcher.ts";
 export type { StyleMode } from "../../ground/traffic/particleStyles.ts";
+
+/** Bounding box for viewport queries */
+export interface BBox {
+  south: number;
+  north: number;
+  west: number;
+  east: number;
+}
+
+/** CCTV Camera data from API */
+export interface Camera {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  url?: string;
+  source?: string;
+}
+
+/** CCTV Billboard configuration */
+export interface CCTVBillboard {
+  id: string;
+  cameraId: string;
+  name: string;
+  position: unknown; // Cesium.Cartesian3
+}
+
+/** CCTV Manager configuration */
+export interface CCTVManagerConfig {
+  maxBillboards: number;
+  refreshInterval: number;
+}
 
 /** Traffic particle state for animation */
 export interface TrafficParticle {

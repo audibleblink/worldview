@@ -155,7 +155,7 @@ function parseCoordinates(input: string): { lat: number; lng: number } | null {
   const trimmed = input.trim();
 
   let match = trimmed.match(DECIMAL_WITH_COMMA);
-  if (match) {
+  if (match && match[1] && match[2]) {
     const lat = parseFloat(match[1]);
     const lng = parseFloat(match[2]);
     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
@@ -164,7 +164,7 @@ function parseCoordinates(input: string): { lat: number; lng: number } | null {
   }
 
   match = trimmed.match(DECIMAL_WITH_DIRECTION);
-  if (match) {
+  if (match && match[1] && match[2] && match[3] && match[4]) {
     let lat = parseFloat(match[1]);
     let lng = parseFloat(match[3]);
     if (match[2].toUpperCase() === "S") lat = -lat;
@@ -175,7 +175,7 @@ function parseCoordinates(input: string): { lat: number; lng: number } | null {
   }
 
   match = trimmed.match(SIGNED_DECIMAL_NO_COMMA);
-  if (match) {
+  if (match && match[1] && match[2]) {
     const lat = parseFloat(match[1]);
     const lng = parseFloat(match[2]);
     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {

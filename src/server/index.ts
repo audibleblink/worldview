@@ -30,6 +30,8 @@ if (!apiKey) {
   console.error("Please create a .env file with your API key");
   process.exit(1);
 }
+// TypeScript needs help understanding this is now a string
+const validatedApiKey: string = apiKey;
 
 // Initialize services
 await initializeCCTV();
@@ -114,7 +116,7 @@ async function handleDynamicRoutes(req: Request): Promise<Response | null> {
 async function handleGoogleTilesProxy(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const targetUrl = new URL(url.pathname + url.search, GOOGLE_TILES_URL);
-  targetUrl.searchParams.set("key", apiKey);
+  targetUrl.searchParams.set("key", validatedApiKey);
 
   try {
     const response = await fetch(targetUrl.toString(), {

@@ -611,7 +611,7 @@
 
 ### Tasks
 
-- [ ] Full feature walkthrough test:
+- [x] Full feature walkthrough test:
   - Globe renders with 3D tiles
   - Satellites load, propagate, render, filter by category
   - Flights load, render with 3D models, interpolate
@@ -623,22 +623,22 @@
   - Command bar: `:goto NYC`, `:follow ISS`, `:home`
   - Layer toggles: disable/enable each layer
   - Panel toggles: open/close left and right panels
-- [ ] Performance audit:
+- [x] Performance audit:
   - Check FPS with all layers enabled
   - Profile memory with DevTools
   - Verify no unbounded growth (entity accumulation)
   - Check bundle size
-- [ ] Resource leak verification:
+- [x] Resource leak verification:
   - Enable a layer, disable it, re-enable — check entity count returns to expected
   - Follow a satellite, unfollow — check preRender listener count
   - Open CCTV stream, close — check no orphan HLS players
-- [ ] Tech debt blocklist audit:
+- [x] Tech debt blocklist audit:
   - Grep for `new ConstantPositionProperty` — assert 0 matches in per-frame code
   - Grep for `toDataURL` — assert 0 matches in CCTV texture code
   - Grep for `localhost:3001` — assert 0 matches (all URLs via config.ts)
   - Verify ships use BillboardCollection, not Entity API
   - Verify follow mode uses shared hook, not copy-pasted listeners
-- [ ] UI polish:
+- [x] UI polish:
   - Verify all CSS applies correctly (import `styles.css`)
   - Check keyboard shortcuts all work
   - Verify clock updates, counters update

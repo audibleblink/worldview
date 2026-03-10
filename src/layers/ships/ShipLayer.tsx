@@ -505,7 +505,7 @@ export function ShipLayer() {
 
     // Update label
     const label = labelMap.get(record.mmsi);
-    if (label) {
+    if (label && color) {
       label.position = position;
       label.text = formatLabelText(record);
       label.fillColor = color;
@@ -536,13 +536,13 @@ export function ShipLayer() {
       const prevRecord = getShipByMmsi(previousMmsi);
       if (prevRecord) {
         const colors = getShipColors();
-        const color = colors[prevRecord.shipTypeCategory] ?? colors.other;
+        const color = colors[prevRecord.shipTypeCategory] ?? colors.other!;
         billboardApi.update(previousMmsi, {
           scale: BILLBOARD_SCALE,
           color,
         });
         const label = labelMap.get(previousMmsi);
-        if (label) {
+        if (label && color) {
           label.fillColor = color;
         }
       }

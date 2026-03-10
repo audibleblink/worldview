@@ -90,8 +90,9 @@ export function convertIataToIcao(callsign: string): string {
 
   // Check for 2-character IATA prefix (can be alphanumeric like B6, F9, G4)
   const match = upper.match(/^([A-Z0-9]{2})(\d+.*)$/);
-  if (match) {
-    const [, iataCode, flightNumber] = match;
+  if (match && match[1] && match[2]) {
+    const iataCode = match[1];
+    const flightNumber = match[2];
     const icaoCode = IATA_TO_ICAO[iataCode];
     if (icaoCode) {
       return icaoCode + flightNumber;

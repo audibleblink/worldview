@@ -6,10 +6,25 @@
  */
 
 import { createStore } from "solid-js/store";
-import type { ShipRecord, ShipTypeCategory } from "../../proxy/aisstream";
 
-// Re-export types for convenience
-export type { ShipRecord, ShipTypeCategory };
+/** Ship type categories for icon selection */
+export type ShipTypeCategory = "cargo" | "tanker" | "passenger" | "fishing" | "other";
+
+/**
+ * Ship record from AIS data
+ */
+export interface ShipRecord {
+  mmsi: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  cog: number;        // Course over ground
+  sog: number;        // Speed over ground (knots)
+  trueHeading: number;
+  shipType: number;
+  shipTypeCategory: ShipTypeCategory;
+  timestamp: number;
+}
 
 /**
  * Bounding box for viewport queries

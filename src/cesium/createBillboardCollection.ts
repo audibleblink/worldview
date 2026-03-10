@@ -189,7 +189,8 @@ export function createBillboardCollection(
       billboard.position = opts.position;
     }
     if (opts.image !== undefined) {
-      billboard.image = opts.image;
+      // Cesium accepts both string and HTMLCanvasElement
+      billboard.image = opts.image as string;
     }
     if (opts.scale !== undefined) {
       billboard.scale = opts.scale;

@@ -69,8 +69,11 @@ export function imageResponse(
   contentType: string,
   extraHeaders: Record<string, string> = {}
 ): Response {
-  // Convert Uint8Array to ArrayBuffer for Response compatibility
-  const body = data instanceof Uint8Array ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) : data;
+  // Convert to Uint8Array for Response compatibility
+  // Cast via unknown to handle TypeScript Uint8Array generics
+  const body = data instanceof Uint8Array 
+    ? data as unknown as BodyInit
+    : new Uint8Array(data) as unknown as BodyInit;
   return corsResponse(body, {
     status: 200,
     headers: {

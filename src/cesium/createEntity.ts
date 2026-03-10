@@ -14,6 +14,9 @@ import { useCesium } from "./useCesium";
 
 declare const Cesium: typeof import("cesium");
 
+// Use Record types for graphics options to avoid namespace issues with ConstructorOptions
+type GraphicsOptions = Record<string, unknown>;
+
 export interface EntityOptions {
   /** Unique entity ID */
   id?: string;
@@ -24,17 +27,17 @@ export interface EntityOptions {
   /** Position in Cartesian3 */
   position?: Cesium.Cartesian3;
   /** Billboard options */
-  billboard?: Cesium.BillboardGraphics.ConstructorOptions;
+  billboard?: GraphicsOptions;
   /** Point options */
-  point?: Cesium.PointGraphics.ConstructorOptions;
+  point?: GraphicsOptions;
   /** Label options */
-  label?: Cesium.LabelGraphics.ConstructorOptions;
+  label?: GraphicsOptions;
   /** Model options (for 3D models) */
-  model?: Cesium.ModelGraphics.ConstructorOptions;
+  model?: GraphicsOptions;
   /** Polyline options */
-  polyline?: Cesium.PolylineGraphics.ConstructorOptions;
+  polyline?: GraphicsOptions;
   /** Path options (for showing entity trail) */
-  path?: Cesium.PathGraphics.ConstructorOptions;
+  path?: GraphicsOptions;
   /** Orientation (for 3D models) */
   orientation?: Cesium.Quaternion;
   /** Custom properties */
@@ -206,7 +209,7 @@ export function createEntity(getOptions: Accessor<EntityOptions | null>): Create
 
 function updateBillboard(
   billboard: Cesium.BillboardGraphics,
-  options: Cesium.BillboardGraphics.ConstructorOptions
+  options: GraphicsOptions
 ) {
   if (options.image !== undefined) {
     billboard.image = new Cesium.ConstantProperty(options.image);
@@ -227,7 +230,7 @@ function updateBillboard(
 
 function updateLabel(
   label: Cesium.LabelGraphics,
-  options: Cesium.LabelGraphics.ConstructorOptions
+  options: GraphicsOptions
 ) {
   if (options.text !== undefined) {
     label.text = new Cesium.ConstantProperty(options.text);
@@ -245,7 +248,7 @@ function updateLabel(
 
 function updateModel(
   model: Cesium.ModelGraphics,
-  options: Cesium.ModelGraphics.ConstructorOptions
+  options: GraphicsOptions
 ) {
   if (options.scale !== undefined) {
     model.scale = new Cesium.ConstantProperty(options.scale);

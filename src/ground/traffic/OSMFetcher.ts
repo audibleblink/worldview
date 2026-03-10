@@ -31,7 +31,9 @@ interface OverpassResponse {
   }>;
 }
 
-const OVERPASS_API_URL = "http://localhost:3001/api/osm"; // Proxy endpoint
+import { PROXY_ENDPOINTS } from "../../config";
+
+const OVERPASS_API_URL = PROXY_ENDPOINTS.osm; // Proxy endpoint from config
 const DB_NAME = "worldview-osm-cache";
 const DB_VERSION = 1;
 const STORE_NAME = "tiles";

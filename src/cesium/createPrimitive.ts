@@ -15,14 +15,9 @@ import { useCesium } from "./useCesium";
 
 declare const Cesium: typeof import("cesium");
 
-type CesiumPrimitive =
-  | Cesium.Primitive
-  | Cesium.GroundPrimitive
-  | Cesium.Cesium3DTileset
-  | Cesium.PointPrimitiveCollection
-  | Cesium.BillboardCollection
-  | Cesium.LabelCollection
-  | Cesium.PolylineCollection;
+// Generic type for Cesium primitives that can be added to scene.primitives
+// Using 'unknown' to avoid complex type unions with namespace issues
+type CesiumPrimitive = unknown;
 
 export interface CreatePrimitiveOptions<T extends CesiumPrimitive> {
   /** Factory function to create the primitive */
@@ -91,8 +86,9 @@ export function createPrimitive<T extends CesiumPrimitive>(
       // Check if we were destroyed while creating
       if (isDestroyed) {
         // Clean up the newly created primitive
-        if (created && typeof (created as { destroy?: () => void }).destroy === "function") {
-          (created as { destroy: () => void }).destroy();
+        const createdAny = created as unknown;
+        if (createdAny && typeof (createdAny as { destroy?: () => void }).destroy === "function") {
+          (createdAny as { destroy: () => void }).destroy();
         }
         return;
       }
