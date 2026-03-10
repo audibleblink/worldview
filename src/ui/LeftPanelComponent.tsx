@@ -9,6 +9,9 @@ import { getAllLayers } from "../layers/registry";
 import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/store";
 import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
 import poisData from "../data/pois.json";
+import { useCesium } from "../cesium/useCesium";
+
+declare const Cesium: typeof import("cesium");
 
 // Types for POI data
 interface POI {
@@ -57,6 +60,8 @@ let logIdCounter = 0;
  * LeftPanel component
  */
 export function LeftPanel() {
+  const { viewer } = useCesium();
+
   // Navigation state
   const [currentCityIndex, setCurrentCityIndex] = createSignal(0);
   const [currentPOIIndex, setCurrentPOIIndex] = createSignal(0);
@@ -86,6 +91,31 @@ export function LeftPanel() {
     });
   }
 
+  /** Fly the camera to a POI */
+  function flyToPOI(poi: POI): void {
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
+
+    // Offset latitude slightly to compensate for oblique camera angle
+    const pitch = poi.pitch ?? -45;
+    const pitchRad = Math.abs(pitch) * (Math.PI / 180);
+    const latOffset = (poi.altitude / 111000) * Math.tan(pitchRad);
+
+    v.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        poi.lng,
+        poi.lat - latOffset,
+        poi.altitude
+      ),
+      orientation: {
+        heading: Cesium.Math.toRadians(0),
+        pitch: Cesium.Math.toRadians(pitch),
+        roll: 0,
+      },
+      duration: 2,
+    });
+  }
+
   /** Handle city selection change */
   function handleCityChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
@@ -93,21 +123,37 @@ export function LeftPanel() {
     setCurrentCityIndex(index);
     setCurrentPOIIndex(0);
     addLogEntry(`[NAV] Flying to ${cities[index]?.name}`);
+
+    // Fly to first POI of selected city
+    const firstPOI = cities[index]?.pois[0];
+    if (firstPOI) {
+      flyToPOI(firstPOI);
+    }
   }
 
   /** Navigate to previous POI */
   function handlePrevPOI(): void {
     if (canGoPrev()) {
-      setCurrentPOIIndex((i) => i - 1);
-      addLogEntry(`[NAV] POI: ${currentCity()?.pois[currentPOIIndex() - 1]?.name}`);
+      const newIndex = currentPOIIndex() - 1;
+      setCurrentPOIIndex(newIndex);
+      const poi = currentCity()?.pois[newIndex];
+      if (poi) {
+        addLogEntry(`[NAV] POI: ${poi.name}`);
+        flyToPOI(poi);
+      }
     }
   }
 
   /** Navigate to next POI */
   function handleNextPOI(): void {
     if (canGoNext()) {
-      setCurrentPOIIndex((i) => i + 1);
-      addLogEntry(`[NAV] POI: ${currentCity()?.pois[currentPOIIndex() + 1]?.name}`);
+      const newIndex = currentPOIIndex() + 1;
+      setCurrentPOIIndex(newIndex);
+      const poi = currentCity()?.pois[newIndex];
+      if (poi) {
+        addLogEntry(`[NAV] POI: ${poi.name}`);
+        flyToPOI(poi);
+      }
     }
   }
 
@@ -135,6 +181,14 @@ export function LeftPanel() {
 
   onMount(() => {
     console.log("[LeftPanel] Mounted");
+
+    // Fly to initial POI after a short delay (viewer may not be ready immediately)
+    setTimeout(() => {
+      const poi = currentPOI();
+      if (poi) {
+        flyToPOI(poi);
+      }
+    }, 2000);
   });
 
   return (
