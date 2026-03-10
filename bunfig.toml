@@ -1,0 +1,12 @@
+# Bun configuration for WorldView
+# SolidJS JSX transformation via babel-preset-solid
+
+[install]
+auto = true
+
+# JSX configuration for SolidJS
+# Bun's native JSX transformation with solid-js preset
+[serve]
+# Development server configuration
+# Files matching these patterns will use the Babel preset for SolidJS
+jsx = "solid"

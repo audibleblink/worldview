@@ -11,12 +11,16 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-typescript": "^7.28.5",
     "@types/bun": "latest",
+    "babel-preset-solid": "^1.9.10",
     "typescript": "^5"
   },
   "dependencies": {
     "cesium": "^1.139.1",
     "hls.js": "^1.6.15",
-    "satellite.js": "^6.0.2"
+    "satellite.js": "^6.0.2",
+    "solid-js": "^1.9.11"
   }
 }

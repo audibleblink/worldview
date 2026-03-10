@@ -1,9 +1,10 @@
 /**
  * WorldView - Development Server
- * Serves the frontend with HMR support
+ * Serves the frontend with HMR support and SolidJS JSX transpilation
  */
 
 import { join } from "node:path";
+import * as babel from "@babel/core";
 
 const PORT = 3000;
 const ROOT = import.meta.dir + "/..";
@@ -21,6 +22,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".js": "application/javascript",
   ".mjs": "application/javascript",
   ".ts": "application/javascript",
+  ".tsx": "application/javascript",
   ".json": "application/json",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -28,6 +30,8 @@ const CONTENT_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
 };
 
 const getContentType = (path: string): string => 
@@ -47,6 +51,31 @@ const serveTranspiledTS = async (filePath: string): Promise<Response | null> => 
   if (!(await file.exists())) return null;
   const transpiler = new Bun.Transpiler({ loader: "ts" });
   return new Response(transpiler.transformSync(await file.text()), {
+    headers: { "Content-Type": "application/javascript" },
+  });
+};
+
+/** Transpile TSX (SolidJS JSX) file on the fly using Babel */
+const serveTranspiledTSX = async (filePath: string): Promise<Response | null> => {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) return null;
+  
+  const source = await file.text();
+  
+  // Use Babel with babel-preset-solid for proper SolidJS JSX transformation
+  const result = await babel.transformAsync(source, {
+    filename: filePath,
+    presets: [
+      ["babel-preset-solid", { generate: "dom", hydratable: false }],
+      ["@babel/preset-typescript", { isTSX: true, allExtensions: true }],
+    ],
+  });
+  
+  if (!result?.code) {
+    return new Response("Transpilation failed", { status: 500 });
+  }
+  
+  return new Response(result.code, {
     headers: { "Content-Type": "application/javascript" },
   });
 };
@@ -75,6 +104,12 @@ Bun.serve({
       if (pathname.startsWith(prefix)) return handler(pathname);
     }
 
+    // Transpile TSX files (SolidJS) from src/
+    if (pathname.startsWith("/src/") && pathname.endsWith(".tsx")) {
+      const response = await serveTranspiledTSX(join(ROOT, pathname));
+      if (response) return response;
+    }
+
     // Transpile TypeScript files from src/
     if (pathname.startsWith("/src/") && pathname.endsWith(".ts")) {
       const response = await serveTranspiledTS(join(ROOT, pathname));
@@ -86,7 +121,7 @@ Bun.serve({
       return serveFile(join(ROOT, pathname), `JSON file not found: ${pathname}`);
     }
 
-    // Serve public assets
+    // Serve public assets (including models/)
     return serveFile(join(PUBLIC_PATH, pathname), `Not Found: ${pathname}`);
   },
 });

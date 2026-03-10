@@ -1,6 +1,7 @@
 /**
  * WorldView - Production Build Script
  * Bundles the application for production deployment
+ * Supports SolidJS JSX transpilation
  */
 
 import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
@@ -19,10 +20,10 @@ if (existsSync(DIST)) {
 }
 mkdirSync(DIST, { recursive: true });
 
-// Bundle the main application
-console.log("Bundling application...");
+// Bundle the SolidJS application
+console.log("Bundling SolidJS application...");
 const result = await Bun.build({
-  entrypoints: [join(ROOT, "src/main.ts")],
+  entrypoints: [join(ROOT, "src/index.tsx")],
   outdir: DIST,
   target: "browser",
   format: "esm",
@@ -31,6 +32,8 @@ const result = await Bun.build({
   naming: {
     entry: "[name].[hash].js",
   },
+  // SolidJS JSX configuration
+  // Bun handles this automatically when jsxImportSource is set in tsconfig.json
 });
 
 if (!result.success) {
@@ -40,8 +43,8 @@ if (!result.success) {
 }
 
 // Get the output filename
-const mainBundle = result.outputs.find((o) => o.path.includes("main"));
-const bundleFilename = mainBundle ? mainBundle.path.split("/").pop() : "main.js";
+const mainBundle = result.outputs.find((o) => o.path.includes("index"));
+const bundleFilename = mainBundle ? mainBundle.path.split("/").pop() : "index.js";
 
 console.log(`  Created: ${bundleFilename}`);
 
@@ -49,7 +52,7 @@ console.log(`  Created: ${bundleFilename}`);
 console.log("Processing HTML...");
 const htmlSource = await Bun.file(join(PUBLIC, "index.html")).text();
 const htmlProcessed = htmlSource
-  .replace('../src/main.ts', `./${bundleFilename}`)
+  .replace('/src/index.tsx', `./${bundleFilename}`)
   .replace('/cesium/Cesium.js', './cesium/Cesium.js')
   .replace('/cesium/Widgets/widgets.css', './cesium/Widgets/widgets.css');
 
@@ -71,6 +74,18 @@ if (existsSync(cesiumSource)) {
   console.log("  Copied: cesium/");
 } else {
   console.warn("  WARNING: CesiumJS assets not found at", cesiumSource);
+}
+
+// Copy local models
+console.log("Copying local models...");
+const modelsSource = join(PUBLIC, "models");
+const modelsDest = join(DIST, "models");
+
+if (existsSync(modelsSource)) {
+  cpSync(modelsSource, modelsDest, { recursive: true });
+  console.log("  Copied: models/");
+} else {
+  console.warn("  WARNING: Models not found at", modelsSource);
 }
 
 // Build proxy server (separate bundle)
