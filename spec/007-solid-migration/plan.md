@@ -293,10 +293,10 @@
 
 ### Tasks
 
-- [ ] Create `src/layers/ships/store.ts`
+- [x] Create `src/layers/ships/store.ts`
   - Ship-specific store: `{ ships, selectedMmsi, followingMmsi, isRateLimited, lastBbox }`
   - Mutations: `setShips(records)`, `selectShip(mmsi)`, `followShip(mmsi)`, `setRateLimited(bool)`
-- [ ] Implement `src/layers/ships/ShipLayer.tsx`
+- [x] Implement `src/layers/ships/ShipLayer.tsx`
   - Port ship data fetching — **use `PROXY_BASE_URL` from config.ts** (Blocklist #6)
   - Port viewport bbox calculation (use `useCamera` for camera changes)
   - **Use `createBillboardCollection`** — NOT Entity API (Blocklist #3)
@@ -307,8 +307,8 @@
   - **Use `useFollowMode` hook** (Blocklist #5)
   - **Interpolate ALL visible ships** — old code only interpolated 60/100, causing visual freezing
   - Cleanup all primitives and listeners via `onCleanup`
-- [ ] Wire ship data into selection store
-- [ ] Verify proxy `/ships` endpoint + AISStream WebSocket relay work
+- [x] Wire ship data into selection store
+- [x] Verify proxy `/ships` endpoint + AISStream WebSocket relay work
 
 ### Verification
 
