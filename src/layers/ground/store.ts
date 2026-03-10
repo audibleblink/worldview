@@ -31,9 +31,9 @@ export interface GroundState {
 }
 
 const initialState: GroundState = {
-  trafficEnabled: true,
-  cctvEnabled: true,
-  seismicEnabled: true,
+  trafficEnabled: false,
+  cctvEnabled: false,
+  seismicEnabled: false,
   trafficStyle: "heatmap",
   cctvCameras: [],
   earthquakes: [],

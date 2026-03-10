@@ -29,7 +29,7 @@ export interface SatelliteState {
 // Initial state
 const initialState: SatelliteState = {
   records: [],
-  hiddenCategories: new Set(),
+  hiddenCategories: new Set<SatelliteCategory>(["starlink"]),
   followingNoradId: null,
   lastUpdated: null,
   isLoading: false,

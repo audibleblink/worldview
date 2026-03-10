@@ -8,6 +8,8 @@ import { layers, toggleLayer, type LayerId } from "../stores/layers";
 import { getAllLayers } from "../layers/registry";
 import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/store";
 import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
+import { satelliteState, toggleCategory } from "../layers/satellites/store";
+import type { SatelliteCategory } from "../layers/satellites/types";
 import poisData from "../data/pois.json";
 
 // Types for POI data
@@ -39,6 +41,19 @@ const LAYER_CONFIGS: LayerConfig[] = [
   { id: "flights", name: "FLIGHTS" },
   { id: "ships", name: "SHIPS" },
   { id: "ground", name: "GROUND" },
+];
+
+interface CategoryConfig {
+  id: SatelliteCategory;
+  name: string;
+}
+
+const SATELLITE_CATEGORIES: CategoryConfig[] = [
+  { id: "stations", name: "STATIONS" },
+  { id: "military", name: "MILITARY" },
+  { id: "gnss", name: "GNSS" },
+  { id: "research", name: "RESEARCH" },
+  { id: "starlink", name: "STARLINK" },
 ];
 
 // Log entry types
@@ -118,6 +133,13 @@ export function LeftPanel() {
     addLogEntry(`[${id.toUpperCase()}] Layer ${isEnabled ? "disabled" : "enabled"}`);
   }
 
+  /** Toggle a satellite category */
+  function handleToggleCategory(category: SatelliteCategory): void {
+    const wasVisible = !satelliteState.hiddenCategories.has(category);
+    toggleCategory(category);
+    addLogEntry(`[SAT] ${category.toUpperCase()} ${wasVisible ? "OFF" : "ON"}`);
+  }
+
   /** Toggle a ground sub-layer */
   function handleToggleSubLayer(subLayer: GroundSubLayer): void {
     toggleSubLayer(subLayer);
@@ -189,6 +211,24 @@ export function LeftPanel() {
                 </button>
               </div>
               
+              {/* Satellite category toggles */}
+              <Show when={config.id === "satellites" && layers.satellites}>
+                <div class="ground-options-row">
+                  <For each={SATELLITE_CATEGORIES}>
+                    {(cat) => (
+                      <div class="sub-toggle-row">
+                        <button
+                          class={`toggle-btn sub-toggle ${!satelliteState.hiddenCategories.has(cat.id) ? "on" : ""}`}
+                          onClick={() => handleToggleCategory(cat.id)}
+                        >
+                          {cat.name}
+                        </button>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+
               {/* Ground sub-layer toggles */}
               <Show when={config.id === "ground" && layers.ground}>
                 <div class="ground-options-row">
