@@ -424,26 +424,26 @@
 
 ### Tasks
 
-- [ ] Create `src/ui/panels/SatelliteInfo.tsx`
+- [x] Create `src/ui/panels/SatelliteInfo.tsx`
   - Port from `src/ui/sat-info-panel.ts`
   - Reads selection store, displays satellite metadata
   - Follow button writes to camera store
-- [ ] Create `src/ui/panels/FlightInfo.tsx`
+- [x] Create `src/ui/panels/FlightInfo.tsx`
   - Port from `src/ui/flight-info-panel.ts`
   - Reads selection store, displays flight metadata
   - Route info from `/flight-route/:callsign`
   - Follow button
-- [ ] Create `src/ui/panels/ShipInfo.tsx`
+- [x] Create `src/ui/panels/ShipInfo.tsx`
   - Port from `src/ui/ship-info-panel.ts`
   - Reads selection store, displays ship metadata
   - Follow button
-- [ ] Create `src/ui/CommandBar.tsx`
+- [x] Create `src/ui/CommandBar.tsx`
   - Port from `src/ui/command-bar.ts` + `src/ui/command-parser.ts`
   - Vim-style `:goto`, `:follow`, `:home`, `:help` commands
   - Reads/writes to camera store, selection store
   - Activates on `:` key, reads from UI store `commandMode`
-- [ ] Wire `<RightPanel>` to show correct info panel based on `selection.type`
-- [ ] Wire command bar into Shell
+- [x] Wire `<RightPanel>` to show correct info panel based on `selection.type`
+- [x] Wire command bar into Shell
 
 ### Verification
 

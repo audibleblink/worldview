@@ -1,11 +1,15 @@
 /**
  * WorldView - Right Panel (SolidJS)
- * Shader/effect controls and live camera readouts
+ * Shader/effect controls, live camera readouts, and info panels
  */
 
-import { createSignal, createEffect, onMount, onCleanup, For, Show, useContext } from "solid-js";
+import { createSignal, createEffect, onMount, onCleanup, For, Show, Switch, Match, useContext } from "solid-js";
 import { shaders, setParameter, PARAMETER_MAPPINGS, type ShaderMode } from "../stores/shaders";
+import { selection } from "../stores/selection";
 import { CesiumContext } from "../cesium/CesiumProvider";
+import { SatelliteInfo } from "./panels/SatelliteInfo";
+import { FlightInfo } from "./panels/FlightInfo";
+import { ShipInfo } from "./panels/ShipInfo";
 
 declare const Cesium: typeof import("cesium");
 
@@ -194,9 +198,23 @@ export function RightPanel() {
   });
 
   return (
-    <div class="right-panel">
-      {/* Parameters Header */}
-      <div class="panel-header">PARAMETERS</div>
+    <>
+      {/* Info Panels - shown based on selection type */}
+      <Switch>
+        <Match when={selection.type === "satellite"}>
+          <SatelliteInfo />
+        </Match>
+        <Match when={selection.type === "flight"}>
+          <FlightInfo />
+        </Match>
+        <Match when={selection.type === "ship"}>
+          <ShipInfo />
+        </Match>
+      </Switch>
+
+      <div class="right-panel">
+        {/* Parameters Header */}
+        <div class="panel-header">PARAMETERS</div>
 
       {/* Effect Sliders */}
       <div class="effect-sliders panel-section">
@@ -268,7 +286,8 @@ export function RightPanel() {
           </span>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

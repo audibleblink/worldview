@@ -4,12 +4,13 @@
  */
 
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
-import { ui, toggleLeftPanel, toggleRightPanel } from "../stores/ui";
+import { ui, toggleLeftPanel, toggleRightPanel, setCommandMode } from "../stores/ui";
 import { shaders, setShader, type ShaderMode } from "../stores/shaders";
 import { LeftPanel } from "./LeftPanelComponent";
 import { RightPanel } from "./RightPanelComponent";
 import { BottomBar } from "./BottomBarComponent";
 import { PerformanceMonitor } from "./PerformanceMonitorComponent";
+import { CommandBar } from "./CommandBar";
 
 // View mode shortcuts (keyboard numbers 1-5)
 const MODE_SHORTCUTS: Record<string, ShaderMode | null> = {
@@ -109,8 +110,19 @@ export function Shell() {
     if (event.key !== "Escape" && isTypingInInput()) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-    // Escape key - handled by other components (command bar, etc.)
+    // Escape key - close command mode if open
     if (event.key === "Escape") {
+      if (ui.commandMode) {
+        event.preventDefault();
+        setCommandMode(false);
+      }
+      return;
+    }
+
+    // Colon key (:) - open command bar (vim-style)
+    if (event.key === ":" || (event.shiftKey && event.key === ";")) {
+      event.preventDefault();
+      setCommandMode(true);
       return;
     }
 
@@ -152,7 +164,7 @@ export function Shell() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("keydown", handleKeydown);
 
-    console.log("[Shell] Mounted, keyboard shortcuts active (1-5 for modes, f for FPS, [ ] for panels)");
+    console.log("[Shell] Mounted, keyboard shortcuts active (1-5 for modes, f for FPS, [ ] for panels, : for command bar)");
   });
 
   onCleanup(() => {
@@ -230,6 +242,9 @@ export function Shell() {
 
       {/* Bottom Bar */}
       <BottomBar />
+
+      {/* Command Bar (vim-style, activated with : key) */}
+      <CommandBar />
     </>
   );
 }
