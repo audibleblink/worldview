@@ -97,4 +97,49 @@ describe("fetchCameras", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("filters out offline cameras", async () => {
+    const fakeGeoJSON = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [-92.28, 34.74] },
+          properties: {
+            id: 750,
+            name: "Online Camera",
+            status: "online",
+            hls_stream_protected: "https://example.com/750.m3u8",
+            camera_type_name: "Traffic",
+          },
+        },
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [-94.15, 36.37] },
+          properties: {
+            id: 100,
+            name: "Disabled Camera",
+            status: "disabled",
+            hls_stream_protected: "https://example.com/100.m3u8",
+            camera_type_name: "Traffic",
+          },
+        },
+      ],
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(JSON.stringify(fakeGeoJSON), { status: 200 }))
+    ) as any;
+
+    try {
+      const source = new ArkansasSource();
+      const cameras = await source.fetchCameras();
+
+      expect(cameras).toHaveLength(1);
+      expect(cameras[0]!.id).toBe("arkansas-750");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
