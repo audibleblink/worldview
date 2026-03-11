@@ -140,6 +140,12 @@ Bun.serve({
       return cctvProxyManager.handleStream(streamMatch[1]);
     }
 
+    // CCTV HLS signed URL
+    const hlsMatch = url.pathname.match(/^\/api\/cctv\/hls\/(.+)$/);
+    if (hlsMatch?.[1]) {
+      return cctvProxyManager.handleHlsUrl(hlsMatch[1]);
+    }
+
     // OSM Overpass
     if (url.pathname === "/api/osm") {
       return handleOSM(req);

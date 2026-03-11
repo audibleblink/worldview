@@ -399,12 +399,38 @@ export class CCTVManager {
     if (hasVideo && camera) {
       const videoMedia = camera.media.find((m) => m.type === "hls" || m.type === "mp4ts");
       if (videoMedia) {
-        this.startHLSPlayback(videoMedia.url, billboard);
+        // Fetch signed HLS URL for token-gated streams, then start playback
+        this.resolveAndStartHLS(camera.id, billboard);
       } else {
         this.startCenterStageRendering(billboard);
       }
     } else {
       this.startCenterStageRendering(billboard);
+    }
+  }
+
+  /** Resolve signed HLS URL and start playback */
+  private async resolveAndStartHLS(cameraId: string, billboard: CCTVBillboard): Promise<void> {
+    try {
+      const response = await fetch(`${PROXY_BASE}/api/cctv/hls/${cameraId}`);
+      
+      if (!response.ok) {
+        logWarn("CCTV", `Failed to get HLS URL for ${cameraId}: ${response.status}`);
+        this.fallbackToCanvas(billboard);
+        return;
+      }
+
+      const data = await response.json();
+      if (!data.url) {
+        logWarn("CCTV", `No HLS URL returned for ${cameraId}`);
+        this.fallbackToCanvas(billboard);
+        return;
+      }
+
+      this.startHLSPlayback(data.url, billboard);
+    } catch (error) {
+      logError("CCTV", `Error resolving HLS URL for ${cameraId}`, error);
+      this.fallbackToCanvas(billboard);
     }
   }
 
