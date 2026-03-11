@@ -30,6 +30,7 @@ export class CCTVProxyManager {
   private allCameras: CCTVCamera[] = [];
   private thumbnailCache = new Map<string, ThumbnailCacheEntry>();
   private lastKnownGoodCache = new Map<string, LastKnownGoodEntry>();
+  private sourceMap = new Map<string, CameraSource>();
 
   constructor() {
     // Ensure cache directory exists (fire and forget)
@@ -39,6 +40,7 @@ export class CCTVProxyManager {
   /** Register a camera source */
   register(source: CameraSource): void {
     this.sources.push(source);
+    this.sourceMap.set(source.name, source);
   }
 
   /** Initialize by fetching cameras from all sources */
