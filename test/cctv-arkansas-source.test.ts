@@ -142,4 +142,39 @@ describe("fetchCameras", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("caches results within TTL", async () => {
+    const fakeGeoJSON = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [-92.28, 34.74] },
+          properties: {
+            id: 750,
+            name: "Test",
+            status: "online",
+            hls_stream_protected: "https://example.com/750.m3u8",
+            camera_type_name: "Traffic",
+          },
+        },
+      ],
+    };
+
+    const originalFetch = globalThis.fetch;
+    let callCount = 0;
+    globalThis.fetch = mock(() => {
+      callCount++;
+      return Promise.resolve(new Response(JSON.stringify(fakeGeoJSON), { status: 200 }));
+    }) as any;
+
+    try {
+      const source = new ArkansasSource();
+      await source.fetchCameras();
+      await source.fetchCameras();
+      expect(callCount).toBe(1); // Only one fetch, second was cached
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
