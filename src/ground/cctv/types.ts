@@ -2,6 +2,8 @@
  * CCTV Types - Camera and billboard definitions
  */
 
+import type { CameraMedia } from "../../proxy/cctv/types.ts";
+
 declare const Cesium: typeof import("cesium");
 
 /** Camera metadata from the catalog */
@@ -10,15 +12,16 @@ export interface Camera {
   name: string;
   latitude: number;
   longitude: number;
-  streamUrl: string;
+  source: string;
   status: "live" | "offline";
+  media: CameraMedia[];
   /** Roadway name from NY511 (e.g., "I-278/Bruckner Expressway") */
   roadway?: string;
   /** Direction of travel from NY511 (e.g., "Northbound"), omitted if "Unknown" */
   direction?: string;
-  /** HLS video stream URL from NY511 */
-  videoUrl?: string;
 }
+
+export type { CameraMedia, CameraMediaType } from "../../proxy/cctv/types.ts";
 
 /** Bounding box for viewport filtering */
 export interface BBox {

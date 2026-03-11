@@ -382,7 +382,7 @@ export class CCTVManager {
 
     const camera = this.getCamera(billboard.cameraId);
     const cameraName = camera?.name ?? billboard.cameraId;
-    const hasVideo = !!(camera?.videoUrl);
+    const hasVideo = !!(camera?.media.some((m) => m.type === "hls" || m.type === "mp4ts"));
 
     const overlay = document.createElement("div");
     overlay.id = "cctv-center-stage";
@@ -396,8 +396,13 @@ export class CCTVManager {
     container.appendChild(overlay);
     this.centerStageOverlay = overlay;
 
-    if (hasVideo && camera?.videoUrl) {
-      this.startHLSPlayback(camera.videoUrl, billboard);
+    if (hasVideo && camera) {
+      const videoMedia = camera.media.find((m) => m.type === "hls" || m.type === "mp4ts");
+      if (videoMedia) {
+        this.startHLSPlayback(videoMedia.url, billboard);
+      } else {
+        this.startCenterStageRendering(billboard);
+      }
     } else {
       this.startCenterStageRendering(billboard);
     }
