@@ -311,20 +311,20 @@ export class CCTVProxyManager {
 
   /** Handle GET /api/cctv/hls/:id - Get signed HLS URL */
   async handleHlsUrl(cameraId: string): Promise<Response> {
-    const camera = this.getCameraById(cameraId);
-    if (!camera) {
-      return jsonResponse({ error: "Camera not found" }, 404);
+    // Extract source name from camera ID (format: "source-id")
+    const dashIndex = cameraId.indexOf("-");
+    if (dashIndex === -1) {
+      return jsonResponse({ error: "Invalid camera ID format" }, 400);
     }
-
-    // Find HLS media
-    const hlsMedia = camera.media.find((m) => m.type === "hls");
-    if (!hlsMedia) {
-      return jsonResponse({ error: "Camera does not support HLS" }, 400);
-    }
+    const sourceName = cameraId.slice(0, dashIndex);
 
     // Get source
-    const source = this.sourceMap.get(camera.source);
-    if (!source || !source.getSignedHlsUrl) {
+    const source = this.sourceMap.get(sourceName);
+    if (!source) {
+      return jsonResponse({ error: `Unknown source: ${sourceName}` }, 404);
+    }
+
+    if (!source.getSignedHlsUrl) {
       return jsonResponse({ error: "Source does not support signed HLS URLs" }, 400);
     }
 

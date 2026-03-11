@@ -380,14 +380,13 @@ export class CCTVManager {
   private createCenterStageOverlay(billboard: CCTVBillboard): void {
     this.removeCenterStageOverlay();
 
-    const camera = this.getCamera(billboard.cameraId);
-    const cameraName = camera?.name ?? billboard.cameraId;
-    const hasVideo = !!(camera?.media.some((m) => m.type === "hls" || m.type === "mp4ts"));
+    const camera = billboard.camera;
+    const hasVideo = camera.media.some((m) => m.type === "hls" || m.type === "mp4ts");
 
     const overlay = document.createElement("div");
     overlay.id = "cctv-center-stage";
     overlay.className = "cctv-center-stage";
-    overlay.innerHTML = createCenterStageHTML(cameraName, hasVideo);
+    overlay.innerHTML = createCenterStageHTML(camera.name, hasVideo);
 
     // Wire up button handlers
     this.wireUpCenterStageButtons(overlay);
@@ -396,14 +395,9 @@ export class CCTVManager {
     container.appendChild(overlay);
     this.centerStageOverlay = overlay;
 
-    if (hasVideo && camera) {
-      const videoMedia = camera.media.find((m) => m.type === "hls" || m.type === "mp4ts");
-      if (videoMedia) {
-        // Fetch signed HLS URL for token-gated streams, then start playback
-        this.resolveAndStartHLS(camera.id, billboard);
-      } else {
-        this.startCenterStageRendering(billboard);
-      }
+    if (hasVideo) {
+      // Fetch signed HLS URL for token-gated streams, then start playback
+      this.resolveAndStartHLS(camera.id, billboard);
     } else {
       this.startCenterStageRendering(billboard);
     }
@@ -443,9 +437,8 @@ export class CCTVManager {
     overlay.querySelector("#cctv-refresh-btn")?.addEventListener("click", () => {
       const cameraId = this.centerStageCameraId;
       if (!cameraId) return;
-      const cam = this.getCamera(cameraId);
-      const bill = this.activeBillboards.get(cameraId);
-      if (cam && bill) this.updateBillboardFrame(bill, cam);
+      const billboard = this.activeBillboards.get(cameraId);
+      if (billboard) this.updateBillboardFrame(billboard, billboard.camera);
     });
 
     overlay.querySelector("#cctv-unproject-btn")?.addEventListener("click", () => {
@@ -728,6 +721,7 @@ export class CCTVManager {
     // Create billboard state
     const billboard: CCTVBillboard = {
       cameraId: camera.id,
+      camera,  // Store full camera data for center-stage even if viewport changes
       entity,
       canvas,
       ctx,

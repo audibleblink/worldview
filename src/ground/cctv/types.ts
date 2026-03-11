@@ -34,6 +34,8 @@ export interface BBox {
 /** Active billboard projection in the 3D scene */
 export interface CCTVBillboard {
   cameraId: string;
+  /** Full camera metadata, preserved for center-stage even if viewport changes */
+  camera: Camera;
   entity: InstanceType<typeof Cesium.Entity>;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
