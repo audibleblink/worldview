@@ -28,4 +28,6 @@ export interface CCTVCamera {
 export interface CameraSource {
   readonly name: string;
   fetchCameras(): Promise<CCTVCamera[]>;
+  /** Get a fresh signed HLS URL for token-gated streams (optional) */
+  getSignedHlsUrl?(cameraId: string): Promise<string>;
 }
