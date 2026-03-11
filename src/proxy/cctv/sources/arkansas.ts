@@ -75,6 +75,32 @@ export class ArkansasSource implements CameraSource {
   }
 
   async getSignedHlsUrl(cameraId: string): Promise<string> {
-    throw new Error("Not implemented");
+    // Extract numeric ID from "arkansas-{id}"
+    const match = cameraId.match(/^arkansas-(\d+)$/);
+    if (!match) {
+      throw new Error(`Invalid Arkansas camera ID format: ${cameraId}`);
+    }
+
+    const numericId = match[1];
+    const tokenGateUrl = `https://actis.idrivearkansas.com/index.php/api/cameras/feed/${numericId}.m3u8`;
+
+    const response = await fetch(tokenGateUrl, {
+      headers: {
+        Referer: "https://www.idrivearkansas.com/",
+        Origin: "https://www.idrivearkansas.com",
+      },
+      redirect: "manual", // Don't follow redirect, we want the Location header
+    });
+
+    if (response.status !== 302) {
+      throw new Error(`Token gate returned ${response.status}, expected 302`);
+    }
+
+    const signedUrl = response.headers.get("Location");
+    if (!signedUrl) {
+      throw new Error("No Location header in redirect response");
+    }
+
+    return signedUrl;
   }
 }

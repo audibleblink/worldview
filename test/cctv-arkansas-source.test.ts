@@ -178,3 +178,76 @@ describe("fetchCameras", () => {
     }
   });
 });
+
+describe("getSignedHlsUrl", () => {
+  test("extracts signed URL from 302 redirect", async () => {
+    const signedUrl = "https://7212406.r.worldssl.net/7212406/_definst_/idrive_750_base.stream/playlist.m3u8?token=abc123";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock((url: string, options?: RequestInit) => {
+      if (url.includes("cameras/feed/750")) {
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: signedUrl },
+          })
+        );
+      }
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    }) as any;
+
+    try {
+      const source = new ArkansasSource();
+      const result = await source.getSignedHlsUrl("arkansas-750");
+      expect(result).toBe(signedUrl);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("sends required Referer header", async () => {
+    const signedUrl = "https://example.com/stream.m3u8?token=xyz";
+    let capturedHeaders: HeadersInit | undefined;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock((url: string, options?: RequestInit) => {
+      capturedHeaders = options?.headers;
+      return Promise.resolve(
+        new Response(null, {
+          status: 302,
+          headers: { Location: signedUrl },
+        })
+      );
+    }) as any;
+
+    try {
+      const source = new ArkansasSource();
+      await source.getSignedHlsUrl("arkansas-750");
+
+      expect(capturedHeaders).toBeDefined();
+      const headers = new Headers(capturedHeaders);
+      expect(headers.get("Referer")).toBe("https://www.idrivearkansas.com/");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("throws on invalid camera ID format", async () => {
+    const source = new ArkansasSource();
+    await expect(source.getSignedHlsUrl("invalid-id")).rejects.toThrow();
+  });
+
+  test("throws when redirect fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Error", { status: 500 }))
+    ) as any;
+
+    try {
+      const source = new ArkansasSource();
+      await expect(source.getSignedHlsUrl("arkansas-750")).rejects.toThrow();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
