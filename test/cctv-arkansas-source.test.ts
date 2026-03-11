@@ -60,4 +60,41 @@ describe("fetchCameras", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("media array has image and hls entries", async () => {
+    const fakeGeoJSON = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [-92.28, 34.74] },
+          properties: {
+            id: 750,
+            name: "Test Camera",
+            status: "online",
+            hls_stream_protected: "https://actis.idrivearkansas.com/index.php/api/cameras/feed/750.m3u8",
+            camera_type_name: "Traffic",
+          },
+        },
+      ],
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(JSON.stringify(fakeGeoJSON), { status: 200 }))
+    ) as any;
+
+    try {
+      const source = new ArkansasSource();
+      const cameras = await source.fetchCameras();
+
+      expect(cameras[0]!.media).toHaveLength(2);
+      expect(cameras[0]!.media[0]!.type).toBe("image");
+      expect(cameras[0]!.media[0]!.url).toBe("https://layers.idrivearkansas.com/cameras/750.jpg");
+      expect(cameras[0]!.media[1]!.type).toBe("hls");
+      expect(cameras[0]!.media[1]!.url).toBe("https://actis.idrivearkansas.com/index.php/api/cameras/feed/750.m3u8");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
