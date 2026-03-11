@@ -250,6 +250,8 @@ export class CCTVProxyManager {
     const encoder = new TextEncoder();
     const boundary = "frame";
 
+    let interval: ReturnType<typeof setInterval> | null = null;
+
     const stream = new ReadableStream({
       start: async (controller) => {
         const fetchFrame = async (): Promise<Uint8Array | null> => {
@@ -280,17 +282,18 @@ export class CCTVProxyManager {
         await pushFrame();
 
         // Then push at interval
-        const interval = setInterval(async () => {
+        interval = setInterval(async () => {
           try {
             await pushFrame();
           } catch {
-            clearInterval(interval);
+            if (interval) clearInterval(interval);
             controller.close();
           }
         }, 1000);
-
+      },
+      cancel: () => {
         // Clean up when stream is cancelled
-        return () => clearInterval(interval);
+        if (interval) clearInterval(interval);
       },
     });
 
