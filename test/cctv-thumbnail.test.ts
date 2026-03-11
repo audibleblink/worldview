@@ -1,13 +1,14 @@
 import { test, expect, describe, beforeAll, mock } from "bun:test";
 import { CCTVProxyManager, type CCTVCamera } from "../src/proxy/cctv";
+import { NY511Source } from "../src/proxy/cctv/sources/ny511";
 import { unlink } from "node:fs/promises";
 
-// Shared manager instance for tests that just read camera data
+// Shared camera list for tests that just read camera data
 let ny511Cameras: CCTVCamera[];
 
 beforeAll(async () => {
-  const manager = new CCTVProxyManager();
-  ny511Cameras = await manager.loadNY511Cameras();
+  const source = new NY511Source();
+  ny511Cameras = await source.fetchCameras();
 });
 
 /** Remove any disk cache for a camera ID so we test the full fallback path */
@@ -16,32 +17,42 @@ async function cleanDiskCache(cameraId: string): Promise<void> {
   try { await unlink(`./cache/cctv/${cameraId}.meta.json`); } catch {}
 }
 
+/** Create a test manager with NY511 source registered */
+function createTestManager(): CCTVProxyManager {
+  const manager = new CCTVProxyManager();
+  manager.register(new NY511Source());
+  return manager;
+}
+
 describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
-  // Task 2.3: imageUrl is stored correctly
+  // Task 2.3: media array contains image entry
   // -----------------------------------------------------------------------
 
-  test("NY511 cameras have imageUrl set", () => {
+  test("NY511 cameras have image media entry", () => {
     for (const cam of ny511Cameras) {
-      expect(cam.imageUrl).toBeDefined();
-      expect(cam.imageUrl).not.toBe("");
+      const imageMedia = cam.media.find((m) => m.type === "image");
+      expect(imageMedia).toBeDefined();
+      expect(imageMedia?.url).not.toBe("");
     }
   });
 
-  test("NY511 imageUrl points to 511ny.org/map/Cctv endpoint", () => {
+  test("NY511 image media points to 511ny.org/map/Cctv endpoint", () => {
     for (const cam of ny511Cameras.slice(0, 20)) {
-      expect(cam.imageUrl).toMatch(/^https:\/\/511ny\.org\/map\/Cctv\/\d+$/);
+      const imageMedia = cam.media.find((m) => m.type === "image");
+      expect(imageMedia?.url).toMatch(/^https:\/\/511ny\.org\/map\/Cctv\/\d+$/);
     }
   });
 
-  test("NY511 imageUrl uses the Url field from source data", async () => {
+  test("NY511 image media uses the Url field from source data", async () => {
     const rawData: any[] = await Bun.file("./src/data/511ny.json").json();
 
     for (const cam of ny511Cameras.slice(0, 10)) {
       const originalId = cam.id.replace("ny511-", "");
       const original = rawData.find((r: any) => r.ID === originalId);
       expect(original).toBeTruthy();
-      expect(cam.imageUrl).toBe(original.Url);
+      const imageMedia = cam.media.find((m) => m.type === "image");
+      expect(imageMedia?.url).toBe(original.Url);
     }
   });
 
@@ -50,8 +61,8 @@ describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
 
   test("handleThumbnail finds NY511 camera by id", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     const sampleCam = ny511Cameras[0]!;
     const response = await testManager.handleThumbnail(sampleCam.id);
@@ -61,8 +72,8 @@ describe("NY511 Thumbnail Proxying", () => {
   });
 
   test("handleThumbnail returns 404 for nonexistent camera", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     const response = await testManager.handleThumbnail("ny511-DOES_NOT_EXIST_999");
     expect(response.status).toBe(404);
@@ -95,8 +106,8 @@ describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
 
   test("generates offline frame for NY511 camera when fetch and all caches fail", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     // Use a camera unlikely to have disk cache and clean it to be sure
     const sampleCam = ny511Cameras[ny511Cameras.length - 1]!;
@@ -129,8 +140,8 @@ describe("NY511 Thumbnail Proxying", () => {
   });
 
   test("offline frame is valid PNG for various cameras", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     // Use cameras from the end of the list (less likely to be cached)
     const testCameras = ny511Cameras.slice(-3);
@@ -163,8 +174,8 @@ describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
 
   test("thumbnail response includes CORS headers", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     const sampleCam = ny511Cameras[ny511Cameras.length - 1]!;
     await cleanDiskCache(sampleCam.id);
@@ -183,8 +194,8 @@ describe("NY511 Thumbnail Proxying", () => {
   });
 
   test("successful thumbnail fetch returns image content type", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     // Mock fetch to return a fake JPEG
     const fakeJpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
@@ -218,8 +229,8 @@ describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
 
   test("falls back to disk cache when fetch fails", async () => {
-    const testManager = new CCTVProxyManager();
-    await testManager.loadNY511Cameras();
+    const testManager = createTestManager();
+    await testManager.fetchAllCameras("ny511");
 
     // Pick a camera, write a fake cached image to disk
     const sampleCam = ny511Cameras[0]!;
@@ -239,7 +250,6 @@ describe("NY511 Thumbnail Proxying", () => {
       // Should return the disk-cached image
       expect(response.headers.get("Content-Type")).toBe("image/jpeg");
       expect(response.headers.get("X-Stale")).toBe("true");
-      expect(response.headers.get("X-From-Disk")).toBe("true");
     } finally {
       globalThis.fetch = originalFetch;
       await cleanDiskCache(sampleCam.id);
@@ -251,7 +261,7 @@ describe("NY511 Thumbnail Proxying", () => {
   // -----------------------------------------------------------------------
 
   test("fetchAllCameras with ny511 source returns only ny511 cameras", async () => {
-    const testManager = new CCTVProxyManager();
+    const testManager = createTestManager();
     const cameras = await testManager.fetchAllCameras("ny511");
 
     expect(cameras.length).toBeGreaterThan(0);

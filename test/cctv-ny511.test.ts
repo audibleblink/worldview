@@ -1,5 +1,6 @@
 import { test, expect, describe } from "bun:test";
-import { CCTVProxyManager } from "../src/proxy/cctv";
+import { NY511Source } from "../src/proxy/cctv/sources/ny511";
+import type { CCTVCamera } from "../src/proxy/cctv";
 
 // Load raw JSON for comparison
 const rawData = await Bun.file("./src/data/511ny.json").json();
@@ -9,9 +10,9 @@ describe("NY511 Camera Loading", () => {
     expect(rawData.length).toBe(2920);
   });
 
-  test("loadNY511Cameras parses and returns cameras", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+  test("fetchCameras parses and returns cameras", async () => {
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     expect(cameras.length).toBeGreaterThan(1500);
   });
 
@@ -19,8 +20,8 @@ describe("NY511 Camera Loading", () => {
     const disabledCount = rawData.filter((c: any) => c.Disabled === true).length;
     expect(disabledCount).toBeGreaterThan(0);
 
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const hasDisabled = cameras.some((c) => {
       const originalId = c.id.replace("ny511-", "");
       const original = rawData.find((r: any) => r.ID === originalId);
@@ -30,8 +31,8 @@ describe("NY511 Camera Loading", () => {
   });
 
   test("filters out blocked cameras", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const hasBlocked = cameras.some((c) => {
       const originalId = c.id.replace("ny511-", "");
       const original = rawData.find((r: any) => r.ID === originalId);
@@ -44,30 +45,30 @@ describe("NY511 Camera Loading", () => {
     const zeroLatCount = rawData.filter((c: any) => c.Latitude === 0).length;
     expect(zeroLatCount).toBeGreaterThan(0);
 
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const hasZeroLat = cameras.some((c) => c.latitude === 0);
     expect(hasZeroLat).toBe(false);
   });
 
   test("filters out cameras with zero longitude", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const hasZeroLon = cameras.some((c) => c.longitude === 0);
     expect(hasZeroLon).toBe(false);
   });
 
   test("prefixes camera IDs with ny511-", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     for (const cam of cameras) {
       expect(cam.id).toStartWith("ny511-");
     }
   });
 
   test("preserves original ID after prefix", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     // Find a known camera from raw data that should pass filters
     const activeRaw = rawData.find(
       (c: any) => !c.Disabled && !c.Blocked && c.Latitude !== 0 && c.Longitude !== 0
@@ -78,24 +79,24 @@ describe("NY511 Camera Loading", () => {
   });
 
   test("all cameras have source ny511", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     for (const cam of cameras) {
       expect(cam.source).toBe("ny511");
     }
   });
 
   test("all cameras have status live", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     for (const cam of cameras) {
       expect(cam.status).toBe("live");
     }
   });
 
   test("cameras have roadway metadata", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const withRoadway = cameras.filter((c) => c.roadway);
     expect(withRoadway.length).toBeGreaterThan(0);
     // Verify a roadway value matches source data
@@ -106,8 +107,8 @@ describe("NY511 Camera Loading", () => {
   });
 
   test("direction is set for non-Unknown values", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const withDirection = cameras.filter((c) => c.direction);
     expect(withDirection.length).toBeGreaterThan(0);
     // Verify none have "Unknown" as direction
@@ -117,8 +118,8 @@ describe("NY511 Camera Loading", () => {
   });
 
   test("direction is undefined for Unknown values", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     // Find a camera whose original had DirectionOfTravel === "Unknown"
     const unknownOriginal = rawData.find(
       (c: any) =>
@@ -132,20 +133,21 @@ describe("NY511 Camera Loading", () => {
     }
   });
 
-  test("videoUrl is set when VideoUrl is non-null", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
-    const withVideo = cameras.filter((c) => c.videoUrl);
+  test("media array contains HLS entry when VideoUrl is non-null", async () => {
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
+    const withVideo = cameras.filter((c) => c.media.find((m) => m.type === "hls"));
     expect(withVideo.length).toBeGreaterThan(0);
     // Verify it's a valid HLS URL
     for (const cam of withVideo.slice(0, 5)) {
-      expect(cam.videoUrl).toContain(".m3u8");
+      const hlsMedia = cam.media.find((m) => m.type === "hls");
+      expect(hlsMedia?.url).toContain(".m3u8");
     }
   });
 
-  test("videoUrl is undefined when VideoUrl is null", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+  test("media array has no HLS entry when VideoUrl is null", async () => {
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     const nullVideoOriginal = rawData.find(
       (c: any) =>
         !c.Disabled && !c.Blocked && c.Latitude !== 0 && c.Longitude !== 0 &&
@@ -154,21 +156,24 @@ describe("NY511 Camera Loading", () => {
     if (nullVideoOriginal) {
       const cam = cameras.find((c) => c.id === `ny511-${nullVideoOriginal.ID}`);
       expect(cam).toBeTruthy();
-      expect(cam!.videoUrl).toBeUndefined();
+      const hlsMedia = cam!.media.find((m) => m.type === "hls");
+      expect(hlsMedia).toBeUndefined();
     }
   });
 
-  test("imageUrl is set to the 511ny.org URL", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+  test("media array contains image entry pointing to 511ny.org URL", async () => {
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     for (const cam of cameras.slice(0, 10)) {
-      expect(cam.imageUrl).toContain("511ny.org");
+      const imageMedia = cam.media.find((m) => m.type === "image");
+      expect(imageMedia).toBeDefined();
+      expect(imageMedia?.url).toContain("511ny.org");
     }
   });
 
   test("active camera count matches expected ~1825", async () => {
-    const manager = new CCTVProxyManager();
-    const cameras = await manager.loadNY511Cameras();
+    const source = new NY511Source();
+    const cameras = await source.fetchCameras();
     // Should be exactly the count of non-disabled, non-blocked, non-zero-coord cameras
     const expectedCount = rawData.filter(
       (c: any) => !c.Disabled && !c.Blocked && c.Latitude !== 0 && c.Longitude !== 0
