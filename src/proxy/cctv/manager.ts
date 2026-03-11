@@ -309,6 +309,34 @@ export class CCTVProxyManager {
     });
   }
 
+  /** Handle GET /api/cctv/hls/:id - Get signed HLS URL */
+  async handleHlsUrl(cameraId: string): Promise<Response> {
+    const camera = this.getCameraById(cameraId);
+    if (!camera) {
+      return jsonResponse({ error: "Camera not found" }, 404);
+    }
+
+    // Find HLS media
+    const hlsMedia = camera.media.find((m) => m.type === "hls");
+    if (!hlsMedia) {
+      return jsonResponse({ error: "Camera does not support HLS" }, 400);
+    }
+
+    // Get source
+    const source = this.sourceMap.get(camera.source);
+    if (!source || !source.getSignedHlsUrl) {
+      return jsonResponse({ error: "Source does not support signed HLS URLs" }, 400);
+    }
+
+    try {
+      const signedUrl = await source.getSignedHlsUrl(cameraId);
+      return jsonResponse({ url: signedUrl });
+    } catch (error) {
+      console.error(`[CCTV] Error getting signed HLS URL for ${cameraId}:`, error);
+      return jsonResponse({ error: "Failed to get stream URL" }, 502);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────
   // Offline Frame Generation
   // ─────────────────────────────────────────────────────────────────
