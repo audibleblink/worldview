@@ -290,7 +290,7 @@ export class CCTVProxyManager {
   }
 
   /** Handle GET /api/cctv/hls-relay/:id/:path - Proxy HLS stream server-side (avoids CORS) */
-  async handleHlsRelay(cameraId: string, relayPath: string, _req: Request): Promise<Response> {
+  async handleHlsRelay(cameraId: string, relayPath: string): Promise<Response> {
     const dashIndex = cameraId.indexOf("-");
     if (dashIndex === -1) {
       return errorResponse("Invalid camera ID format", 400);
@@ -312,6 +312,7 @@ export class CCTVProxyManager {
       const basePath = signedUrlObj.pathname.replace(/[^/]+$/, "");
       const upstreamUrl = new URL(basePath + relayPath + signedUrlObj.search, signedUrlObj.origin).toString();
 
+      // Use a browser UA to avoid bot-blocking on some CDN endpoints
       const upstream = await fetch(upstreamUrl, {
         headers: { "User-Agent": "Mozilla/5.0" },
       });
@@ -327,7 +328,7 @@ export class CCTVProxyManager {
         const manifestText = await upstream.text();
         const proxyBase = `/api/cctv/hls-relay/${encodeURIComponent(cameraId)}/`;
         const rewritten = manifestText
-          .split("\n")
+          .split(/\r?\n/)
           .map((line) => {
             const trimmed = line.trim();
             // Non-comment, non-empty lines are segment/playlist references

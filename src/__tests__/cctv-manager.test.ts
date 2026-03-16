@@ -248,7 +248,7 @@ describe("CCTVProxyManager HLS Relay", () => {
     ) as typeof fetch;
 
     try {
-      const response = await manager.handleHlsRelay("arkansas-99", "playlist.m3u8", new Request("http://localhost/"));
+      const response = await manager.handleHlsRelay("arkansas-99", "playlist.m3u8");
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toContain("mpegurl");
       const body = await response.text();
@@ -278,7 +278,7 @@ describe("CCTVProxyManager HLS Relay", () => {
     }) as typeof fetch;
 
     try {
-      const response = await manager.handleHlsRelay("arkansas-99", "media_w123_001.ts", new Request("http://localhost/"));
+      const response = await manager.handleHlsRelay("arkansas-99", "media_w123_001.ts");
       expect(response.status).toBe(200);
       expect(fetchedUrl).toBe("https://cdn.example.com/rtplive/CAM1/media_w123_001.ts?token=abc");
     } finally {
@@ -289,7 +289,7 @@ describe("CCTVProxyManager HLS Relay", () => {
   test("handleHlsRelay returns 404 for unknown source", async () => {
     const manager = new CCTVProxyManager();
     await manager.initialize();
-    const response = await manager.handleHlsRelay("arkansas-999", "playlist.m3u8", new Request("http://localhost/"));
+    const response = await manager.handleHlsRelay("arkansas-999", "playlist.m3u8");
     expect(response.status).toBe(404);
   });
 
@@ -297,7 +297,7 @@ describe("CCTVProxyManager HLS Relay", () => {
     const manager = new CCTVProxyManager();
     manager.register(fakeSource("notoken", []));
     await manager.initialize();
-    const response = await manager.handleHlsRelay("notoken-1", "playlist.m3u8", new Request("http://localhost/"));
+    const response = await manager.handleHlsRelay("notoken-1", "playlist.m3u8");
     expect(response.status).toBe(400);
   });
 });
