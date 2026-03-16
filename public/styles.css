@@ -1367,6 +1367,11 @@ select option {
   color: #fff;
 }
 
+.cctv-status.img {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .cctv-info {
   flex: 1;
   min-width: 0;
@@ -1837,5 +1842,13 @@ select option {
   width: 100%;
   display: block;
   max-height: 280px;
+  background: #000;
+}
+
+.cctv-image {
+  width: 100%;
+  display: block;
+  max-height: 280px;
+  object-fit: cover;
   background: #000;
 }

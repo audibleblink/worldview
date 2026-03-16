@@ -28,6 +28,10 @@ export interface GroundState {
   trafficLoading: boolean;
   /** Last error message for traffic */
   trafficError: string | null;
+  /** Whether CCTV cameras are currently loading */
+  cctvLoading: boolean;
+  /** Whether viewport altitude is too high to show CCTV cameras */
+  cctvTooHigh: boolean;
 }
 
 const initialState: GroundState = {
@@ -40,6 +44,8 @@ const initialState: GroundState = {
   centerStageCameraId: null,
   trafficLoading: false,
   trafficError: null,
+  cctvLoading: true,
+  cctvTooHigh: false,
 };
 
 // Create the store
@@ -121,6 +127,20 @@ export function setTrafficLoading(loading: boolean): void {
  */
 export function setTrafficError(error: string | null): void {
   setGroundState("trafficError", error);
+}
+
+/**
+ * Set CCTV loading state
+ */
+export function setCctvLoading(loading: boolean): void {
+  setGroundState("cctvLoading", loading);
+}
+
+/**
+ * Set CCTV too-high state (viewport altitude above threshold)
+ */
+export function setCctvTooHigh(tooHigh: boolean): void {
+  setGroundState("cctvTooHigh", tooHigh);
 }
 
 // Export readonly state

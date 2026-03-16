@@ -63,6 +63,8 @@ export interface CreateBillboardCollectionReturn {
   clear: () => void;
   /** Get count of billboards */
   count: () => number;
+  /** Get all current billboard IDs */
+  ids: () => Set<string>;
 }
 
 /**
@@ -251,6 +253,8 @@ export function createBillboardCollection(
     clear: () => clearInternal(),
 
     count: () => billboardMap.size,
+
+    ids: () => new Set(billboardMap.keys()),
   };
 }
 

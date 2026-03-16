@@ -4,12 +4,10 @@
  * CRITICAL: Uses canvas directly for texture updates - NO toDataURL() (Blocklist #2)
  */
 
-import { createEffect, onCleanup, createSignal, on } from "solid-js";
-import { createBillboardCollection, type BillboardOptions } from "../../cesium/createBillboardCollection.ts";
+import { createEffect, onCleanup, on } from "solid-js";
+import { createBillboardCollection } from "../../cesium/createBillboardCollection.ts";
 import { useCesium } from "../../cesium/useCesium.ts";
-import { groundState, setCameras, setCenterStageCamera } from "./store.ts";
-import { PROXY_ENDPOINTS } from "../../config.ts";
-import type { Camera, BBox } from "./types.ts";
+import { groundState, setCenterStageCamera } from "./store.ts";
 
 declare const Cesium: typeof import("cesium");
 
@@ -100,59 +98,11 @@ function createCameraIconTexture(): HTMLCanvasElement {
 export function CCTVLayer() {
   const { viewer, ready } = useCesium();
 
-  const [cameras, setCamerasLocal] = createSignal<Camera[]>([]);
-  let viewportDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Read cameras from the shared store (fetching done by CCTVCameraListPanel via useCCTVFetcher)
+  const cameras = () => groundState.cctvCameras;
 
   // Create billboard collection for camera markers
   const markerCollection = createBillboardCollection();
-
-  /**
-   * Get viewport bounding box.
-   * Uses camera.computeViewRectangle so it works even when globe.show = false.
-   */
-  function getViewportBbox(): BBox | null {
-    const v = viewer();
-    if (!v || v.isDestroyed()) return null;
-
-    const rect = v.camera.computeViewRectangle(v.scene.globe.ellipsoid);
-    if (!rect) return null;
-
-    return {
-      south: Cesium.Math.toDegrees(rect.south),
-      north: Cesium.Math.toDegrees(rect.north),
-      west: Cesium.Math.toDegrees(rect.west),
-      east: Cesium.Math.toDegrees(rect.east),
-    };
-  }
-
-  /**
-   * Fetch cameras in viewport from proxy
-   */
-  async function fetchCamerasInViewport(): Promise<void> {
-    const bbox = getViewportBbox();
-    if (!bbox) return;
-
-    try {
-      const params = new URLSearchParams({
-        bbox: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
-      });
-
-      const response = await fetch(`${PROXY_ENDPOINTS.cctvCameras}?${params}`);
-
-      if (!response.ok) {
-        console.error(`[CCTVLayer] Failed to fetch cameras: ${response.status}`);
-        return;
-      }
-
-      const data: Camera[] = await response.json();
-      setCamerasLocal(data);
-      setCameras(data);
-
-      console.log(`[CCTVLayer] Fetched ${data.length} cameras`);
-    } catch (error) {
-      console.error("[CCTVLayer] Error fetching cameras:", error);
-    }
-  }
 
   /**
    * Update billboard markers based on camera data
@@ -161,18 +111,8 @@ export function CCTVLayer() {
     const cameraData = cameras();
     const iconCanvas = createCameraIconTexture();
 
-    // Get current billboard IDs
-    const currentIds = new Set<string>();
-    const count = markerCollection.count();
-
-    // Collect current marker IDs
-    for (let i = 0; i < count; i++) {
-      const billboard = markerCollection.collection?.get(i);
-      if (billboard?.id) {
-        currentIds.add(billboard.id as string);
-      }
-    }
-
+    // Get current billboard IDs directly from the tracked map (not raw Cesium index)
+    const currentIds = markerCollection.ids();
     const newIds = new Set(cameraData.map((c) => `cctv-marker:${c.id}`));
 
     // Remove markers for cameras no longer in view
@@ -206,47 +146,12 @@ export function CCTVLayer() {
     }
   }
 
-  /**
-   * Handle camera movement with debounce
-   */
-  function handleCameraChange(): void {
-    if (viewportDebounceTimer) {
-      clearTimeout(viewportDebounceTimer);
-    }
-
-    viewportDebounceTimer = setTimeout(() => {
-      fetchCamerasInViewport();
-    }, CONFIG.viewportDebounceMs);
-  }
-
   // Update markers when camera data changes
   createEffect(
     on(cameras, () => {
       updateMarkers();
     })
   );
-
-  // Markers are always visible when the ground layer is active
-  // (cctvEnabled sub-toggle no longer hides billboard markers)
-
-  // Set up camera listener and initial fetch
-  createEffect(() => {
-    if (!ready()) return;
-
-    const v = viewer();
-    if (!v || v.isDestroyed()) return;
-
-    v.camera.moveEnd.addEventListener(handleCameraChange);
-
-    // Initial fetch
-    fetchCamerasInViewport();
-
-    onCleanup(() => {
-      if (!v.isDestroyed()) {
-        v.camera.moveEnd.removeEventListener(handleCameraChange);
-      }
-    });
-  });
 
   // Set up click handler for camera selection
   createEffect(() => {
@@ -285,9 +190,6 @@ export function CCTVLayer() {
 
   // Cleanup
   onCleanup(() => {
-    if (viewportDebounceTimer) {
-      clearTimeout(viewportDebounceTimer);
-    }
     markerCollection.clear();
     console.log("[CCTVLayer] Unmounted");
   });
