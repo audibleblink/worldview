@@ -52,10 +52,8 @@ export async function handleHlsRelay(req: Request): Promise<Response> {
   // Path format: /api/cctv/hls-relay/:id/:relayPath
   const match = url.pathname.match(/^\/api\/cctv\/hls-relay\/([^/]+)\/(.+)$/);
   if (!match) {
-    return new Response(JSON.stringify({ error: "Invalid relay URL" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    const { errorResponse } = await import("../types.ts");
+    return errorResponse("Invalid relay URL", 400);
   }
   const cameraId = decodeURIComponent(match[1]!);
   const relayPath = match[2]!;
