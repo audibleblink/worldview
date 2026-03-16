@@ -137,6 +137,7 @@ export function CesiumProvider(props: CesiumProviderProps) {
     if (scene.moon) scene.moon.show = true;
 
     setViewer(cesiumViewer);
+    (window as any).__viewer = cesiumViewer; // DEBUG: expose viewer for diagnostics
 
     // Load Google Photorealistic 3D Tiles
     try {

@@ -8,11 +8,15 @@ import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import Hls from "hls.js";
 import { groundState, setCenterStageCamera } from "../../layers/ground/store";
 import { PROXY_ENDPOINTS } from "../../config";
+import { useCesium } from "../../cesium/useCesium";
+
+declare const Cesium: typeof import("cesium");
 
 /**
  * CCTVPanel - Video/image overlay for selected CCTV camera
  */
 export function CCTVPanel() {
+  const { viewer, ready } = useCesium();
   let videoRef: HTMLVideoElement | undefined;
   let hlsInstance: Hls | null = null;
 
@@ -84,6 +88,28 @@ export function CCTVPanel() {
       setIsVideo(false);
       setImageSrc(PROXY_ENDPOINTS.cctvThumbnail(cameraId));
     }
+  });
+
+  // Pan viewport to center on the selected camera (keep current altitude)
+  createEffect(() => {
+    const cameraId = groundState.centerStageCameraId;
+    if (!cameraId || !ready()) return;
+
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
+
+    const camera = untrack(() => groundState.cctvCameras.find((c) => c.id === cameraId));
+    if (!camera) return;
+
+    const currentHeight = v.camera.positionCartographic.height;
+    v.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        camera.longitude,
+        camera.latitude,
+        currentHeight
+      ),
+      duration: 1.5,
+    });
   });
 
   onCleanup(() => {

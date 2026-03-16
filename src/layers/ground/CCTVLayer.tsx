@@ -105,6 +105,26 @@ export function CCTVLayer() {
   const markerCollection = createBillboardCollection();
 
   /**
+   * Sample terrain height from 3D tiles at a given lon/lat.
+   * Falls back to a safe default if tiles aren't loaded at that point yet.
+   */
+  function getTerrainHeight(lon: number, lat: number): number {
+    const v = viewer();
+    if (!v || v.isDestroyed()) return CONFIG.billboardAltitude;
+
+    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
+    const height = v.scene.sampleHeight(carto);
+
+    // sampleHeight returns undefined if no tiles are loaded at that position
+    if (height === undefined || height === null || isNaN(height)) {
+      return CONFIG.billboardAltitude;
+    }
+
+    // Place billboard slightly above the tile surface
+    return height + 5;
+  }
+
+  /**
    * Update billboard markers based on camera data
    */
   function updateMarkers(): void {
@@ -127,12 +147,13 @@ export function CCTVLayer() {
       const markerId = `cctv-marker:${camera.id}`;
 
       if (!currentIds.has(markerId)) {
+        const alt = getTerrainHeight(camera.longitude, camera.latitude);
         markerCollection.add({
           id: markerId,
           position: Cesium.Cartesian3.fromDegrees(
             camera.longitude,
             camera.latitude,
-            10
+            alt
           ),
           // CRITICAL: Pass canvas directly - NO toDataURL()
           image: iconCanvas,
