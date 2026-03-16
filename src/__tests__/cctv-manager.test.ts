@@ -207,3 +207,97 @@ describe("CCTVProxyManager Route Handlers", () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe("CCTVProxyManager HLS Relay", () => {
+  function makeHlsSource(signedUrl: string): CameraSource {
+    return {
+      name: "arkansas",
+      fetchCameras: async () => [
+        makeCamera({
+          id: "arkansas-99",
+          source: "arkansas",
+          media: [{ type: "hls", url: "https://actis.idrivearkansas.com/feed/99.m3u8" }],
+        }),
+      ],
+      getSignedHlsUrl: async (_id: string) => signedUrl,
+    };
+  }
+
+  test("handleHlsRelay returns rewritten manifest with proxied segment URLs", async () => {
+    const manager = new CCTVProxyManager();
+    const signedUrl = "https://cdn.example.com/rtplive/CAM1/playlist.m3u8?token=abc";
+    manager.register(makeHlsSource(signedUrl));
+    await manager.initialize();
+
+    const rawManifest = [
+      "#EXTM3U",
+      "#EXT-X-VERSION:3",
+      "#EXTINF:2.0,",
+      "media_w123_001.ts",
+      "#EXTINF:2.0,",
+      "media_w123_002.ts",
+      "#EXT-X-ENDLIST",
+    ].join("\n");
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(rawManifest, {
+        status: 200,
+        headers: { "Content-Type": "application/vnd.apple.mpegurl" },
+      }))
+    ) as typeof fetch;
+
+    try {
+      const response = await manager.handleHlsRelay("arkansas-99", "playlist.m3u8", new Request("http://localhost/"));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toContain("mpegurl");
+      const body = await response.text();
+      expect(body).toContain("/api/cctv/hls-relay/arkansas-99/media_w123_001.ts");
+      expect(body).toContain("/api/cctv/hls-relay/arkansas-99/media_w123_002.ts");
+      expect(body).not.toContain("\nmedia_w123_001.ts\n"); // bare filename gone (not as a standalone line)
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("handleHlsRelay proxies .ts segments with correct URL construction", async () => {
+    const manager = new CCTVProxyManager();
+    const signedUrl = "https://cdn.example.com/rtplive/CAM1/playlist.m3u8?token=abc";
+    manager.register(makeHlsSource(signedUrl));
+    await manager.initialize();
+
+    let fetchedUrl = "";
+    const fakeSegmentData = new Uint8Array([0x47, 0x00, 0x00]); // MPEG-TS sync byte
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock((url: string | URL | Request) => {
+      fetchedUrl = url.toString();
+      return Promise.resolve(new Response(fakeSegmentData, {
+        status: 200,
+        headers: { "Content-Type": "video/MP2T" },
+      }));
+    }) as typeof fetch;
+
+    try {
+      const response = await manager.handleHlsRelay("arkansas-99", "media_w123_001.ts", new Request("http://localhost/"));
+      expect(response.status).toBe(200);
+      expect(fetchedUrl).toBe("https://cdn.example.com/rtplive/CAM1/media_w123_001.ts?token=abc");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("handleHlsRelay returns 404 for unknown source", async () => {
+    const manager = new CCTVProxyManager();
+    await manager.initialize();
+    const response = await manager.handleHlsRelay("arkansas-999", "playlist.m3u8", new Request("http://localhost/"));
+    expect(response.status).toBe(404);
+  });
+
+  test("handleHlsRelay returns 400 for source without getSignedHlsUrl", async () => {
+    const manager = new CCTVProxyManager();
+    manager.register(fakeSource("notoken", []));
+    await manager.initialize();
+    const response = await manager.handleHlsRelay("notoken-1", "playlist.m3u8", new Request("http://localhost/"));
+    expect(response.status).toBe(400);
+  });
+});

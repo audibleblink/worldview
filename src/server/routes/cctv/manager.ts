@@ -289,6 +289,79 @@ export class CCTVProxyManager {
     }
   }
 
+  /** Handle GET /api/cctv/hls-relay/:id/:path - Proxy HLS stream server-side (avoids CORS) */
+  async handleHlsRelay(cameraId: string, relayPath: string, _req: Request): Promise<Response> {
+    const dashIndex = cameraId.indexOf("-");
+    if (dashIndex === -1) {
+      return errorResponse("Invalid camera ID format", 400);
+    }
+    const sourceName = cameraId.slice(0, dashIndex);
+    const source = this.sourceMap.get(sourceName);
+    if (!source) {
+      return errorResponse(`Unknown source: ${sourceName}`, 404);
+    }
+    if (!source.getSignedHlsUrl) {
+      return errorResponse("Source does not support signed HLS URLs", 400);
+    }
+
+    try {
+      const signedUrl = await source.getSignedHlsUrl(cameraId);
+      const signedUrlObj = new URL(signedUrl);
+
+      // Strip the playlist filename to get base path (e.g. /rtplive/R11_272/)
+      const basePath = signedUrlObj.pathname.replace(/[^/]+$/, "");
+      const upstreamUrl = new URL(basePath + relayPath + signedUrlObj.search, signedUrlObj.origin).toString();
+
+      const upstream = await fetch(upstreamUrl, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+      });
+
+      if (!upstream.ok) {
+        return errorResponse(`Upstream error: ${upstream.status}`, 502);
+      }
+
+      const contentType = upstream.headers.get("Content-Type") ?? "application/octet-stream";
+
+      // For HLS manifests, rewrite relative segment URLs to go through this relay
+      if (contentType.includes("mpegurl") || relayPath.endsWith(".m3u8")) {
+        const manifestText = await upstream.text();
+        const proxyBase = `/api/cctv/hls-relay/${encodeURIComponent(cameraId)}/`;
+        const rewritten = manifestText
+          .split("\n")
+          .map((line) => {
+            const trimmed = line.trim();
+            // Non-comment, non-empty lines are segment/playlist references
+            if (trimmed && !trimmed.startsWith("#")) {
+              return proxyBase + trimmed;
+            }
+            return line;
+          })
+          .join("\n");
+        return new Response(rewritten, {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/vnd.apple.mpegurl",
+            "Cache-Control": "no-cache",
+          },
+        });
+      }
+
+      // For segments and other binary content, stream through
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type": contentType,
+          "Cache-Control": "no-cache",
+        },
+      });
+    } catch (error) {
+      console.error(`[CCTV] HLS relay error for ${cameraId}/${relayPath}:`, error);
+      return errorResponse("HLS relay error", 502);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────
   // Offline Frame Generation
   // ─────────────────────────────────────────────────────────────────
