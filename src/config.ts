@@ -58,6 +58,9 @@ export const PROXY_ENDPOINTS = {
 
   /** CCTV signed HLS URL resolver (for token-gated streams) */
   cctvHlsUrl: (id: string) => `${PROXY_BASE_URL}/api/cctv/hls/${encodeURIComponent(id)}`,
+
+  /** CCTV HLS relay — proxies manifest + segments server-side to avoid CORS */
+  cctvHlsRelay: (id: string) => `${PROXY_BASE_URL}/api/cctv/hls-relay/${encodeURIComponent(id)}/playlist.m3u8`,
   
   /** OSM Overpass API proxy */
   osm: `${PROXY_BASE_URL}/api/osm`,

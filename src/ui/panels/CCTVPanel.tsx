@@ -1,20 +1,25 @@
 /**
  * WorldView - CCTV Panel
  * Displays live video feed when a CCTV camera is selected.
- * Uses HLS.js for HLS streams; falls back to MJPEG for image-only cameras.
+ * Uses HLS.js for HLS streams; displays an <img> for image-only cameras.
  */
 
-import { createEffect, onCleanup, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import Hls from "hls.js";
 import { groundState, setCenterStageCamera } from "../../layers/ground/store";
 import { PROXY_ENDPOINTS } from "../../config";
 
 /**
- * CCTVPanel - Video overlay for selected CCTV camera
+ * CCTVPanel - Video/image overlay for selected CCTV camera
  */
 export function CCTVPanel() {
   let videoRef: HTMLVideoElement | undefined;
   let hlsInstance: Hls | null = null;
+
+  // Whether the selected camera is video (true) or image-only (false)
+  const [isVideo, setIsVideo] = createSignal(false);
+  // Image src for image-only cameras
+  const [imageSrc, setImageSrc] = createSignal("");
 
   function destroyHls(): void {
     if (hlsInstance) {
@@ -50,45 +55,34 @@ export function CCTVPanel() {
     const cameraId = groundState.centerStageCameraId;
 
     destroyHls();
+    setIsVideo(false);
+    setImageSrc("");
 
-    if (!cameraId || !videoRef) return;
+    if (!cameraId) return;
 
-    const camera = groundState.cctvCameras.find((c) => c.id === cameraId);
+    const camera = untrack(() => groundState.cctvCameras.find((c) => c.id === cameraId));
     if (!camera) return;
 
     const hlsMedia = camera.media.find((m) => m.type === "hls");
 
     if (hlsMedia) {
-      // Check if this source uses token-gated HLS (needs proxy to resolve)
+      // Video camera — use the <video> player
+      setIsVideo(true);
+
+      // Check if this source uses token-gated HLS (CORS-blocked if fetched directly)
       const sourcePrefix = cameraId.split("-")[0];
       const tokenGatedSources = ["arkansas"];
 
       if (tokenGatedSources.includes(sourcePrefix ?? "")) {
-        // Fetch a fresh signed URL from the proxy
-        fetch(PROXY_ENDPOINTS.cctvHlsUrl(cameraId))
-          .then((res) => res.json())
-          .then((data: { url?: string }) => {
-            if (data.url) {
-              startHls(data.url);
-            } else {
-              console.warn("[CCTVPanel] No signed HLS URL returned for", cameraId);
-            }
-          })
-          .catch((err) => console.error("[CCTVPanel] Failed to resolve HLS URL:", err));
+        // Use the server-side relay — fetches signed URL and proxies manifest + segments
+        startHls(PROXY_ENDPOINTS.cctvHlsRelay(cameraId));
       } else {
         startHls(hlsMedia.url);
       }
     } else {
-      // Image-only camera: use MJPEG stream
-      const streamUrl = PROXY_ENDPOINTS.cctvStream(cameraId);
-      if (Hls.isSupported()) {
-        // Can't use HLS.js for MJPEG — set src directly
-        videoRef.src = streamUrl;
-        videoRef.play().catch(console.error);
-      } else {
-        videoRef.src = streamUrl;
-        videoRef.play().catch(console.error);
-      }
+      // Image-only camera — display the thumbnail directly as an <img>
+      setIsVideo(false);
+      setImageSrc(PROXY_ENDPOINTS.cctvThumbnail(cameraId));
     }
   });
 
@@ -112,14 +106,25 @@ export function CCTVPanel() {
             </button>
           </div>
           <div class="cctv-panel-content">
-            <video
-              ref={videoRef}
-              class="cctv-video"
-              controls
-              muted
-              autoplay
-              poster={PROXY_ENDPOINTS.cctvThumbnail(cameraId())}
-            />
+            <Show
+              when={isVideo()}
+              fallback={
+                <img
+                  src={imageSrc()}
+                  class="cctv-image"
+                  alt={groundState.cctvCameras.find((c) => c.id === cameraId())?.name ?? cameraId()}
+                />
+              }
+            >
+              <video
+                ref={videoRef}
+                class="cctv-video"
+                controls
+                muted
+                autoplay
+                poster={PROXY_ENDPOINTS.cctvThumbnail(cameraId())}
+              />
+            </Show>
           </div>
         </div>
       )}
