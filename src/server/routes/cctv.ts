@@ -45,3 +45,19 @@ export async function handleHlsUrl(req: Request): Promise<Response> {
   }
   return cctvProxyManager.handleHlsUrl(match[1]);
 }
+
+/** Handle GET /api/cctv/hls-relay/:id/:path - Proxy HLS content server-side */
+export async function handleHlsRelay(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  // Path format: /api/cctv/hls-relay/:id/:relayPath
+  const match = url.pathname.match(/^\/api\/cctv\/hls-relay\/([^/]+)\/(.+)$/);
+  if (!match) {
+    return new Response(JSON.stringify({ error: "Invalid relay URL" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const cameraId = decodeURIComponent(match[1]!);
+  const relayPath = match[2]!;
+  return cctvProxyManager.handleHlsRelay(cameraId, relayPath);
+}

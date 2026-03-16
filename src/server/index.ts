@@ -13,7 +13,7 @@ import { corsResponse, jsonResponse, errorResponse } from "./types.ts";
 import { handleTLE, getTLECacheStats } from "./routes/tle.ts";
 import { handleFlights, handleAircraftMeta, handleFlightRoute, getFlightsCacheStats } from "./routes/flights.ts";
 import { handleGeocode, getGeocodeCacheStats } from "./routes/geocode.ts";
-import { handleCameraList, handleThumbnail, handleStream, handleHlsUrl, initializeCCTV } from "./routes/cctv.ts";
+import { handleCameraList, handleThumbnail, handleStream, handleHlsUrl, handleHlsRelay, initializeCCTV } from "./routes/cctv.ts";
 import { handleShips } from "./routes/ships.ts";
 import { handleOSM } from "./routes/osm.ts";
 import { handleGoogleTiles, handleMapTiles } from "./routes/tiles.ts";
@@ -104,6 +104,11 @@ async function handleDynamicRoutes(req: Request): Promise<Response | null> {
     return applyMiddleware(handleHlsUrl)(req);
   }
 
+  // CCTV HLS relay: /api/cctv/hls-relay/:id/:path
+  if (path.startsWith("/api/cctv/hls-relay/")) {
+    return applyMiddleware(handleHlsRelay)(req);
+  }
+
   // Map tiles: /map-tiles/:z/:x/:y
   if (path.startsWith("/map-tiles/")) {
     return applyMiddleware(handleMapTiles)(req);
@@ -192,6 +197,7 @@ console.log(`  GET  /api/cctv/cameras      - CCTV camera list`);
 console.log(`  GET  /api/cctv/thumbnail/:id - Camera thumbnail`);
 console.log(`  GET  /api/cctv/stream/:id   - Camera MJPEG stream`);
 console.log(`  GET  /api/cctv/hls/:id      - Signed HLS URL for token-gated streams`);
+console.log(`  GET  /api/cctv/hls-relay/:id/:path - Server-side HLS proxy (avoids CORS)`);
 console.log(`  POST /api/osm               - OSM Overpass queries`);
 console.log(`  GET  /map-tiles/:z/:x/:y    - 2D map tiles`);
 console.log(`  GET  /api/stats             - Cache statistics`);
