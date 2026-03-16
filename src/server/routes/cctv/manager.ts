@@ -312,9 +312,13 @@ export class CCTVProxyManager {
       const basePath = signedUrlObj.pathname.replace(/[^/]+$/, "");
       const upstreamUrl = new URL(basePath + relayPath + signedUrlObj.search, signedUrlObj.origin).toString();
 
-      // Use a browser UA to avoid bot-blocking on some CDN endpoints
+      // Use browser UA + Referer to satisfy CDN origin checks (e.g. Arkansas worldssl.net CDN)
       const upstream = await fetch(upstreamUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" },
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Referer: "https://www.idrivearkansas.com/",
+          Origin: "https://www.idrivearkansas.com",
+        },
       });
 
       if (!upstream.ok) {

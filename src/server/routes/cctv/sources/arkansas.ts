@@ -28,11 +28,14 @@ interface ArkansasGeoJSON {
 const ARKANSAS_GEOJSON_URL = "https://layers.idrivearkansas.com/cameras.geojson";
 const ARKANSAS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const TOKEN_CACHE_TTL = 25 * 1000; // 25s — tokens appear short-lived, stay well under expiry
+
 export class ArkansasSource implements CameraSource {
   readonly name = "arkansas";
 
   private cameras: CCTVCamera[] = [];
   private cacheTime = 0;
+  private tokenCache = new Map<string, { url: string; expiresAt: number }>();
 
   async fetchCameras(): Promise<CCTVCamera[]> {
     if (this.cameras.length > 0 && Date.now() - this.cacheTime < ARKANSAS_CACHE_TTL) {
@@ -75,6 +78,12 @@ export class ArkansasSource implements CameraSource {
   }
 
   async getSignedHlsUrl(cameraId: string): Promise<string> {
+    // Return cached token if still valid
+    const cached = this.tokenCache.get(cameraId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.url;
+    }
+
     // Extract numeric ID from "arkansas-{id}"
     const match = cameraId.match(/^arkansas-(\d+)$/);
     if (!match) {
@@ -101,6 +110,7 @@ export class ArkansasSource implements CameraSource {
       throw new Error("No Location header in redirect response");
     }
 
+    this.tokenCache.set(cameraId, { url: signedUrl, expiresAt: Date.now() + TOKEN_CACHE_TTL });
     return signedUrl;
   }
 }
