@@ -19,15 +19,24 @@ export interface BBox {
   east: number;
 }
 
+/** Media format a camera can provide */
+export type CameraMediaType = "image" | "hls" | "mp4ts";
+
+/** A single media endpoint for a camera */
+export interface CameraMedia {
+  type: CameraMediaType;
+  url: string;
+}
+
 /** CCTV Camera data from API */
 export interface Camera {
   id: string;
   name: string;
   latitude: number;
   longitude: number;
-  url?: string;
-  source?: string;
-  status?: string;
+  source: string;
+  status: "live" | "offline";
+  media: CameraMedia[];
   roadway?: string;
   direction?: string;
 }

@@ -35,6 +35,8 @@ export interface BillboardOptions {
   horizontalOrigin?: Cesium.HorizontalOrigin;
   /** Custom data attached to billboard */
   data?: unknown;
+  /** Distance from camera at which depth testing is disabled (use Infinity to always render on top) */
+  disableDepthTestDistance?: number;
 }
 
 export interface CreateBillboardCollectionOptions {
@@ -160,6 +162,7 @@ export function createBillboardCollection(
       pixelOffset: opts.pixelOffset ?? Cesium.Cartesian2.ZERO,
       verticalOrigin: opts.verticalOrigin ?? Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: opts.horizontalOrigin ?? Cesium.HorizontalOrigin.CENTER,
+      disableDepthTestDistance: opts.disableDepthTestDistance,
     });
 
     // Store custom data on the billboard

@@ -40,52 +40,22 @@ export function CCTVCameraListPanel() {
   }
 
   /**
-   * Get viewport bounding box from Cesium camera
+   * Get viewport bounding box from Cesium camera.
+   * Uses camera.computeViewRectangle so it works even when globe.show = false.
    */
   function getViewportBbox(): BBox | null {
     const v = viewer();
     if (!v || v.isDestroyed()) return null;
 
-    const camera = v.camera;
-    const canvas = v.scene.canvas;
-    const ellipsoid = v.scene.globe.ellipsoid;
+    const rect = v.camera.computeViewRectangle(v.scene.globe.ellipsoid);
+    if (!rect) return null;
 
-    const corners = [
-      new Cesium.Cartesian2(0, 0),
-      new Cesium.Cartesian2(canvas.clientWidth, 0),
-      new Cesium.Cartesian2(0, canvas.clientHeight),
-      new Cesium.Cartesian2(canvas.clientWidth, canvas.clientHeight),
-    ];
-
-    let minLat = Infinity,
-      maxLat = -Infinity,
-      minLon = Infinity,
-      maxLon = -Infinity;
-    let validCorners = 0;
-
-    for (const corner of corners) {
-      const ray = camera.getPickRay(corner);
-      if (!ray) continue;
-
-      const position = v.scene.globe.pick(ray, v.scene);
-      if (!position) continue;
-
-      const cartographic = ellipsoid.cartesianToCartographic(position);
-      if (!cartographic) continue;
-
-      const lat = Cesium.Math.toDegrees(cartographic.latitude);
-      const lon = Cesium.Math.toDegrees(cartographic.longitude);
-
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLon = Math.min(minLon, lon);
-      maxLon = Math.max(maxLon, lon);
-      validCorners++;
-    }
-
-    if (validCorners < 2) return null;
-
-    return { south: minLat, north: maxLat, west: minLon, east: maxLon };
+    return {
+      south: Cesium.Math.toDegrees(rect.south),
+      north: Cesium.Math.toDegrees(rect.north),
+      west: Cesium.Math.toDegrees(rect.west),
+      east: Cesium.Math.toDegrees(rect.east),
+    };
   }
 
   /**
@@ -235,11 +205,9 @@ export function CCTVCameraListPanel() {
                     alt={camera.name}
                     loading="lazy"
                   />
-                  <Show when={camera.status}>
-                    <span class={`cctv-status ${camera.status === "active" ? "live" : "offline"}`}>
-                      {camera.status === "active" ? "LIVE" : camera.status!.toUpperCase()}
-                    </span>
-                  </Show>
+                  <span class={`cctv-status ${camera.status === "live" ? "live" : "offline"}`}>
+                    {camera.status === "live" ? "LIVE" : "OFFLINE"}
+                  </span>
                 </div>
                 <div class="cctv-info">
                   <div class="cctv-name">{camera.name}</div>

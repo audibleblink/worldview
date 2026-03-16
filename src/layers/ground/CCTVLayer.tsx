@@ -107,56 +107,21 @@ export function CCTVLayer() {
   const markerCollection = createBillboardCollection();
 
   /**
-   * Get viewport bounding box
+   * Get viewport bounding box.
+   * Uses camera.computeViewRectangle so it works even when globe.show = false.
    */
   function getViewportBbox(): BBox | null {
     const v = viewer();
     if (!v || v.isDestroyed()) return null;
 
-    const camera = v.camera;
-    const canvas = v.scene.canvas;
-    const ellipsoid = v.scene.globe.ellipsoid;
-
-    const corners = [
-      new Cesium.Cartesian2(0, 0),
-      new Cesium.Cartesian2(canvas.clientWidth, 0),
-      new Cesium.Cartesian2(0, canvas.clientHeight),
-      new Cesium.Cartesian2(canvas.clientWidth, canvas.clientHeight),
-    ];
-
-    let minLat = Infinity,
-      maxLat = -Infinity,
-      minLon = Infinity,
-      maxLon = -Infinity;
-    let validCorners = 0;
-
-    for (const corner of corners) {
-      const ray = camera.getPickRay(corner);
-      if (!ray) continue;
-
-      const position = v.scene.globe.pick(ray, v.scene);
-      if (!position) continue;
-
-      const cartographic = ellipsoid.cartesianToCartographic(position);
-      if (!cartographic) continue;
-
-      const lat = Cesium.Math.toDegrees(cartographic.latitude);
-      const lon = Cesium.Math.toDegrees(cartographic.longitude);
-
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLon = Math.min(minLon, lon);
-      maxLon = Math.max(maxLon, lon);
-      validCorners++;
-    }
-
-    if (validCorners < 2) return null;
+    const rect = v.camera.computeViewRectangle(v.scene.globe.ellipsoid);
+    if (!rect) return null;
 
     return {
-      south: minLat,
-      north: maxLat,
-      west: minLon,
-      east: maxLon,
+      south: Cesium.Math.toDegrees(rect.south),
+      north: Cesium.Math.toDegrees(rect.north),
+      west: Cesium.Math.toDegrees(rect.west),
+      east: Cesium.Math.toDegrees(rect.east),
     };
   }
 
@@ -234,6 +199,7 @@ export function CCTVLayer() {
           scale: CONFIG.markerSize / 40, // Scale to desired size
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           data: { cameraId: camera.id, name: camera.name },
         });
       }
@@ -294,9 +260,10 @@ export function CCTVLayer() {
       const pickedObject = v.scene.pick(click.position);
 
       if (Cesium.defined(pickedObject)) {
-        const billboard = pickedObject.id;
-        if (billboard && typeof billboard.id === "string" && billboard.id.startsWith("cctv-marker:")) {
-          const cameraId = billboard.id.replace("cctv-marker:", "");
+        // BillboardCollection pick: pickedObject.id is the string id set on the billboard
+        const id = pickedObject.id;
+        if (typeof id === "string" && id.startsWith("cctv-marker:")) {
+          const cameraId = id.replace("cctv-marker:", "");
           console.log("[CCTVLayer] Selected camera:", cameraId);
           setCenterStageCamera(cameraId);
           return;

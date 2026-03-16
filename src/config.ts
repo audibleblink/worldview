@@ -55,6 +55,9 @@ export const PROXY_ENDPOINTS = {
   
   /** CCTV stream by camera ID */
   cctvStream: (id: string) => `${PROXY_BASE_URL}/api/cctv/stream/${encodeURIComponent(id)}`,
+
+  /** CCTV signed HLS URL resolver (for token-gated streams) */
+  cctvHlsUrl: (id: string) => `${PROXY_BASE_URL}/api/cctv/hls/${encodeURIComponent(id)}`,
   
   /** OSM Overpass API proxy */
   osm: `${PROXY_BASE_URL}/api/osm`,
