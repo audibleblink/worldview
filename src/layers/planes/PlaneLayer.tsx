@@ -234,8 +234,6 @@ export function PlaneLayer() {
       scale: BILLBOARD_SCALE,
       color,
       rotation: -Cesium.Math.toRadians(record.heading),
-      // UNIT_Z aligns rotation to globe's Z axis for consistent heading display
-      alignedAxis: Cesium.Cartesian3.UNIT_Z,
       data: { icao24: record.icao24, type: "plane" },
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
