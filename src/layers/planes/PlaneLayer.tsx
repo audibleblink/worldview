@@ -463,9 +463,9 @@ export function PlaneLayer() {
         continue;
       }
 
-      // Use 75% of actual velocity for smoother, more conservative interpolation
+      // Use 80% of actual velocity for smoother, more conservative interpolation
       // This undershoots rather than overshoots, avoiding the snap-back effect
-      const interpolationSpeed = record.velocity * 0.75;
+      const interpolationSpeed = record.velocity * 0.8;
 
       // Distance traveled in meters
       const distanceM = interpolationSpeed * elapsedSec;
@@ -498,8 +498,8 @@ export function PlaneLayer() {
         Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
       );
 
-      // Account for vertical rate (altitude change) - also at 75% speed
-      const altitudeChange = record.verticalRate * elapsedSec * 0.75;
+      // Account for vertical rate (altitude change) - also at 80% speed
+      const altitudeChange = record.verticalRate * elapsedSec * 0.8;
       const newAltitude = Math.max(0, record.altitude + altitudeChange);
 
       // Create interpolated position
