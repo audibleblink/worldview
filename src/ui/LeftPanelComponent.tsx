@@ -23,8 +23,8 @@ interface LayerConfig {
 // Static layer configuration for display
 const LAYER_CONFIGS: LayerConfig[] = [
   { id: "satellites", name: "SATELLITES" },
-  { id: "flights", name: "FLIGHTS" },
   { id: "ships", name: "SHIPS" },
+  { id: "planes", name: "PLANES" },
   { id: "ground", name: "GROUND" },
 ];
 
