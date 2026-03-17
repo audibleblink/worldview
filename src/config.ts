@@ -16,18 +16,17 @@ export const PROXY_ENDPOINTS = {
   /** TLE satellite data endpoint */
   tle: (group: string) => `${PROXY_BASE_URL}/tle?group=${encodeURIComponent(group)}`,
   
-  /** OpenSky flight states endpoint */
-  flights: `${PROXY_BASE_URL}/flights`,
-  
-  /** FlightAware route lookup */
-  flightRoute: (callsign: string) => `${PROXY_BASE_URL}/flight-route/${encodeURIComponent(callsign)}`,
-  
-  /** Aircraft metadata by ICAO24 hex */
-  aircraftMeta: (icao24: string) => `${PROXY_BASE_URL}/aircraft-meta/${encodeURIComponent(icao24)}`,
-  
   /** Ship tracking endpoint with bounding box */
   ships: ({ minLat, maxLat, minLon, maxLon }: { minLat: number; maxLat: number; minLon: number; maxLon: number }) =>
     `${PROXY_BASE_URL}/ships?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}`,
+
+  /** Plane tracking endpoint with bounding box */
+  planes: ({ minLat, maxLat, minLon, maxLon }: { minLat: number; maxLat: number; minLon: number; maxLon: number }) =>
+    `${PROXY_BASE_URL}/planes?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}`,
+
+  /** Plane search by callsign */
+  planesSearch: (callsign: string) =>
+    `${PROXY_BASE_URL}/planes/search?callsign=${encodeURIComponent(callsign)}`,
   
   /** CCTV camera list */
   cctvCameras: `${PROXY_BASE_URL}/api/cctv/cameras`,
@@ -58,7 +57,4 @@ export const PROXY_ENDPOINTS = {
 /**
  * Local asset paths - bundled assets that should NOT use remote URLs
  */
-export const LOCAL_ASSETS = {
-  /** 3D aircraft model for flight visualization */
-  aircraftModel: "/models/aircraft.glb",
-} as const;
+export const LOCAL_ASSETS = {} as const;
