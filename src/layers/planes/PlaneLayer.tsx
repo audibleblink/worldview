@@ -463,11 +463,16 @@ export function PlaneLayer() {
         continue;
       }
 
-      // Cap interpolation to 30 seconds to avoid runaway extrapolation
-      const cappedElapsed = Math.min(elapsedSec, 30);
+      // Cap interpolation to 8 seconds (80% of poll interval) to reduce rubberbanding
+      // After 8 seconds, we stop extrapolating and wait for fresh data
+      const cappedElapsed = Math.min(elapsedSec, 8);
 
-      // Distance traveled in meters
-      const distanceM = record.velocity * cappedElapsed;
+      // Apply damping factor - start at 100% speed, decay to 30% by cap time
+      // This makes planes slow down as we get further from known data
+      const dampingFactor = 0.3 + 0.7 * Math.max(0, 1 - cappedElapsed / 8);
+
+      // Distance traveled in meters (with damping)
+      const distanceM = record.velocity * cappedElapsed * dampingFactor;
 
       // Convert heading to radians (heading is clockwise from north)
       const headingRad = Cesium.Math.toRadians(record.heading);
