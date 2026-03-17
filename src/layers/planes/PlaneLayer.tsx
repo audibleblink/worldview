@@ -147,6 +147,10 @@ export function PlaneLayer() {
   let cameraMoveDebounce: ReturnType<typeof setTimeout> | null = null;
   let cameraMoveRemove: (() => void) | null = null;
 
+  // Track last trail update time for followed plane (to throttle trail point additions)
+  let lastTrailUpdateTime = 0;
+  const TRAIL_UPDATE_INTERVAL_MS = 1000; // Add trail point every 1 second during follow
+
   function getBoundingBox(): BBox {
     const viewportBbox = getViewportBBox();
     if (viewportBbox) return viewportBbox;
@@ -515,6 +519,12 @@ export function PlaneLayer() {
       const label = labelMap.get(icao24);
       if (label) {
         label.position = interpolatedPos;
+      }
+
+      // Update trail for followed plane during interpolation (throttled)
+      if (icao24 === planeState.followingIcao24 && now - lastTrailUpdateTime > TRAIL_UPDATE_INTERVAL_MS) {
+        updateTrail(icao24, interpolatedPos, MAX_TRAIL_POINTS);
+        lastTrailUpdateTime = now;
       }
     }
 
