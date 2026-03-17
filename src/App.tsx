@@ -5,9 +5,9 @@ import { Shell } from "./ui/ShellComponent";
 
 // Side-effect imports: register layer definitions
 import "./layers/satellites";
-import "./layers/flights";
 import "./layers/ships";
 import "./layers/ground";
+import "./layers/planes";
 
 export function App() {
   return (
