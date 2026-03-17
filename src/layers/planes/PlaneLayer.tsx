@@ -227,9 +227,6 @@ export function PlaneLayer() {
     const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
     const color = getAltitudeColor(record.altitude);
 
-    // Get the local "up" vector at this position for proper 3D rotation
-    const alignedAxis = Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3());
-
     billboardApi.add({
       id: record.icao24,
       position,
@@ -237,7 +234,8 @@ export function PlaneLayer() {
       scale: BILLBOARD_SCALE,
       color,
       rotation: -Cesium.Math.toRadians(record.heading),
-      alignedAxis,
+      // UNIT_Z aligns rotation to globe's Z axis for consistent heading display
+      alignedAxis: Cesium.Cartesian3.UNIT_Z,
       data: { icao24: record.icao24, type: "plane" },
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
@@ -268,13 +266,9 @@ export function PlaneLayer() {
     const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
     const color = getAltitudeColor(record.altitude);
 
-    // Update aligned axis for proper 3D rotation as position changes
-    const alignedAxis = Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3());
-
     billboardApi.update(record.icao24, {
       position,
       rotation: -Cesium.Math.toRadians(record.heading),
-      alignedAxis,
       color,
     });
 
