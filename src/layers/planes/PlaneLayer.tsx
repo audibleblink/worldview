@@ -13,6 +13,7 @@ import { usePreRender } from "../../cesium/hooks/usePreRender";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
 import { PROXY_ENDPOINTS } from "../../config";
 import { selectEntity, clearSelection, type FlightData } from "../../stores/selection";
+import { camera } from "../../stores/camera";
 import {
   planeState,
   updatePlanes,
@@ -476,6 +477,42 @@ export function PlaneLayer() {
       if (isReady) await initialize();
     })
   );
+
+  // React to camera store follow target changes (from UI Follow button)
+  createEffect(() => {
+    const target = camera.target;
+    const mode = camera.mode;
+
+    if (mode === "follow" && target?.type === "flight") {
+      const icao24 = target.id;
+      // Only start if not already following this plane
+      if (planeState.followingIcao24 !== icao24) {
+        // Select the plane if not selected
+        if (planeState.selectedIcao24 !== icao24) {
+          const record = getPlaneByIcao24(icao24);
+          if (record) {
+            handlePlaneSelection(icao24);
+          }
+        }
+        // Start follow mode
+        if (planeState.selectedIcao24 === icao24 || getPlaneByIcao24(icao24)) {
+          followPlane(icao24);
+          track(
+            () => interpolatedPositions.get(icao24) ?? null,
+            {
+              heading: 0,
+              pitch: Cesium.Math.toRadians(PLANE_FOLLOW_PITCH),
+              range: PLANE_FOLLOW_RANGE,
+              useGroundLevel: false,
+            }
+          );
+        }
+      }
+    } else if (mode === "free" && planeState.followingIcao24) {
+      // Camera switched to free mode - stop following
+      stopFollowMode();
+    }
+  });
 
   async function initialize(): Promise<void> {
     const v = viewer();
