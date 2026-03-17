@@ -25,6 +25,7 @@ export interface BillboardOptions {
   horizontalOrigin?: Cesium.HorizontalOrigin;
   data?: unknown;
   disableDepthTestDistance?: number;
+  alignedAxis?: Cesium.Cartesian3;
 }
 
 export interface CreateBillboardCollectionOptions {
@@ -45,7 +46,7 @@ export interface CreateBillboardCollectionReturn {
 }
 
 /** Properties that can be directly assigned on a Cesium.Billboard. */
-const UPDATABLE_PROPS = ["position", "scale", "color", "rotation", "show", "pixelOffset"] as const;
+const UPDATABLE_PROPS = ["position", "scale", "color", "rotation", "show", "pixelOffset", "alignedAxis"] as const;
 
 /**
  * Create a reactive BillboardCollection for efficient rendering of many billboards.
@@ -75,6 +76,7 @@ export function createBillboardCollection(
           verticalOrigin: opts.verticalOrigin ?? Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: opts.horizontalOrigin ?? Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: opts.disableDepthTestDistance,
+          alignedAxis: opts.alignedAxis,
         });
         if (opts.data !== undefined) (billboard as any).data = opts.data;
         return billboard;
