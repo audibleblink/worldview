@@ -76,7 +76,6 @@ interface EarthquakeVisualization {
 export function SeismicLayer() {
   const { viewer, ready } = useCesium();
 
-  const [earthquakes, setLocalEarthquakes] = createSignal<EarthquakeData[]>([]);
   const [visualizations] = createSignal(new Map<string, EarthquakeVisualization>());
   const [viewportCenter, setViewportCenter] = createSignal<{ lat: number; lon: number } | null>(null);
 
@@ -291,7 +290,6 @@ export function SeismicLayer() {
 
     // Update store
     setEarthquakes(data);
-    setLocalEarthquakes(data);
 
     // Check for demo fallback
     checkDemoFallback(data);

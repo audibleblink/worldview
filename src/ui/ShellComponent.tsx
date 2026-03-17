@@ -13,155 +13,94 @@ import { PerformanceMonitor } from "./PerformanceMonitorComponent";
 import { CommandBar } from "./CommandBar";
 import { CCTVPanel } from "./panels/CCTVPanel";
 
-// View mode shortcuts (keyboard numbers 1-5)
+/** Keyboard number keys map to shader modes (1 = normal/null, 2-5 = effects) */
 const MODE_SHORTCUTS: Record<string, ShaderMode | null> = {
-  "1": null,      // NORMAL
-  "2": "crt",
-  "3": "nvg",
-  "4": "flir",
-  "5": "ah64",
+  "1": null, "2": "crt", "3": "nvg", "4": "flir", "5": "ah64",
 };
 
 /** Format UTC timestamp for the clock display */
 function formatUTCTimestamp(): string {
-  const now = new Date();
+  const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}Z`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
 }
 
-/** Generate random telemetry string */
+/** Generate random telemetry string for display */
 function generateTelemetry(): string {
-  const rand = (max: number, width: number) =>
-    String(Math.floor(Math.random() * max)).padStart(width, "0");
+  const rand = (max: number, w: number) => String(Math.floor(Math.random() * max)).padStart(w, "0");
   return `GRB: ${rand(99999, 5)} PASS: DESC:${rand(999, 3)}`;
 }
 
 /** Check if user is typing in an input field */
 function isTypingInInput(): boolean {
-  const el = document.activeElement;
-  const tag = el?.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select" || !!(el as HTMLElement)?.isContentEditable;
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
 }
 
 /**
  * Shell component - Main UI container
  */
 export function Shell() {
-  // Reactive clock time
   const [time, setTime] = createSignal(formatUTCTimestamp());
-  
-  // Reactive telemetry
   const [telemetry, setTelemetry] = createSignal(generateTelemetry());
-  
-  // Tracking counters (these would be updated by layer stores)
-  const [satCount, setSatCount] = createSignal<number | null>(null);
-  const [flightCount, setFlightCount] = createSignal<number | null>(null);
-  const [shipCount, setShipCount] = createSignal<number | null>(null);
-  const [cameraCount, setCameraCount] = createSignal<number | null>(null);
-
-  // FPS counter visibility
   const [showFPS, setShowFPS] = createSignal(false);
 
-  // Interval references for page visibility handling
-  let clockIntervalId: ReturnType<typeof setInterval> | null = null;
-  let telemetryIntervalId: ReturnType<typeof setInterval> | null = null;
+  // Interval IDs for cleanup and visibility handling
+  let clockInterval: ReturnType<typeof setInterval> | null = null;
+  let telemetryInterval: ReturnType<typeof setInterval> | null = null;
 
-  /** Start clock updates */
-  function startClock(): void {
+  function startIntervals(): void {
+    stopIntervals();
     setTime(formatUTCTimestamp());
-    clockIntervalId = setInterval(() => setTime(formatUTCTimestamp()), 1000);
-  }
-
-  /** Start telemetry updates */
-  function startTelemetry(): void {
     setTelemetry(generateTelemetry());
-    telemetryIntervalId = setInterval(() => setTelemetry(generateTelemetry()), 3000);
+    clockInterval = setInterval(() => setTime(formatUTCTimestamp()), 1000);
+    telemetryInterval = setInterval(() => setTelemetry(generateTelemetry()), 3000);
   }
 
-  /** Stop all intervals */
   function stopIntervals(): void {
-    if (clockIntervalId !== null) {
-      clearInterval(clockIntervalId);
-      clockIntervalId = null;
-    }
-    if (telemetryIntervalId !== null) {
-      clearInterval(telemetryIntervalId);
-      telemetryIntervalId = null;
-    }
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    if (telemetryInterval) { clearInterval(telemetryInterval); telemetryInterval = null; }
   }
 
-  /** Resume intervals */
-  function resumeIntervals(): void {
-    if (clockIntervalId === null) startClock();
-    if (telemetryIntervalId === null) startTelemetry();
-  }
-
-  /** Handle page visibility changes */
   function handleVisibilityChange(): void {
-    if (document.hidden) {
-      stopIntervals();
-    } else {
-      resumeIntervals();
-    }
+    document.hidden ? stopIntervals() : startIntervals();
   }
 
   /** Handle keyboard shortcuts */
-  function handleKeydown(event: KeyboardEvent): void {
-    // Don't process shortcuts when typing in input (except Escape)
-    if (event.key !== "Escape" && isTypingInInput()) return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+  function handleKeydown(e: KeyboardEvent): void {
+    // Allow Escape even when typing; block other shortcuts in input fields
+    if (e.key !== "Escape" && isTypingInInput()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    // Escape key - close command mode if open
-    if (event.key === "Escape") {
-      if (ui.commandMode) {
-        event.preventDefault();
-        setCommandMode(false);
-      }
-      return;
-    }
+    // Key action map for simple shortcuts
+    const actions: Record<string, () => void> = {
+      "Escape": () => ui.commandMode && setCommandMode(false),
+      ":": () => setCommandMode(true),
+      "f": () => setShowFPS(!showFPS()),
+      "F": () => setShowFPS(!showFPS()),
+      "[": toggleLeftPanel,
+      "]": toggleRightPanel,
+    };
 
-    // Colon key (:) - open command bar (vim-style)
-    if (event.key === ":" || (event.shiftKey && event.key === ";")) {
-      event.preventDefault();
-      setCommandMode(true);
-      return;
-    }
-
-    // Toggle FPS counter with 'f' key
-    if (event.key.toLowerCase() === "f") {
-      event.preventDefault();
-      setShowFPS(!showFPS());
-      return;
-    }
-
-    // Toggle left panel with '[' key
-    if (event.key === "[") {
-      event.preventDefault();
-      toggleLeftPanel();
-      return;
-    }
-
-    // Toggle right panel with ']' key
-    if (event.key === "]") {
-      event.preventDefault();
-      toggleRightPanel();
+    const action = actions[e.key];
+    if (action) {
+      e.preventDefault();
+      action();
       return;
     }
 
     // Mode shortcuts (1-5)
-    const mode = MODE_SHORTCUTS[event.key];
+    const mode = MODE_SHORTCUTS[e.key];
     if (mode !== undefined) {
-      event.preventDefault();
+      e.preventDefault();
       setShader(mode);
     }
   }
 
   onMount(() => {
-    // Start intervals
-    startClock();
-    startTelemetry();
-
-    // Add event listeners
+    startIntervals();
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("keydown", handleKeydown);
 
@@ -169,28 +108,16 @@ export function Shell() {
   });
 
   onCleanup(() => {
-    // Stop intervals
     stopIntervals();
-
-    // Remove event listeners
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     document.removeEventListener("keydown", handleKeydown);
-
-    console.log("[Shell] Cleaned up");
   });
 
-  /** Get current mode display name */
-  const modeDisplay = () => {
-    const mode = shaders.active;
-    return mode ? mode.toUpperCase() : "NORMAL";
-  };
+  const modeDisplay = () => shaders.active?.toUpperCase() ?? "NORMAL";
 
   return (
     <>
-      {/* Classification Watermark */}
       <div class="classification-watermark">TOP SECRET // SI-TK // NOFORN</div>
-
-      {/* Vignette Overlay */}
       <div class="vignette-overlay" />
 
       {/* Top Bar */}
@@ -200,20 +127,8 @@ export function Shell() {
           <div class="tagline">NO PLACE LEFT BEHIND</div>
         </div>
 
-        <div class="top-bar-center">
-          <Show when={satCount() !== null}>
-            <span id="sat-tracking-counter">TRACKING: {satCount()} SATS</span>
-          </Show>
-          <Show when={flightCount() !== null}>
-            <span id="flight-tracking-counter">TRACKING: {flightCount()} FLIGHTS</span>
-          </Show>
-          <Show when={shipCount() !== null}>
-            <span id="ship-tracking-counter">TRACKING: {shipCount()} SHIPS</span>
-          </Show>
-          <Show when={cameraCount() !== null}>
-            <span id="camera-tracking-counter">CAMERAS: {cameraCount()}</span>
-          </Show>
-        </div>
+        {/* Center section intentionally empty - tracking counters removed (were unused) */}
+        <div class="top-bar-center" />
 
         <div class="top-bar-right">
           <Show when={showFPS()}>

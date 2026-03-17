@@ -15,23 +15,10 @@
   <!-- Main Container - SolidJS will render into this -->
   <div id="app"></div>
 
-  <!-- Import map: resolve bare specifiers for ES modules -->
-  <script type="importmap">
-  {
-    "imports": {
-      "solid-js": "/solid-js/solid.js",
-      "solid-js/web": "/solid-js/web.js",
-      "solid-js/store": "/solid-js/store.js",
-      "satellite.js": "/satellite.js/satellite.es.js",
-      "hls.js": "/hls.js/hls.mjs"
-    }
-  }
-  </script>
-
   <!-- CesiumJS Library (UMD global) -->
   <script src="/cesium/Cesium.js"></script>
 
-  <!-- WorldView Application (SolidJS) -->
-  <script type="module" src="/src/index.tsx"></script>
+  <!-- WorldView Application (SolidJS) - Bun bundles this automatically -->
+  <script type="module" src="../src/index.tsx"></script>
 </body>
 </html>

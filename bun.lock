@@ -16,6 +16,7 @@
         "@types/babel__core": "^7.20.5",
         "@types/bun": "latest",
         "babel-preset-solid": "^1.9.10",
+        "bun-plugin-solid": "^1.0.0",
         "typescript": "^5",
       },
     },
@@ -144,6 +145,8 @@
     "bitmap-sdf": ["bitmap-sdf@1.0.4", "", {}, "sha512-1G3U4n5JE6RAiALMxu0p1XmeZkTeCwGKykzsLTCqVzfSDaN6S7fKnkIkfejogz+iwqBWc0UYAIKnKHNN7pSfDg=="],
 
     "browserslist": ["browserslist@4.28.1", "", { "dependencies": { "baseline-browser-mapping": "^2.9.0", "caniuse-lite": "^1.0.30001759", "electron-to-chromium": "^1.5.263", "node-releases": "^2.0.27", "update-browserslist-db": "^1.2.0" }, "bin": { "browserslist": "cli.js" } }, "sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA=="],
+
+    "bun-plugin-solid": ["bun-plugin-solid@1.0.0", "", { "dependencies": { "@babel/core": ">=7.0.0", "@babel/preset-typescript": ">=7.0.0", "babel-preset-solid": ">=1.8.0" } }, "sha512-H4ZcW4afCLYLDtBsog5cvCfQo8f5E7SD8AeT1woVmIKBOMguy/ml9f1jz9UlikN/i+VK1bS6GII46ZR2OdhbBQ=="],
 
     "bun-types": ["bun-types@1.3.10", "", { "dependencies": { "@types/node": "*" } }, "sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg=="],
 

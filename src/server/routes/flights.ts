@@ -11,18 +11,14 @@
 import { TTLCache, CachedFetcher } from "../cache.ts";
 import { jsonResponse, errorResponse } from "../types.ts";
 
-const OPENSKY_API_URL = "https://opensky-network.org/api";
+const OPENSKY_API = "https://opensky-network.org/api";
 const OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
-const TOKEN_REFRESH_MARGIN = 30; // seconds before expiry to refresh
+const TOKEN_REFRESH_MARGIN_S = 30;
 
-/** Cache TTL: 10 seconds for flight state vectors */
-const STATES_CACHE_TTL = 10_000;
-
-/** Max entries for aircraft metadata LRU cache */
+const STATES_CACHE_TTL = 10_000;       // 10s for flight vectors
+const METADATA_CACHE_TTL = 86_400_000; // 24h for aircraft metadata
 const METADATA_MAX_SIZE = 1000;
-
-/** FlightAware cache TTL: 1 hour for route data */
-const ROUTE_CACHE_TTL = 60 * 60 * 1000;
+const ROUTE_CACHE_TTL = 3_600_000;     // 1h for route data
 
 interface TokenState {
   accessToken: string | null;
@@ -89,7 +85,7 @@ class OpenSkyClient {
     });
 
     this.metaCache = new TTLCache({
-      ttl: 24 * 60 * 60 * 1000, // 24 hours
+      ttl: METADATA_CACHE_TTL,
       maxSize: METADATA_MAX_SIZE,
     });
   }
@@ -132,7 +128,7 @@ class OpenSkyClient {
       const expiresIn = data.expires_in ?? 1800;
       this.tokenState = {
         accessToken: data.access_token,
-        expiresAt: Date.now() + (expiresIn - TOKEN_REFRESH_MARGIN) * 1000,
+        expiresAt: Date.now() + (expiresIn - TOKEN_REFRESH_MARGIN_S) * 1000,
       };
 
       console.log(`[OpenSky] Token refreshed, expires in ${expiresIn}s`);
@@ -200,7 +196,7 @@ class OpenSkyClient {
     try {
       const flights = await this.statesCache.getOrFetch("all", async () => {
         const headers = await this.buildHeaders();
-        const response = await fetch(`${OPENSKY_API_URL}/states/all`, { headers });
+        const response = await fetch(`${OPENSKY_API}/states/all`, { headers });
 
         if (!response.ok) {
           throw new Error(`OpenSky API error: ${response.status}`);
@@ -208,13 +204,7 @@ class OpenSkyClient {
 
         const data = await response.json();
         const states: any[] = data.states || [];
-
-        // Transform and filter: remove ground aircraft, strip unused fields
-        const transformed: TransformedFlightState[] = [];
-        for (const state of states) {
-          const t = this.transformState(state);
-          if (t) transformed.push(t);
-        }
+        const transformed = states.map((s) => this.transformState(s)).filter(Boolean) as TransformedFlightState[];
 
         console.log(`[OpenSky] Fetched ${states.length} states, ${transformed.length} airborne`);
         return transformed;
@@ -229,32 +219,23 @@ class OpenSkyClient {
 
   /** Fetch aircraft metadata by ICAO24 with LRU caching */
   async fetchMetadata(icao24: string): Promise<Response> {
-    const normalizedIcao = icao24.toLowerCase();
-
-    // Check cache first
-    const cached = this.metaCache.get(normalizedIcao);
-    if (cached) {
-      return jsonResponse(cached);
-    }
-
-    const headers = await this.buildHeaders();
+    const id = icao24.toLowerCase();
+    const cached = this.metaCache.get(id);
+    if (cached) return jsonResponse(cached);
 
     try {
-      const response = await fetch(
-        `${OPENSKY_API_URL}/metadata/aircraft/icao/${normalizedIcao}`,
-        { headers }
-      );
+      const headers = await this.buildHeaders();
+      const response = await fetch(`${OPENSKY_API}/metadata/aircraft/icao/${id}`, { headers });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          return errorResponse("Aircraft not found", 404);
-        }
-        return errorResponse("OpenSky metadata API error", 502);
+        return errorResponse(
+          response.status === 404 ? "Aircraft not found" : "OpenSky metadata API error",
+          response.status === 404 ? 404 : 502
+        );
       }
 
       const data = await response.json();
-      // Cache with LRU eviction
-      this.metaCache.set(normalizedIcao, data);
+      this.metaCache.set(id, data);
       return jsonResponse(data);
     } catch (error) {
       console.error("[OpenSky] Metadata error:", error);
@@ -360,7 +341,7 @@ class FlightAwareClient {
 const flightAwareClient = new FlightAwareClient();
 
 // Export handlers
-export async function handleFlights(req: Request): Promise<Response> {
+export function handleFlights(_req: Request): Promise<Response> {
   return openSkyClient.fetchStates();
 }
 

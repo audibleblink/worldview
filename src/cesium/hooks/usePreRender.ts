@@ -5,8 +5,7 @@
  * Auto-unsubscribes via onCleanup.
  */
 
-import { onCleanup, createEffect, on } from "solid-js";
-import { useCesium } from "../useCesium";
+import { useViewerEvent } from "../useCesium";
 
 declare const Cesium: typeof import("cesium");
 
@@ -18,54 +17,16 @@ export type PreRenderCallback = (scene: Cesium.Scene, time: Cesium.JulianDate) =
  * Automatically cleans up when component unmounts.
  *
  * @param callback - Function called every frame with scene and time
- *
- * Usage:
- * ```tsx
- * usePreRender((scene, time) => {
- *   // Update positions, animations, etc.
- * });
- * ```
  */
 export function usePreRender(callback: PreRenderCallback): void {
-  const { viewer, ready } = useCesium();
-
-  let removeListener: (() => void) | null = null;
-
-  createEffect(
-    on(ready, (isReady) => {
-      // Clean up any existing listener
-      if (removeListener) {
-        removeListener();
-        removeListener = null;
+  useViewerEvent((viewer) => {
+    const { scene } = viewer;
+    scene.preRender.addEventListener(callback);
+    return () => {
+      if (!viewer.isDestroyed()) {
+        scene.preRender.removeEventListener(callback);
       }
-
-      if (!isReady) return;
-
-      const v = viewer();
-      if (!v || v.isDestroyed()) return;
-
-      const scene = v.scene;
-
-      // Subscribe to preRender
-      const listener = (scene: Cesium.Scene, time: Cesium.JulianDate) => {
-        callback(scene, time);
-      };
-
-      scene.preRender.addEventListener(listener);
-
-      removeListener = () => {
-        if (!v.isDestroyed()) {
-          scene.preRender.removeEventListener(listener);
-        }
-      };
-    })
-  );
-
-  onCleanup(() => {
-    if (removeListener) {
-      removeListener();
-      removeListener = null;
-    }
+    };
   });
 }
 

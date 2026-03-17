@@ -10,6 +10,13 @@ const DECIMAL_WITH_COMMA = /^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/;
 const DECIMAL_WITH_DIRECTION = /^(\d+\.?\d*)\s*([NS])\s*,?\s*(\d+\.?\d*)\s*([EW])$/i;
 const SIGNED_DECIMAL_NO_COMMA = /^(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$/;
 
+/** Return {lat, lng} if both values are valid WGS84 coordinates, else null */
+function validCoords(lat: number, lng: number): { lat: number; lng: number } | null {
+  if (isNaN(lat) || isNaN(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
 /**
  * Parse coordinate string in various formats
  */
@@ -17,32 +24,20 @@ export function parseCoordinates(input: string): { lat: number; lng: number } | 
   const trimmed = input.trim();
 
   let match = trimmed.match(DECIMAL_WITH_COMMA);
-  if (match && match[1] && match[2]) {
-    const lat = parseFloat(match[1]);
-    const lng = parseFloat(match[2]);
-    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      return { lat, lng };
-    }
+  if (match?.[1] && match[2]) {
+    return validCoords(parseFloat(match[1]), parseFloat(match[2]));
   }
 
   match = trimmed.match(DECIMAL_WITH_DIRECTION);
-  if (match && match[1] && match[2] && match[3] && match[4]) {
-    let lat = parseFloat(match[1]);
-    let lng = parseFloat(match[3]);
-    if (match[2].toUpperCase() === "S") lat = -lat;
-    if (match[4].toUpperCase() === "W") lng = -lng;
-    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      return { lat, lng };
-    }
+  if (match?.[1] && match[2] && match[3] && match[4]) {
+    const lat = parseFloat(match[1]) * (match[2].toUpperCase() === "S" ? -1 : 1);
+    const lng = parseFloat(match[3]) * (match[4].toUpperCase() === "W" ? -1 : 1);
+    return validCoords(lat, lng);
   }
 
   match = trimmed.match(SIGNED_DECIMAL_NO_COMMA);
-  if (match && match[1] && match[2]) {
-    const lat = parseFloat(match[1]);
-    const lng = parseFloat(match[2]);
-    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      return { lat, lng };
-    }
+  if (match?.[1] && match[2]) {
+    return validCoords(parseFloat(match[1]), parseFloat(match[2]));
   }
 
   return null;
@@ -57,49 +52,52 @@ export function lookupAirport(code: string): { lat: number; lng: number; name: s
   return airport ? { lat: airport.lat, lng: airport.lng, name: airport.name } : null;
 }
 
-/**
- * Geocode result type
- */
+/** Geocode result type */
 export interface GeoResult {
   lat: number;
   lng: number;
   name: string;
-  type: "country" | "region" | "city" | "address" | "poi" | "unknown";
+  type: "country" | "region" | "city" | "address" | "poi" | "coords" | "airport" | "unknown";
 }
 
-/**
- * Map Google geocode types to our simplified types
- */
+/** Google geocode type → simplified type mapping */
+const GOOGLE_TYPE_MAP: Record<string, GeoResult["type"]> = {
+  country: "country",
+  administrative_area_level_1: "region",
+  locality: "city",
+  postal_code: "city",
+  sublocality: "city",
+  street_address: "address",
+  route: "address",
+  premise: "address",
+  point_of_interest: "poi",
+  establishment: "poi",
+};
+
+/** Map Google geocode types to our simplified types */
 function mapGoogleTypeToGeoType(types: string[]): GeoResult["type"] {
   for (const type of types) {
-    switch (type) {
-      case "country": return "country";
-      case "administrative_area_level_1": return "region";
-      case "locality":
-      case "postal_code":
-      case "sublocality": return "city";
-      case "street_address":
-      case "route":
-      case "premise": return "address";
-      case "point_of_interest":
-      case "establishment": return "poi";
-    }
+    const mapped = GOOGLE_TYPE_MAP[type];
+    if (mapped) return mapped;
   }
   return "unknown";
 }
 
-/**
- * Get appropriate altitude for geo result type
- */
+/** Camera altitude (meters) by geo result type */
+const ALTITUDE_BY_TYPE: Record<GeoResult["type"], number> = {
+  country: 2_000_000,
+  region: 500_000,
+  city: 50_000,
+  coords: 10_000,
+  airport: 5_000,
+  address: 1_000,
+  poi: 500,
+  unknown: 10_000,
+};
+
+/** Get appropriate camera altitude (meters) for a geo result type */
 export function getAltitudeForType(type: GeoResult["type"]): number {
-  switch (type) {
-    case "country": return 2000000;
-    case "region": return 500000;
-    case "city": return 50000;
-    case "address": return 1000;
-    case "poi": return 500;
-    default: return 10000;
-  }
+  return ALTITUDE_BY_TYPE[type];
 }
 
 /**

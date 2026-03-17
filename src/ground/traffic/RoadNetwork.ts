@@ -228,11 +228,4 @@ export class RoadNetwork {
   }
 }
 
-/**
- * Build a road network from raw OSM ways
- * Standalone function for easier testing
- */
-export function buildNetwork(ways: RawOSMWay[]): RoadSegment[] {
-  const network = new RoadNetwork(ways);
-  return network.segments;
-}
+

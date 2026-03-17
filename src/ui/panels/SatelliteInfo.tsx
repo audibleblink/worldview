@@ -5,35 +5,20 @@
  */
 
 import { Show, createMemo } from "solid-js";
-import { selection, clearSelection, type SatelliteData } from "../../stores/selection";
-import { setFollowTarget, camera, setFreeCamera } from "../../stores/camera";
+import { selection, type SatelliteData } from "../../stores/selection";
+import { formatCoordinates } from "../formatters";
+import { useEntityPanel } from "./useEntityPanel";
 
-/**
- * Format velocity for display (km/s)
- */
+/** Format velocity magnitude for display (km/s) */
 function formatVelocity(velocity?: { x: number; y: number; z: number }): string {
   if (!velocity) return "—";
   const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
   return `${speed.toFixed(3)} KM/S`;
 }
 
-/**
- * Format altitude for display
- */
-function formatAltitude(alt: number): string {
-  if (alt >= 1000) {
-    return `${(alt / 1000).toFixed(0)} km`;
-  }
-  return `${alt.toFixed(0)} m`;
-}
-
-/**
- * Format coordinates for display
- */
-function formatCoordinates(lat: number, lng: number): string {
-  const latDir = lat >= 0 ? "N" : "S";
-  const lngDir = lng >= 0 ? "E" : "W";
-  return `${Math.abs(lat).toFixed(4)}°${latDir} ${Math.abs(lng).toFixed(4)}°${lngDir}`;
+/** Format orbital altitude (always km-scale) */
+function formatOrbitalAltitude(alt: number): string {
+  return alt >= 1000 ? `${(alt / 1000).toFixed(0)} km` : `${alt.toFixed(0)} m`;
 }
 
 /**
@@ -41,36 +26,12 @@ function formatCoordinates(lat: number, lng: number): string {
  * Displays satellite metadata when a satellite is selected
  */
 export function SatelliteInfo() {
-  // Memoize satellite data extraction
+  const { isFollowing, handleFollow, handleClose } = useEntityPanel("satellite");
+
   const data = createMemo(() => {
     if (selection.type !== "satellite") return null;
     return selection.data as SatelliteData | null;
   });
-
-  // Check if currently following this satellite
-  const isFollowing = createMemo(() => {
-    return (
-      camera.mode === "follow" &&
-      camera.target?.type === "satellite" &&
-      camera.target?.id === selection.id
-    );
-  });
-
-  const handleFollow = () => {
-    if (isFollowing()) {
-      setFreeCamera();
-    } else if (selection.id) {
-      setFollowTarget("satellite", selection.id);
-    }
-  };
-
-  const handleClose = () => {
-    // Stop following if we were following this satellite
-    if (isFollowing()) {
-      setFreeCamera();
-    }
-    clearSelection();
-  };
 
   return (
     <Show when={data()}>
@@ -110,7 +71,7 @@ export function SatelliteInfo() {
             <div class="sat-info-row">
               <span class="sat-info-label">ALT</span>
               <span class="sat-info-value">
-                {satData().position ? formatAltitude(satData().position.alt) : "—"}
+                {satData().position ? formatOrbitalAltitude(satData().position.alt) : "—"}
               </span>
             </div>
             <div class="sat-info-row">

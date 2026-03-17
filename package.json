@@ -4,13 +4,13 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
-
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-typescript": "^7.28.5",
     "@types/babel__core": "^7.20.5",
     "@types/bun": "latest",
     "babel-preset-solid": "^1.9.10",
+    "bun-plugin-solid": "^1.0.0",
     "typescript": "^5"
   },
   "dependencies": {

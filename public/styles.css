@@ -1002,24 +1002,44 @@ select option {
 }
 
 /* ============================================
-   Satellite Info Panel
+   Info Panels - Shared Base
    ============================================ */
-.sat-info-panel {
+.sat-info-panel,
+.flight-info-panel,
+.ship-info-panel {
   position: absolute;
-  top: var(--spacing-md);
   right: calc(var(--panel-width) + var(--spacing-md));
   width: 240px;
   background: rgba(0, 0, 0, 0.92);
   border: 1px solid var(--color-highlight);
+  color: var(--color-highlight);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  color: var(--color-highlight);
   z-index: 300;
   pointer-events: all;
 }
 
-.sat-info-panel.hidden {
-  display: none;
+.sat-info-link,
+.flight-info-link,
+.ship-info-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.sat-info-link:hover,
+.flight-info-link:hover,
+.ship-info-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* ============================================
+   Satellite Info Panel
+   ============================================ */
+.sat-info-panel {
+  top: var(--spacing-md);
 }
 
 .sat-info-header {
@@ -1103,115 +1123,44 @@ select option {
   color: var(--color-bg);
 }
 
-.sat-info-link {
-  color: var(--color-highlight);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.15s ease, text-decoration 0.15s ease;
-}
-
-.sat-info-link:hover {
-  color: #fff;
-  text-decoration: underline;
-}
-
 /* ============================================
    Flight Info Panel
    ============================================ */
 .flight-info-panel {
-  position: absolute;
   top: calc(var(--spacing-md) + 260px);
-  right: calc(var(--panel-width) + var(--spacing-md));
-  width: 240px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid var(--color-highlight);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-highlight);
-  z-index: 300;
-  pointer-events: all;
-}
-
-.flight-info-panel.hidden {
-  display: none;
-}
-
-.flight-info-link {
-  color: var(--color-highlight);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.15s ease, text-decoration 0.15s ease;
-}
-
-.flight-info-link:hover {
-  color: #fff;
-  text-decoration: underline;
 }
 
 /* ============================================
-   Ship Info Panel
+   Ship Info Panel (blue variant)
    ============================================ */
 .ship-info-panel {
-  position: absolute;
+  --ship-color: #3B82F6;
   top: calc(var(--spacing-md) + 520px);
-  right: calc(var(--panel-width) + var(--spacing-md));
   width: 260px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid #3B82F6;
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: #3B82F6;
-  z-index: 300;
-  pointer-events: all;
+  border-color: var(--ship-color);
+  color: var(--ship-color);
 }
 
-.ship-info-panel.hidden {
-  display: none;
-}
-
-.ship-info-header {
-  background: rgba(59, 130, 246, 0.08);
-  border-bottom-color: #3B82F6;
-}
-
-.ship-info-title {
-  color: #3B82F6;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ship-info-panel .sat-info-row {
-  border-bottom-color: rgba(59, 130, 246, 0.1);
-}
-
-.ship-info-panel .sat-info-label {
-  color: var(--color-text-dim);
-}
-
-.ship-info-panel .sat-info-value {
-  color: #3B82F6;
-}
-
-.ship-info-panel .ship-info-link {
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.ship-info-panel .ship-info-link:hover {
-  text-decoration: underline;
-}
+.ship-info-panel .sat-info-header { background: rgba(59, 130, 246, 0.08); }
+.ship-info-panel .sat-info-row { border-bottom-color: rgba(59, 130, 246, 0.1); }
+.ship-info-panel .sat-info-value { color: var(--ship-color); }
 
 .ship-info-panel .sat-info-follow-btn {
-  border-color: #3B82F6;
-  color: #3B82F6;
+  border-color: var(--ship-color);
+  color: var(--ship-color);
   margin-bottom: var(--spacing-xs);
 }
 
 .ship-info-panel .sat-info-follow-btn:hover {
-  background: #3B82F6;
+  background: var(--ship-color);
   color: var(--color-bg);
+}
+
+.ship-info-title {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ship-info-footer {
@@ -1232,39 +1181,13 @@ select option {
 }
 
 .ship-info-external-link:hover {
-  color: #3B82F6;
+  color: var(--ship-color);
   text-decoration: underline;
 }
 
 /* ============================================
-   CCTV Panel
+   CCTV Camera List (sidebar panel)
    ============================================ */
-.cctv-panel {
-  border: 1px solid var(--color-border);
-  background: rgba(0, 10, 15, 0.6);
-  margin-bottom: var(--spacing-md);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.cctv-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border);
-  font-size: 9px;
-  color: var(--color-text-dim);
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.cctv-panel-title {
-  letter-spacing: 1.5px;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
 .cctv-panel-title::before {
   content: "";
   display: inline-block;
@@ -1541,7 +1464,8 @@ select option {
   background: #000;
 }
 
-#cctv-center-stage-canvas {
+#cctv-center-stage-canvas,
+#cctv-center-stage-video {
   display: block;
   max-width: 100%;
   max-height: 70vh;
@@ -1550,12 +1474,7 @@ select option {
 }
 
 #cctv-center-stage-video {
-  display: block;
-  max-width: 100%;
-  max-height: 70vh;
   background: #000;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
 }
 
 /* ============================================
@@ -1783,7 +1702,7 @@ select option {
 }
 
 /* ============================================
-   CCTV Panel
+   CCTV Video Overlay Panel
    ============================================ */
 .cctv-panel {
   position: fixed;
@@ -1838,7 +1757,8 @@ select option {
   line-height: 0;
 }
 
-.cctv-video {
+.cctv-video,
+.cctv-image {
   width: 100%;
   display: block;
   max-height: 280px;
@@ -1846,9 +1766,5 @@ select option {
 }
 
 .cctv-image {
-  width: 100%;
-  display: block;
-  max-height: 280px;
   object-fit: cover;
-  background: #000;
 }

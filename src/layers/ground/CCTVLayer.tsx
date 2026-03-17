@@ -1,7 +1,5 @@
 /**
- * WorldView - CCTV Layer
- * Camera markers rendered via BillboardCollection (NOT Entity API)
- * CRITICAL: Uses canvas directly for texture updates - NO toDataURL() (Blocklist #2)
+ * CCTV Layer - Camera markers via BillboardCollection
  */
 
 import { createEffect, onCleanup, on } from "solid-js";
@@ -11,153 +9,85 @@ import { groundState, setCenterStageCamera } from "./store.ts";
 
 declare const Cesium: typeof import("cesium");
 
-/** Configuration */
-const CONFIG = {
-  markerSize: 24,
-  viewportDebounceMs: 1000,
-  maxProjectedBillboards: 4,
-  billboardWidth: 200,
-  billboardHeight: 150,
-  billboardAltitude: 15,
-  billboardRefreshMs: 30_000,
-};
+const MARKER_SIZE = 24;
+const BILLBOARD_ALTITUDE = 15;
 
-/** Camera icon texture cache */
 let cameraIconCanvas: HTMLCanvasElement | null = null;
 
-/**
- * Create camera marker icon texture
- */
+/** Create camera marker icon texture (cached) */
 function createCameraIconTexture(): HTMLCanvasElement {
   if (cameraIconCanvas) return cameraIconCanvas;
 
-  const size = 40;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = canvas.height = 40;
   const ctx = canvas.getContext("2d")!;
+  const c = 20; // center
 
-  const centerX = size / 2;
-  const centerY = size / 2;
-
-  // Black circle background
+  // Black circle background with green border
   ctx.beginPath();
-  ctx.arc(centerX, centerY, 18, 0, Math.PI * 2);
-  ctx.fillStyle = "#000000";
+  ctx.arc(c, c, 18, 0, Math.PI * 2);
+  ctx.fillStyle = "#000";
   ctx.fill();
-
-  // Green border
   ctx.strokeStyle = "#00ff88";
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Camera body (rounded rectangle)
+  // Camera body (rounded rect)
   ctx.fillStyle = "#00ff88";
-  const bodyX = centerX - 10;
-  const bodyY = centerY - 6;
-  const bodyW = 20;
-  const bodyH = 12;
-  const radius = 2;
-
   ctx.beginPath();
-  ctx.moveTo(bodyX + radius, bodyY);
-  ctx.lineTo(bodyX + bodyW - radius, bodyY);
-  ctx.quadraticCurveTo(bodyX + bodyW, bodyY, bodyX + bodyW, bodyY + radius);
-  ctx.lineTo(bodyX + bodyW, bodyY + bodyH - radius);
-  ctx.quadraticCurveTo(bodyX + bodyW, bodyY + bodyH, bodyX + bodyW - radius, bodyY + bodyH);
-  ctx.lineTo(bodyX + radius, bodyY + bodyH);
-  ctx.quadraticCurveTo(bodyX, bodyY + bodyH, bodyX, bodyY + bodyH - radius);
-  ctx.lineTo(bodyX, bodyY + radius);
-  ctx.quadraticCurveTo(bodyX, bodyY, bodyX + radius, bodyY);
-  ctx.closePath();
+  ctx.roundRect(c - 10, c - 6, 20, 12, 2);
   ctx.fill();
 
-  // Lens (circle)
+  // Lens
   ctx.beginPath();
-  ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "#000000";
+  ctx.arc(c, c, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#000";
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+  ctx.arc(c, c, 3, 0, Math.PI * 2);
   ctx.fillStyle = "#00ff88";
   ctx.fill();
 
-  // Lens highlight
+  // Highlight
   ctx.beginPath();
-  ctx.arc(centerX - 1, centerY - 1, 1.2, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffffff";
+  ctx.arc(c - 1, c - 1, 1.2, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff";
   ctx.fill();
 
   cameraIconCanvas = canvas;
   return canvas;
 }
 
-/**
- * CCTVLayer - Renders CCTV camera markers on the map
- */
 export function CCTVLayer() {
   const { viewer, ready } = useCesium();
-
-  // Read cameras from the shared store (fetching done by CCTVCameraListPanel via useCCTVFetcher)
   const cameras = () => groundState.cctvCameras;
-
-  // Create billboard collection for camera markers
   const markerCollection = createBillboardCollection();
 
-  /**
-   * Sample terrain height from 3D tiles at a given lon/lat.
-   * Falls back to a safe default if tiles aren't loaded at that point yet.
-   */
   function getTerrainHeight(lon: number, lat: number): number {
     const v = viewer();
-    if (!v || v.isDestroyed()) return CONFIG.billboardAltitude;
-
-    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    const height = v.scene.sampleHeight(carto);
-
-    // sampleHeight returns undefined if no tiles are loaded at that position
-    if (height === undefined || height === null || isNaN(height)) {
-      return CONFIG.billboardAltitude;
-    }
-
-    // Place billboard slightly above the tile surface
-    return height + 5;
+    if (!v || v.isDestroyed()) return BILLBOARD_ALTITUDE;
+    const height = v.scene.sampleHeight(Cesium.Cartographic.fromDegrees(lon, lat));
+    return (height ?? BILLBOARD_ALTITUDE) + 5;
   }
 
-  /**
-   * Update billboard markers based on camera data
-   */
   function updateMarkers(): void {
     const cameraData = cameras();
     const iconCanvas = createCameraIconTexture();
-
-    // Get current billboard IDs directly from the tracked map (not raw Cesium index)
     const currentIds = markerCollection.ids();
     const newIds = new Set(cameraData.map((c) => `cctv-marker:${c.id}`));
 
-    // Remove markers for cameras no longer in view
     for (const id of currentIds) {
-      if (!newIds.has(id)) {
-        markerCollection.remove(id);
-      }
+      if (!newIds.has(id)) markerCollection.remove(id);
     }
 
-    // Add markers for new cameras
     for (const camera of cameraData) {
       const markerId = `cctv-marker:${camera.id}`;
-
       if (!currentIds.has(markerId)) {
-        const alt = getTerrainHeight(camera.longitude, camera.latitude);
         markerCollection.add({
           id: markerId,
-          position: Cesium.Cartesian3.fromDegrees(
-            camera.longitude,
-            camera.latitude,
-            alt
-          ),
-          // CRITICAL: Pass canvas directly - NO toDataURL()
+          position: Cesium.Cartesian3.fromDegrees(camera.longitude, camera.latitude, getTerrainHeight(camera.longitude, camera.latitude)),
           image: iconCanvas,
-          scale: CONFIG.markerSize / 40, // Scale to desired size
+          scale: MARKER_SIZE / 40,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -167,55 +97,28 @@ export function CCTVLayer() {
     }
   }
 
-  // Update markers when camera data changes
-  createEffect(
-    on(cameras, () => {
-      updateMarkers();
-    })
-  );
+  createEffect(on(cameras, updateMarkers));
 
-  // Set up click handler for camera selection
   createEffect(() => {
     if (!ready()) return;
     const v = viewer();
     if (!v || v.isDestroyed()) return;
 
     const handler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
-
     handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
-      const pickedObject = v.scene.pick(click.position);
-
-      if (Cesium.defined(pickedObject)) {
-        // BillboardCollection pick: pickedObject.id is the string id set on the billboard
-        const id = pickedObject.id;
-        if (typeof id === "string" && id.startsWith("cctv-marker:")) {
-          const cameraId = id.replace("cctv-marker:", "");
-          console.log("[CCTVLayer] Selected camera:", cameraId);
-          setCenterStageCamera(cameraId);
-          return;
-        }
-      }
-
-      // Clicked empty space - close panel if open
-      if (groundState.centerStageCameraId) {
+      const picked = v.scene.pick(click.position);
+      const id = picked?.id;
+      if (typeof id === "string" && id.startsWith("cctv-marker:")) {
+        setCenterStageCamera(id.replace("cctv-marker:", ""));
+      } else if (groundState.centerStageCameraId) {
         setCenterStageCamera(null);
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    onCleanup(() => {
-      if (!handler.isDestroyed()) {
-        handler.destroy();
-      }
-    });
+    onCleanup(() => { if (!handler.isDestroyed()) handler.destroy(); });
   });
 
-  // Cleanup
-  onCleanup(() => {
-    markerCollection.clear();
-    console.log("[CCTVLayer] Unmounted");
-  });
+  onCleanup(() => markerCollection.clear());
 
   return null;
 }
-
-export default CCTVLayer;

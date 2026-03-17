@@ -4,27 +4,14 @@
  */
 import { createStore } from "solid-js/store";
 
-/**
- * Camera modes
- */
 export type CameraMode = "free" | "follow" | "orbit";
-
-/**
- * Entity types that can be followed
- */
 export type FollowTargetType = "satellite" | "flight" | "ship";
 
-/**
- * Target entity reference
- */
 export interface FollowTarget {
   type: FollowTargetType;
   id: string;
 }
 
-/**
- * Camera position (Cesium camera state)
- */
 export interface CameraPosition {
   longitude: number;
   latitude: number;
@@ -34,74 +21,50 @@ export interface CameraPosition {
   roll: number;
 }
 
-/**
- * Camera state structure
- */
 export interface CameraState {
   mode: CameraMode;
   target: FollowTarget | null;
   position: CameraPosition | null;
 }
 
-// Initial state with free camera
-const initialState: CameraState = {
+const [camera, setCamera] = createStore<CameraState>({
   mode: "free",
   target: null,
   position: null,
-};
+});
 
-// Create the store
-const [camera, setCamera] = createStore<CameraState>(initialState);
+// --- Mutations (named for future event-sourcing) ---
 
-// Named mutation functions (for future event-sourcing)
+/** Set camera to track a target in the given mode */
+function setTargetWithMode(mode: "follow" | "orbit", type: FollowTargetType, id: string): void {
+  setCamera({ mode, target: { type, id } });
+}
 
-/**
- * Set the camera to follow a target entity
- */
 export function setFollowTarget(type: FollowTargetType, id: string): void {
-  setCamera({
-    mode: "follow",
-    target: { type, id },
-  });
+  setTargetWithMode("follow", type, id);
 }
 
-/**
- * Set the camera to orbit a target entity
- */
 export function setOrbitTarget(type: FollowTargetType, id: string): void {
-  setCamera({
-    mode: "orbit",
-    target: { type, id },
-  });
+  setTargetWithMode("orbit", type, id);
 }
 
-/**
- * Return to free camera mode (no follow target)
- */
+/** Return to free camera mode (clears follow target) */
 export function setFreeCamera(): void {
-  setCamera({
-    mode: "free",
-    target: null,
-  });
+  setCamera({ mode: "free", target: null });
 }
 
-/**
- * Update the stored camera position
- * Called by the Cesium camera sync effect
- */
+/** Update stored camera position (called by Cesium camera sync effect) */
 export function updateCameraPosition(position: CameraPosition): void {
   setCamera("position", position);
 }
 
-/**
- * Set camera mode directly
- */
+/** Set camera mode directly; clears target when switching to free */
 export function setCameraMode(mode: CameraMode): void {
-  setCamera("mode", mode);
   if (mode === "free") {
-    setCamera("target", null);
+    setFreeCamera();
+  } else {
+    setCamera("mode", mode);
   }
 }
 
-// Export readonly state
 export { camera };

@@ -1,40 +1,25 @@
 /**
- * WorldView - Ground Layer Store
- * Manages ground-level feature state: traffic, CCTV, seismic
+ * Ground Layer Store - State for traffic, CCTV, and seismic sub-layers
  */
 
 import { createStore } from "solid-js/store";
 import type { Camera, EarthquakeData, StyleMode, GroundSubLayer } from "./types.ts";
 
-/**
- * Ground layer state
- */
 export interface GroundState {
-  /** Traffic particle sub-layer enabled */
   trafficEnabled: boolean;
-  /** CCTV camera sub-layer enabled */
   cctvEnabled: boolean;
-  /** Seismic/earthquake sub-layer enabled */
   seismicEnabled: boolean;
-  /** Traffic visualization style mode */
   trafficStyle: StyleMode;
-  /** Cached CCTV camera data */
   cctvCameras: Camera[];
-  /** Cached earthquake data */
   earthquakes: EarthquakeData[];
-  /** Currently center-staged camera ID (for video viewing) */
   centerStageCameraId: string | null;
-  /** Whether traffic data is currently loading */
   trafficLoading: boolean;
-  /** Last error message for traffic */
   trafficError: string | null;
-  /** Whether CCTV cameras are currently loading */
   cctvLoading: boolean;
-  /** Whether viewport altitude is too high to show CCTV cameras */
   cctvTooHigh: boolean;
 }
 
-const initialState: GroundState = {
+const [groundState, setGroundState] = createStore<GroundState>({
   trafficEnabled: false,
   cctvEnabled: true,
   seismicEnabled: false,
@@ -46,102 +31,23 @@ const initialState: GroundState = {
   trafficError: null,
   cctvLoading: true,
   cctvTooHigh: false,
+});
+
+const SUB_LAYER_KEY: Record<GroundSubLayer, keyof GroundState> = {
+  traffic: "trafficEnabled",
+  cctv: "cctvEnabled",
+  seismic: "seismicEnabled",
 };
 
-// Create the store
-const [groundState, setGroundState] = createStore<GroundState>(initialState);
+export const toggleSubLayer = (name: GroundSubLayer) => setGroundState(SUB_LAYER_KEY[name] as any, (p: boolean) => !p);
+export const setSubLayerEnabled = (name: GroundSubLayer, enabled: boolean) => setGroundState(SUB_LAYER_KEY[name] as any, enabled);
+export const setTrafficStyle = (mode: StyleMode) => setGroundState("trafficStyle", mode);
+export const setCameras = (cameras: Camera[]) => setGroundState("cctvCameras", cameras);
+export const setEarthquakes = (earthquakes: EarthquakeData[]) => setGroundState("earthquakes", earthquakes);
+export const setCenterStageCamera = (id: string | null) => setGroundState("centerStageCameraId", id);
+export const setTrafficLoading = (v: boolean) => setGroundState("trafficLoading", v);
+export const setTrafficError = (v: string | null) => setGroundState("trafficError", v);
+export const setCctvLoading = (v: boolean) => setGroundState("cctvLoading", v);
+export const setCctvTooHigh = (v: boolean) => setGroundState("cctvTooHigh", v);
 
-// Named mutation functions
-
-/**
- * Toggle a sub-layer's visibility
- */
-export function toggleSubLayer(name: GroundSubLayer): void {
-  switch (name) {
-    case "traffic":
-      setGroundState("trafficEnabled", (prev) => !prev);
-      break;
-    case "cctv":
-      setGroundState("cctvEnabled", (prev) => !prev);
-      break;
-    case "seismic":
-      setGroundState("seismicEnabled", (prev) => !prev);
-      break;
-  }
-}
-
-/**
- * Set a sub-layer's visibility
- */
-export function setSubLayerEnabled(name: GroundSubLayer, enabled: boolean): void {
-  switch (name) {
-    case "traffic":
-      setGroundState("trafficEnabled", enabled);
-      break;
-    case "cctv":
-      setGroundState("cctvEnabled", enabled);
-      break;
-    case "seismic":
-      setGroundState("seismicEnabled", enabled);
-      break;
-  }
-}
-
-/**
- * Set traffic visualization style mode
- */
-export function setTrafficStyle(mode: StyleMode): void {
-  setGroundState("trafficStyle", mode);
-}
-
-/**
- * Update cached CCTV camera data
- */
-export function setCameras(cameras: Camera[]): void {
-  setGroundState("cctvCameras", cameras);
-}
-
-/**
- * Update cached earthquake data
- */
-export function setEarthquakes(earthquakes: EarthquakeData[]): void {
-  setGroundState("earthquakes", earthquakes);
-}
-
-/**
- * Set center-stage camera (for fullscreen video view)
- */
-export function setCenterStageCamera(cameraId: string | null): void {
-  setGroundState("centerStageCameraId", cameraId);
-}
-
-/**
- * Set traffic loading state
- */
-export function setTrafficLoading(loading: boolean): void {
-  setGroundState("trafficLoading", loading);
-}
-
-/**
- * Set traffic error
- */
-export function setTrafficError(error: string | null): void {
-  setGroundState("trafficError", error);
-}
-
-/**
- * Set CCTV loading state
- */
-export function setCctvLoading(loading: boolean): void {
-  setGroundState("cctvLoading", loading);
-}
-
-/**
- * Set CCTV too-high state (viewport altitude above threshold)
- */
-export function setCctvTooHigh(tooHigh: boolean): void {
-  setGroundState("cctvTooHigh", tooHigh);
-}
-
-// Export readonly state
 export { groundState };

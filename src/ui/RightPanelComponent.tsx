@@ -3,21 +3,20 @@
  * Shader/effect controls, live camera readouts, and info panels
  */
 
-import { createSignal, createEffect, onMount, onCleanup, For, Show, Switch, Match, useContext } from "solid-js";
+import { createSignal, createEffect, onMount, onCleanup, For, Switch, Match, useContext } from "solid-js";
 import { shaders, setParameter, PARAMETER_MAPPINGS, type ShaderMode } from "../stores/shaders";
 import { selection } from "../stores/selection";
 import { CesiumContext } from "../cesium/CesiumProvider";
 import { SatelliteInfo } from "./panels/SatelliteInfo";
 import { FlightInfo } from "./panels/FlightInfo";
 import { ShipInfo } from "./panels/ShipInfo";
+import { formatLatitude, formatLongitude, formatAltitude, formatDistance } from "./formatters";
 
 declare const Cesium: typeof import("cesium");
 
-// Slider configuration
 const SLIDER_NAMES = ["PIXELATION", "DISTORTION", "INSTABILITY"] as const;
 type SliderName = typeof SLIDER_NAMES[number];
 
-// Readout data structure
 interface ReadoutData {
   latitude: number;
   longitude: number;
@@ -27,120 +26,54 @@ interface ReadoutData {
   pitch: number;
 }
 
-/**
- * Format latitude with N/S indicator
- */
-function formatLatitude(lat: number): string {
-  const dir = lat >= 0 ? "N" : "S";
-  return `${Math.abs(lat).toFixed(4)}° ${dir}`;
-}
-
-/**
- * Format longitude with E/W indicator
- */
-function formatLongitude(lng: number): string {
-  const dir = lng >= 0 ? "E" : "W";
-  return `${Math.abs(lng).toFixed(4)}° ${dir}`;
-}
-
-/**
- * Format altitude with appropriate precision
- */
-function formatAltitude(altitude: number): string {
-  if (altitude >= 1_000_000) return `${(altitude / 1000).toFixed(0)}km`;
-  if (altitude >= 1000) return `${Math.round(altitude)}m`;
-  return `${altitude.toFixed(1)}m`;
-}
-
-/**
- * Format distance value with appropriate unit (cm, m, km)
- */
-function formatDistance(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}km`;
-  if (value >= 1) return `${value.toFixed(1)}m`;
-  return `${(value * 100).toFixed(1)}cm`;
-}
-
-/**
- * RightPanel component
- */
 export function RightPanel() {
-  // Get Cesium context (may be null if not within CesiumProvider)
   const cesiumCtx = useContext(CesiumContext);
-  
-  // Slider values (0-100 scale)
+
   const [sliderValues, setSliderValues] = createSignal<Record<SliderName, number>>({
-    PIXELATION: 50,
-    DISTORTION: 50,
-    INSTABILITY: 50,
+    PIXELATION: 50, DISTORTION: 50, INSTABILITY: 50,
   });
 
-  // Readout values
   const [readouts, setReadouts] = createSignal<ReadoutData>({
-    latitude: 0,
-    longitude: 0,
-    altitude: 0,
-    gsd: 0,
-    niirs: 0,
-    pitch: 0,
+    latitude: 0, longitude: 0, altitude: 0, gsd: 0, niirs: 0, pitch: 0,
   });
 
-  // Check if sliders should be enabled (when a shader mode is active)
   const slidersEnabled = () => shaders.active !== null;
 
-  /** Get slider value from shader parameters */
   function getSliderValueFromParams(name: SliderName, mode: ShaderMode): number {
     const mapping = PARAMETER_MAPPINGS[mode]?.[name];
     if (!mapping) return 50;
-
     const paramValue = shaders.parameters[mapping.uniform] ?? mapping.default;
-    const normalized = (paramValue - mapping.min) / (mapping.max - mapping.min);
-    return Math.round(normalized * 100);
+    return Math.round(((paramValue - mapping.min) / (mapping.max - mapping.min)) * 100);
   }
 
-  /** Update shader parameter from slider value */
   function handleSliderChange(name: SliderName, value: number): void {
     setSliderValues((prev) => ({ ...prev, [name]: value }));
-
     const mode = shaders.active;
     if (!mode) return;
-
     const mapping = PARAMETER_MAPPINGS[mode]?.[name];
     if (mapping) {
-      const paramValue = mapping.min + (value / 100) * (mapping.max - mapping.min);
-      setParameter(mapping.uniform, paramValue);
+      setParameter(mapping.uniform, mapping.min + (value / 100) * (mapping.max - mapping.min));
     }
   }
 
-  /** Update readouts from camera position */
   function updateReadoutsFromCamera(): void {
     const viewer = cesiumCtx?.viewer();
     if (!viewer) return;
 
-    const camera = viewer.camera;
-    const cartographic = camera.positionCartographic;
-    if (!cartographic) return;
+    const { camera } = viewer;
+    const carto = camera.positionCartographic;
+    if (!carto) return;
 
-    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
-    const altitude = cartographic.height;
-    const pitchDegrees = Cesium.Math.toDegrees(camera.pitch);
-
-    // Calculate GSD (Ground Sample Distance)
-    // Simplified: GSD ≈ altitude / 10000 (at nadir)
-    const gsd = Math.max(0.01, altitude / 10000);
-
-    // Calculate NIIRS (National Imagery Interpretability Rating Scale)
-    // Simplified formula: NIIRS ≈ 9 - log10(altitude/100), clamped 1-9
-    const niirs = Math.max(1, Math.min(9, 9 - Math.log10(altitude / 100)));
-
+    const altitude = carto.height;
+    // GSD: simplified as altitude / 10000 at nadir
+    // NIIRS: simplified as 9 - log10(altitude/100), clamped 1-9
     setReadouts({
-      latitude,
-      longitude,
+      latitude: Cesium.Math.toDegrees(carto.latitude),
+      longitude: Cesium.Math.toDegrees(carto.longitude),
       altitude,
-      gsd,
-      niirs,
-      pitch: pitchDegrees,
+      gsd: Math.max(0.01, altitude / 10000),
+      niirs: Math.max(1, Math.min(9, 9 - Math.log10(altitude / 100))),
+      pitch: Cesium.Math.toDegrees(camera.pitch),
     });
   }
 
@@ -148,53 +81,39 @@ export function RightPanel() {
   createEffect(() => {
     const mode = shaders.active;
     if (!mode) {
-      // Reset sliders when no shader active
       setSliderValues({ PIXELATION: 0, DISTORTION: 0, INSTABILITY: 0 });
       return;
     }
-
-    // Set sliders to current parameter values
-    const newValues: Record<SliderName, number> = {
+    setSliderValues({
       PIXELATION: getSliderValueFromParams("PIXELATION", mode),
       DISTORTION: getSliderValueFromParams("DISTORTION", mode),
       INSTABILITY: getSliderValueFromParams("INSTABILITY", mode),
-    };
-    setSliderValues(newValues);
+    });
   });
 
   onMount(() => {
     const viewer = cesiumCtx?.viewer();
     if (!viewer) return;
 
-    // Initial readout update
     updateReadoutsFromCamera();
 
-    // Throttled camera change handler
+    // Throttle camera.changed to max 10 updates/sec
     let lastUpdate = 0;
-    const throttleMs = 100;
-
-    const handleCameraChange = () => {
+    const throttledUpdate = () => {
       const now = Date.now();
-      if (now - lastUpdate > throttleMs) {
+      if (now - lastUpdate > 100) {
         lastUpdate = now;
         updateReadoutsFromCamera();
       }
     };
 
-    const handleCameraMoveEnd = () => {
-      updateReadoutsFromCamera();
-    };
-
-    // Subscribe to camera events
-    viewer.camera.changed.addEventListener(handleCameraChange);
-    viewer.camera.moveEnd.addEventListener(handleCameraMoveEnd);
+    viewer.camera.changed.addEventListener(throttledUpdate);
+    viewer.camera.moveEnd.addEventListener(updateReadoutsFromCamera);
 
     onCleanup(() => {
-      viewer.camera.changed.removeEventListener(handleCameraChange);
-      viewer.camera.moveEnd.removeEventListener(handleCameraMoveEnd);
+      viewer.camera.changed.removeEventListener(throttledUpdate);
+      viewer.camera.moveEnd.removeEventListener(updateReadoutsFromCamera);
     });
-
-    console.log("[RightPanel] Mounted, subscribed to camera changes");
   });
 
   return (

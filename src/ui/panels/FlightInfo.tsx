@@ -5,14 +5,12 @@
  */
 
 import { Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
-import { selection, clearSelection, type FlightData } from "../../stores/selection";
-import { setFollowTarget, camera, setFreeCamera } from "../../stores/camera";
-import { PROXY_BASE_URL } from "../../config";
+import { selection, type FlightData } from "../../stores/selection";
+import { PROXY_ENDPOINTS } from "../../config";
+import { formatAltitudeFeet, formatSpeedKnots, formatHeading } from "../formatters";
+import { useEntityPanel } from "./useEntityPanel";
 
-/**
- * Format vertical rate for display.
- * Converts m/s to fpm with arrow indicator.
- */
+/** Format vertical rate (m/s → fpm with arrow indicator) */
 function formatVerticalRate(verticalRateMS: number): string {
   const fpm = Math.round(verticalRateMS * 196.85);
   if (fpm > 0) return `↑ ${fpm} fpm`;
@@ -20,48 +18,17 @@ function formatVerticalRate(verticalRateMS: number): string {
   return "— fpm";
 }
 
-/**
- * Format altitude in feet
- */
-function formatAltitude(altitudeM: number): string {
-  const feet = Math.round(altitudeM * 3.28084);
-  return `${feet.toLocaleString()} ft`;
-}
-
-/**
- * Format speed in knots
- */
-function formatSpeed(velocityMS: number): string {
-  const knots = Math.round(velocityMS * 1.94384);
-  return `${knots} kts`;
-}
-
-/**
- * Format heading in degrees
- */
-function formatHeading(heading: number): string {
-  return `${Math.round(heading)}°`;
-}
-
-/**
- * Fetch flight route from FlightAware via proxy.
- */
+/** Fetch flight route from FlightAware via proxy */
 async function fetchFlightRoute(
-  callsign: string
+  callsign: string,
 ): Promise<{ origin: string; destination: string } | null> {
-  if (!callsign.trim()) return null;
-
   try {
-    const response = await fetch(
-      `${PROXY_BASE_URL}/flight-route/${encodeURIComponent(callsign.trim())}`
-    );
+    const response = await fetch(PROXY_ENDPOINTS.flightRoute(callsign));
     if (!response.ok) return null;
-
     const data = await response.json();
-    if (data.origin && data.destination) {
-      return { origin: data.origin, destination: data.destination };
-    }
-    return null;
+    return data.origin && data.destination
+      ? { origin: data.origin, destination: data.destination }
+      : null;
   } catch (error) {
     console.error("[FLIGHTS] Route lookup failed:", error);
     return null;
@@ -73,71 +40,34 @@ async function fetchFlightRoute(
  * Displays flight metadata when a flight is selected
  */
 export function FlightInfo() {
+  const { isFollowing, handleFollow, handleClose } = useEntityPanel("flight");
   const [route, setRoute] = createSignal<string>("...");
 
-  // Memoize flight data extraction
   const data = createMemo(() => {
     if (selection.type !== "flight") return null;
     return selection.data as FlightData | null;
   });
 
-  // Check if currently following this flight
-  const isFollowing = createMemo(() => {
-    return (
-      camera.mode === "follow" &&
-      camera.target?.type === "flight" &&
-      camera.target?.id === selection.id
-    );
-  });
-
   // Fetch route when flight data changes
   createEffect(() => {
     const flightData = data();
-    if (!flightData) {
-      setRoute("...");
-      return;
-    }
+    if (!flightData) { setRoute("..."); return; }
 
     const callsign = flightData.callsign?.trim();
-    if (!callsign) {
-      setRoute("—");
-      return;
-    }
+    if (!callsign) { setRoute("—"); return; }
 
-    // Reset route while loading
     setRoute("...");
-
-    // Fetch route asynchronously
     let cancelled = false;
     fetchFlightRoute(callsign).then((result) => {
       if (cancelled) return;
-      if (result && result.origin !== "—" && result.destination !== "—") {
-        setRoute(`${result.origin} → ${result.destination}`);
-      } else {
-        setRoute("—");
-      }
+      setRoute(
+        result && result.origin !== "—" && result.destination !== "—"
+          ? `${result.origin} → ${result.destination}`
+          : "—",
+      );
     });
-
-    onCleanup(() => {
-      cancelled = true;
-    });
+    onCleanup(() => { cancelled = true; });
   });
-
-  const handleFollow = () => {
-    if (isFollowing()) {
-      setFreeCamera();
-    } else if (selection.id) {
-      setFollowTarget("flight", selection.id);
-    }
-  };
-
-  const handleClose = () => {
-    // Stop following if we were following this flight
-    if (isFollowing()) {
-      setFreeCamera();
-    }
-    clearSelection();
-  };
 
   return (
     <Show when={data()}>
@@ -169,12 +99,12 @@ export function FlightInfo() {
             <div class="sat-info-row">
               <span class="sat-info-label">ALTITUDE</span>
               <span class="sat-info-value">
-                {flightData().position ? formatAltitude(flightData().position.alt) : "—"}
+                {flightData().position ? formatAltitudeFeet(flightData().position.alt) : "—"}
               </span>
             </div>
             <div class="sat-info-row">
               <span class="sat-info-label">SPEED</span>
-              <span class="sat-info-value">{formatSpeed(flightData().velocity)}</span>
+              <span class="sat-info-value">{formatSpeedKnots(flightData().velocity)}</span>
             </div>
             <div class="sat-info-row">
               <span class="sat-info-label">HEADING</span>

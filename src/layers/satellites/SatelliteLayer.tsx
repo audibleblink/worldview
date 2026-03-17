@@ -1,15 +1,10 @@
 /**
- * WorldView - Satellite Layer
- *
- * SolidJS component that renders satellites on the Cesium globe.
- * Features: TLE fetch, SGP4 propagation, billboard rendering,
- * category filtering, selection, follow mode, orbital paths.
+ * Satellite Layer - Renders satellites with TLE/SGP4 propagation
  */
 
 import { onMount, onCleanup, createEffect, on, createSignal } from "solid-js";
 import * as satellite from "satellite.js";
 import { useCesium } from "../../cesium/useCesium";
-import { usePreRender } from "../../cesium/hooks/usePreRender";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
 import { createBillboardCollection } from "../../cesium/createBillboardCollection";
 import { PROXY_ENDPOINTS } from "../../config";
@@ -26,7 +21,6 @@ import {
 import {
   type SatelliteRecord,
   type SatelliteCategory,
-  type SatellitePosition,
   CATEGORY_TO_GROUPS,
   CATEGORY_COLORS,
   BILLBOARD_SIZE_NORMAL,
@@ -37,116 +31,74 @@ import {
 
 declare const Cesium: typeof import("cesium");
 
-// Cache satellite positions for follow mode and selection
+// Position cache for follow mode and selection
 const satellitePositions = new Map<string, Cesium.Cartesian3>();
 
-/**
- * Parse TLE text into satellite records
- */
+/** Parse TLE text into satellite records */
 function parseTLEText(text: string, category: SatelliteCategory): SatelliteRecord[] {
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const records: SatelliteRecord[] = [];
 
   for (let i = 0; i + 2 < lines.length; i += 3) {
-    const name = lines[i]!;
-    const line1 = lines[i + 1]!;
-    const line2 = lines[i + 2]!;
-
+    const [name, line1, line2] = [lines[i]!, lines[i + 1]!, lines[i + 2]!];
     if (!line1.startsWith("1 ") || !line2.startsWith("2 ")) continue;
 
     const satrec = satellite.twoline2satrec(line1, line2);
     if (satrec.error !== 0) continue;
 
-    // NORAD catalog number: columns 3–7 (0-indexed chars 2–6)
     const noradId = line1.substring(2, 7).trim();
-    const colorStr = CATEGORY_COLORS[category];
-    const color = Cesium.Color.fromCssColorString(colorStr);
-
+    const color = Cesium.Color.fromCssColorString(CATEGORY_COLORS[category]);
     records.push({ name, noradId, line1, line2, category, satrec, color });
   }
-
   return records;
 }
 
-/**
- * Fetch TLEs for a category from the proxy
- */
+/** Fetch TLEs for a category from the proxy */
 async function fetchTLEs(category: SatelliteCategory): Promise<SatelliteRecord[]> {
-  const groups = CATEGORY_TO_GROUPS[category];
-  const allRecords: SatelliteRecord[] = [];
-
-  for (const group of groups) {
-    const url = PROXY_ENDPOINTS.tle(group);
-    const res = await fetch(url);
-    
+  const records: SatelliteRecord[] = [];
+  for (const group of CATEGORY_TO_GROUPS[category]) {
+    const res = await fetch(PROXY_ENDPOINTS.tle(group));
     if (!res.ok) {
-      console.error(`[SatelliteLayer] Failed to fetch TLEs for "${group}": ${res.status}`);
+      console.error(`[SatelliteLayer] TLE fetch failed for "${group}": ${res.status}`);
       continue;
     }
-
-    const text = await res.text();
-    allRecords.push(...parseTLEText(text, category));
+    records.push(...parseTLEText(await res.text(), category));
   }
-
-  return allRecords;
+  return records;
 }
 
-/**
- * Load all TLE categories
- */
+/** Load all TLE categories in parallel */
 async function loadAllTLEs(): Promise<SatelliteRecord[]> {
   const categories: SatelliteCategory[] = ["stations", "military", "starlink", "gnss", "research"];
-  const results = await Promise.all(categories.map((cat) => fetchTLEs(cat)));
-  return results.flat();
+  return (await Promise.all(categories.map(fetchTLEs))).flat();
 }
 
-/**
- * Propagate all satellites to their current positions
- */
-function propagateAll(records: SatelliteRecord[], date: Date): SatellitePosition[] {
+/** Propagate satellites to current positions */
+function propagateAll(records: SatelliteRecord[], date: Date) {
   const gmst = satellite.gstime(date);
-  const results: SatellitePosition[] = [];
-
-  for (const record of records) {
+  return records.flatMap((record) => {
     const result = satellite.propagate(record.satrec, date);
-    if (!result?.position || typeof result.position === "boolean") continue;
+    if (!result?.position || typeof result.position === "boolean") return [];
 
     const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
-    const cartesian = Cesium.Cartesian3.fromRadians(
-      geo.longitude,
-      geo.latitude,
-      geo.height * 1000
-    );
+    const cartesian = Cesium.Cartesian3.fromRadians(geo.longitude, geo.latitude, geo.height * 1000);
 
-    // Compute velocity if available
     let velocityKmS: number | undefined;
     if (result.velocity && typeof result.velocity !== "boolean") {
       const { x, y, z } = result.velocity;
       velocityKmS = Math.sqrt(x ** 2 + y ** 2 + z ** 2);
     }
-
-    results.push({ record, cartesian, velocityKmS });
-  }
-
-  return results;
+    return [{ record, cartesian, velocityKmS }];
+  });
 }
 
-/**
- * Compute orbital path for a satellite (next 24 hours)
- */
+/** Compute 24-hour orbital path (2-minute steps) */
 function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[] {
-  const totalMinutes = 24 * 60; // 24 hours
-  const stepMinutes = 2; // 2-minute steps for 720 points (smooth enough)
-  const steps = Math.ceil(totalMinutes / stepMinutes);
-  const now = new Date();
   const positions: Cesium.Cartesian3[] = [];
+  const now = Date.now();
 
-  for (let i = 0; i <= steps; i++) {
-    const t = new Date(now.getTime() + i * stepMinutes * 60_000);
+  for (let i = 0; i <= 720; i++) {
+    const t = new Date(now + i * 2 * 60_000);
     const result = satellite.propagate(record.satrec, t);
     if (!result?.position || typeof result.position === "boolean") continue;
 
@@ -154,110 +106,70 @@ function computeOrbitalPath(record: SatelliteRecord): Cesium.Cartesian3[] {
     const geo = satellite.eciToGeodetic(result.position as satellite.EciVec3<number>, gmst);
     positions.push(Cesium.Cartesian3.fromRadians(geo.longitude, geo.latitude, geo.height * 1000));
   }
-
   return positions;
 }
 
-/**
- * Create a satellite sprite texture
- * Draws a satellite shape (body with solar panels) in white for color tinting.
- */
+/** Create satellite sprite texture (body with solar panels) */
 function createSatelliteTexture(): string {
-  const size = 32;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = canvas.height = 32;
   const ctx = canvas.getContext("2d")!;
+  const c = 16; // center
 
-  const centerX = size / 2;
-  const centerY = size / 2;
-
-  // Draw subtle glow behind
-  const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size / 2);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 0.4)");
-  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.1)");
+  // Glow
+  const gradient = ctx.createRadialGradient(c, c, 0, c, c, 16);
+  gradient.addColorStop(0, "rgba(255,255,255,0.4)");
+  gradient.addColorStop(0.5, "rgba(255,255,255,0.1)");
   gradient.addColorStop(1, "transparent");
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, 32, 32);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1;
-
-  // Central body (rectangle)
-  const bodyWidth = 6;
-  const bodyHeight = 8;
-  ctx.fillRect(centerX - bodyWidth / 2, centerY - bodyHeight / 2, bodyWidth, bodyHeight);
-
-  // Left solar panel
-  ctx.fillRect(centerX - 14, centerY - 3, 10, 6);
-
-  // Right solar panel
-  ctx.fillRect(centerX + 4, centerY - 3, 10, 6);
+  // Body and panels
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(c - 3, c - 4, 6, 8);  // body
+  ctx.fillRect(c - 14, c - 3, 10, 6); // left panel
+  ctx.fillRect(c + 4, c - 3, 10, 6);  // right panel
 
   // Panel grid lines
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+  ctx.strokeStyle = "rgba(0,0,0,0.3)";
   ctx.lineWidth = 0.5;
-
-  // Left panel lines
   ctx.beginPath();
-  ctx.moveTo(centerX - 9, centerY - 3);
-  ctx.lineTo(centerX - 9, centerY + 3);
-  ctx.moveTo(centerX - 14, centerY);
-  ctx.lineTo(centerX - 4, centerY);
-  ctx.stroke();
-
-  // Right panel lines
-  ctx.beginPath();
-  ctx.moveTo(centerX + 9, centerY - 3);
-  ctx.lineTo(centerX + 9, centerY + 3);
-  ctx.moveTo(centerX + 4, centerY);
-  ctx.lineTo(centerX + 14, centerY);
+  ctx.moveTo(c - 9, c - 3); ctx.lineTo(c - 9, c + 3);
+  ctx.moveTo(c - 14, c); ctx.lineTo(c - 4, c);
+  ctx.moveTo(c + 9, c - 3); ctx.lineTo(c + 9, c + 3);
+  ctx.moveTo(c + 4, c); ctx.lineTo(c + 14, c);
   ctx.stroke();
 
   return canvas.toDataURL();
 }
 
-/**
- * SatelliteLayer - Renders satellites on the globe
- */
 export function SatelliteLayer() {
   const { viewer, ready } = useCesium();
   const { track, stop: stopFollow, isFollowing } = useFollowMode();
-  const { add, remove, update, get, clear, collection } = createBillboardCollection();
+  const { add, update, clear } = createBillboardCollection();
 
-  // Local state
   const [selectedNoradId, setSelectedNoradId] = createSignal<string | null>(null);
   const [satelliteTexture, setSatelliteTexture] = createSignal<string | null>(null);
-  
-  // Refs for cleanup
+
   let updateInterval: ReturnType<typeof setInterval> | null = null;
   let orbitalPathEntity: Cesium.Entity | null = null;
   let screenSpaceHandler: Cesium.ScreenSpaceEventHandler | null = null;
 
-  // Initialize texture
-  onMount(() => {
-    setSatelliteTexture(createSatelliteTexture());
-  });
+  onMount(() => setSatelliteTexture(createSatelliteTexture()));
 
   // Load TLEs when viewer is ready
-  createEffect(
-    on(ready, async (isReady) => {
-      if (!isReady) return;
-
-      console.log("[SatelliteLayer] Loading TLEs...");
-      setLoading(true);
-
-      try {
-        const records = await loadAllTLEs();
-        setSatellites(records);
-        console.log(`[SatelliteLayer] Loaded ${records.length} satellites`);
-      } catch (err) {
-        console.error("[SatelliteLayer] Failed to load TLEs:", err);
-        setError(err instanceof Error ? err.message : "Failed to load TLEs");
-      }
-    })
-  );
+  createEffect(on(ready, async (isReady) => {
+    if (!isReady) return;
+    setLoading(true);
+    try {
+      const records = await loadAllTLEs();
+      setSatellites(records);
+      console.log(`[SatelliteLayer] Loaded ${records.length} satellites`);
+    } catch (err) {
+      console.error("[SatelliteLayer] Failed to load TLEs:", err);
+      setError(err instanceof Error ? err.message : "Failed to load TLEs");
+    }
+  }));
 
   // Create billboards when records change
   createEffect(() => {
@@ -268,21 +180,15 @@ export function SatelliteLayer() {
     const v = viewer();
     if (!v || v.isDestroyed()) return;
 
-    console.log(`[SatelliteLayer] Creating ${records.length} billboards`);
-
-    // Clear existing billboards
     clear();
     satellitePositions.clear();
 
-    // Propagate and create billboards
-    const positions = propagateAll(records, new Date());
-
-    for (const { record, cartesian } of positions) {
+    for (const { record, cartesian } of propagateAll(records, new Date())) {
       add({
         id: record.noradId,
         position: cartesian,
         image: texture,
-        scale: BILLBOARD_SIZE_NORMAL / 32, // Scale relative to texture size
+        scale: BILLBOARD_SIZE_NORMAL / 32,
         color: record.color,
         show: !satelliteState.hiddenCategories.has(record.category),
         data: record,
@@ -290,68 +196,44 @@ export function SatelliteLayer() {
       satellitePositions.set(record.noradId, cartesian);
     }
 
-    // Start position update interval
-    if (updateInterval) {
-      clearInterval(updateInterval);
-    }
-    updateInterval = setInterval(() => {
-      updatePositions();
-    }, POSITION_UPDATE_INTERVAL_MS);
+    if (updateInterval) clearInterval(updateInterval);
+    updateInterval = setInterval(updatePositions, POSITION_UPDATE_INTERVAL_MS);
   });
 
   // Update billboard visibility when hidden categories change
   createEffect(() => {
-    const hiddenCategories = satelliteState.hiddenCategories;
-    const records = satelliteState.records;
-
+    const { hiddenCategories, records } = satelliteState;
     for (const record of records) {
-      const visible = !hiddenCategories.has(record.category);
-      update(record.noradId, { show: visible });
+      update(record.noradId, { show: !hiddenCategories.has(record.category) });
     }
-
     // Deselect if selected satellite's category is now hidden
-    const currentSelected = selectedNoradId();
-    if (currentSelected) {
-      const record = getSatelliteByNoradId(currentSelected);
-      if (record && hiddenCategories.has(record.category)) {
-        deselectSatellite();
-      }
+    const selected = selectedNoradId();
+    if (selected) {
+      const record = getSatelliteByNoradId(selected);
+      if (record && hiddenCategories.has(record.category)) deselectSatellite();
     }
   });
 
-  /**
-   * Update all satellite positions
-   */
   function updatePositions() {
-    const records = satelliteState.records;
+    const { records } = satelliteState;
     if (!records.length) return;
-
-    const positions = propagateAll(records, new Date());
-
-    for (const { record, cartesian } of positions) {
+    for (const { record, cartesian } of propagateAll(records, new Date())) {
       update(record.noradId, { position: cartesian });
       satellitePositions.set(record.noradId, cartesian);
     }
   }
 
-  /**
-   * Select a satellite by NORAD ID
-   */
   function selectSatellite(noradId: string) {
-    // Deselect previous if any
     deselectSatellite();
 
     const record = getSatelliteByNoradId(noradId);
     if (!record) return;
 
     setSelectedNoradId(noradId);
-
-    // Update billboard size
     update(noradId, { scale: BILLBOARD_SIZE_SELECTED / 32 });
 
     // Compute velocity
-    const now = new Date();
-    const result = satellite.propagate(record.satrec, now);
+    const result = satellite.propagate(record.satrec, new Date());
     let velocityKmS = 0;
     if (result?.velocity && typeof result.velocity !== "boolean") {
       const { x, y, z } = result.velocity;
@@ -360,24 +242,21 @@ export function SatelliteLayer() {
 
     // Get position
     const position = satellitePositions.get(noradId);
-    let lat = 0, lng = 0, alt = 0;
-    if (position) {
-      const cartographic = Cesium.Cartographic.fromCartesian(position);
-      lat = Cesium.Math.toDegrees(cartographic.latitude);
-      lng = Cesium.Math.toDegrees(cartographic.longitude);
-      alt = cartographic.height;
-    }
+    const { lat, lng, alt } = position
+      ? (() => {
+          const c = Cesium.Cartographic.fromCartesian(position);
+          return { lat: Cesium.Math.toDegrees(c.latitude), lng: Cesium.Math.toDegrees(c.longitude), alt: c.height };
+        })()
+      : { lat: 0, lng: 0, alt: 0 };
 
-    // Update selection store
-    const selectionData: SatelliteData = {
+    selectEntity("satellite", noradId, {
       noradId: record.noradId,
       name: record.name,
       category: record.category,
       position: { lat, lng, alt },
       velocity: velocityKmS ? { x: velocityKmS, y: 0, z: 0 } : undefined,
       tle: { line1: record.line1, line2: record.line2 },
-    };
-    selectEntity("satellite", noradId, selectionData);
+    } as SatelliteData);
 
     // Create orbital path
     const v = viewer();
@@ -394,43 +273,29 @@ export function SatelliteLayer() {
         });
       }
     }
-
-    console.log(`[SatelliteLayer] Selected satellite: ${record.name} (${noradId})`);
   }
 
-  /**
-   * Deselect current satellite
-   */
   function deselectSatellite() {
     const current = selectedNoradId();
     if (current) {
-      // Reset billboard size
       update(current, { scale: BILLBOARD_SIZE_NORMAL / 32 });
       setSelectedNoradId(null);
     }
 
-    // Remove orbital path
     const v = viewer();
     if (orbitalPathEntity && v && !v.isDestroyed()) {
       v.entities.remove(orbitalPathEntity);
       orbitalPathEntity = null;
     }
 
-    // Stop follow mode
     if (isFollowing()) {
       stopFollow();
       unfollowSatellite();
     }
 
-    // Clear selection store if it was a satellite
-    if (selection.type === "satellite") {
-      clearSelection();
-    }
+    if (selection.type === "satellite") clearSelection();
   }
 
-  /**
-   * Start following the selected satellite
-   */
   function startFollowMode() {
     const noradId = selectedNoradId();
     if (!noradId) return;
@@ -438,97 +303,55 @@ export function SatelliteLayer() {
     const record = getSatelliteByNoradId(noradId);
     if (!record) return;
 
-    // Warm up position cache if not yet populated (e.g. selected via command bar before first update)
+    // Ensure position cache is populated
     if (!satellitePositions.has(noradId)) {
       const positions = propagateAll([record], new Date());
-      if (positions[0]) {
-        satellitePositions.set(noradId, positions[0].cartesian);
-      }
+      if (positions[0]) satellitePositions.set(noradId, positions[0].cartesian);
     }
 
     followSatellite(noradId);
-
-    track(
-      () => satellitePositions.get(noradId) ?? null,
-      {
-        heading: 0,
-        pitch: -Math.PI / 4,
-        range: FOLLOW_RANGE_METERS,
-      }
-    );
-
-    console.log(`[SatelliteLayer] Following satellite: ${noradId}`);
+    track(() => satellitePositions.get(noradId) ?? null, {
+      heading: 0,
+      pitch: -Math.PI / 4,
+      range: FOLLOW_RANGE_METERS,
+    });
   }
 
   // Setup click handler for satellite selection
-  createEffect(
-    on(ready, (isReady) => {
-      if (!isReady) return;
+  createEffect(on(ready, (isReady) => {
+    if (!isReady) return;
 
-      const v = viewer();
-      if (!v || v.isDestroyed()) return;
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
 
-      // Create screen space event handler
-      screenSpaceHandler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
+    screenSpaceHandler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
 
-      screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
-        const pickedObject = v.scene.pick(click.position);
+    screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = v.scene.pick(click.position);
+      const id = picked?.id;
+      if (typeof id === "string" && getSatelliteByNoradId(id)) {
+        selectSatellite(id);
+      } else if (selectedNoradId()) {
+        deselectSatellite();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-        if (Cesium.defined(pickedObject) && pickedObject.id) {
-          // Check if it's a billboard with a noradId
-          const id = pickedObject.id;
-          if (typeof id === "string" && getSatelliteByNoradId(id)) {
-            selectSatellite(id);
-            return;
-          }
-        }
-
-        // Clicked on nothing - deselect
-        if (selectedNoradId()) {
-          deselectSatellite();
-        }
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-      // Double-click to follow
-      screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
-        const pickedObject = v.scene.pick(click.position);
-
-        if (Cesium.defined(pickedObject) && pickedObject.id) {
-          const id = pickedObject.id;
-          if (typeof id === "string" && getSatelliteByNoradId(id)) {
-            if (selectedNoradId() !== id) {
-              selectSatellite(id);
-            }
-            startFollowMode();
-          }
-        }
-      }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    })
-  );
+    screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = v.scene.pick(click.position);
+      const id = picked?.id;
+      if (typeof id === "string" && getSatelliteByNoradId(id)) {
+        if (selectedNoradId() !== id) selectSatellite(id);
+        startFollowMode();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+  }));
 
   // React to external selection changes (e.g., from command bar)
   createEffect(() => {
     if (selection.type === "satellite" && selection.id && selection.id !== selectedNoradId()) {
       selectSatellite(selection.id);
     } else if (selection.type !== "satellite" && selectedNoradId()) {
-      // Something else selected, deselect our satellite
-      const current = selectedNoradId();
-      if (current) {
-        update(current, { scale: BILLBOARD_SIZE_NORMAL / 32 });
-        setSelectedNoradId(null);
-        
-        // Remove orbital path
-        const v = viewer();
-        if (orbitalPathEntity && v && !v.isDestroyed()) {
-          v.entities.remove(orbitalPathEntity);
-          orbitalPathEntity = null;
-        }
-
-        if (isFollowing()) {
-          stopFollow();
-          unfollowSatellite();
-        }
-      }
+      deselectSatellite();
     }
   });
 
@@ -542,40 +365,19 @@ export function SatelliteLayer() {
     }
   });
 
-  // Cleanup
   onCleanup(() => {
-    console.log("[SatelliteLayer] Cleaning up");
+    if (updateInterval) clearInterval(updateInterval);
 
-    // Clear interval
-    if (updateInterval) {
-      clearInterval(updateInterval);
-      updateInterval = null;
-    }
-
-    // Remove orbital path
     const v = viewer();
     if (orbitalPathEntity && v && !v.isDestroyed()) {
       v.entities.remove(orbitalPathEntity);
-      orbitalPathEntity = null;
     }
 
-    // Destroy screen space handler
-    if (screenSpaceHandler) {
-      screenSpaceHandler.destroy();
-      screenSpaceHandler = null;
-    }
+    if (screenSpaceHandler) screenSpaceHandler.destroy();
+    if (isFollowing()) stopFollow();
 
-    // Stop follow mode
-    if (isFollowing()) {
-      stopFollow();
-    }
-
-    // Clear billboard collection (handled by createBillboardCollection cleanup)
     satellitePositions.clear();
   });
 
-  // Layers don't render DOM - they add primitives to Cesium
   return null;
 }
-
-export default SatelliteLayer;

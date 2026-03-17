@@ -2,12 +2,11 @@
  * Middleware utilities for server routes
  *
  * Provides composable wrappers for:
- * - Error boundary (catch all errors, return consistent error response)
- * - CORS preflight handling
- * - Request/response logging
+ * - Error boundary (catch errors, return consistent error response)
+ * - Request/response logging with timing
  */
 
-import { corsResponse, errorResponse, type RouteHandler } from "./types.ts";
+import { errorResponse, type RouteHandler } from "./types.ts";
 
 /**
  * Wrap a handler with error boundary
@@ -20,36 +19,13 @@ export function withErrorBoundary(handler: RouteHandler): RouteHandler {
     try {
       return await handler(req);
     } catch (error) {
+      const isTimeout = error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
       const message = error instanceof Error ? error.message : "Internal server error";
-      const isTimeout = error instanceof Error && error.name === "AbortError";
 
-      console.error(
-        `[Error] ${req.method} ${new URL(req.url).pathname}:`,
-        error instanceof Error ? error.message : error
-      );
+      console.error(`[Error] ${req.method} ${new URL(req.url).pathname}:`, message);
 
-      if (isTimeout) {
-        return errorResponse("Request timeout", 504);
-      }
-
-      return errorResponse(message, 500);
+      return errorResponse(isTimeout ? "Request timeout" : message, isTimeout ? 504 : 500);
     }
-  };
-}
-
-/**
- * Wrap a handler with CORS support
- *
- * Automatically handles OPTIONS preflight requests.
- */
-export function withCORS(handler: RouteHandler): RouteHandler {
-  return async (req: Request): Promise<Response> => {
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      return corsResponse(null, { status: 204 });
-    }
-
-    return handler(req);
   };
 }
 
@@ -69,10 +45,9 @@ export function withLogging(handler: RouteHandler): RouteHandler {
     const duration = (performance.now() - start).toFixed(1);
     const status = response.status;
     const statusColor = status >= 400 ? "\x1b[31m" : status >= 300 ? "\x1b[33m" : "\x1b[32m";
-    const reset = "\x1b[0m";
 
     console.log(
-      `[${new Date().toISOString().slice(11, 19)}] ${req.method} ${path} ${statusColor}${status}${reset} ${duration}ms`
+      `[${new Date().toISOString().slice(11, 19)}] ${req.method} ${path} ${statusColor}${status}\x1b[0m ${duration}ms`
     );
 
     return response;
@@ -80,25 +55,13 @@ export function withLogging(handler: RouteHandler): RouteHandler {
 }
 
 /**
- * Compose multiple middleware functions
- *
- * @example
- * const handler = compose(withCORS, withLogging, withErrorBoundary)(myHandler);
- */
-export function compose(...middlewares: Array<(h: RouteHandler) => RouteHandler>) {
-  return (handler: RouteHandler): RouteHandler => {
-    return middlewares.reduceRight((h, middleware) => middleware(h), handler);
-  };
-}
-
-/**
  * Apply standard middleware stack to a handler
  *
- * Applies: CORS → Logging → Error Boundary
- * This is the recommended wrapper for all route handlers.
+ * Applies: Logging → Error Boundary
+ * CORS preflight is handled at the server level in index.ts
  */
 export function applyMiddleware(handler: RouteHandler): RouteHandler {
-  return compose(withCORS, withLogging, withErrorBoundary)(handler);
+  return withLogging(withErrorBoundary(handler));
 }
 
 /**

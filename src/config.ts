@@ -5,28 +5,10 @@
  * NEVER hardcode proxy URLs elsewhere in the codebase.
  */
 
-/**
- * Base URL for the proxy server.
- * Reads from PROXY_BASE_URL environment variable, defaults to localhost:3001.
- */
-export const PROXY_BASE_URL = 
-  typeof process !== "undefined" && process.env?.PROXY_BASE_URL
-    ? process.env.PROXY_BASE_URL
-    : "http://localhost:3001";
+/** Base URL for the proxy server */
+export const PROXY_BASE_URL = "http://localhost:3001";
 
-/**
- * Development server port
- */
-export const DEV_SERVER_PORT = 3000;
-
-/**
- * Proxy server port
- */
-export const PROXY_SERVER_PORT = 3001;
-
-/**
- * Proxy endpoint URLs - use these instead of hardcoding paths
- */
+/** Proxy endpoint URLs - use these instead of hardcoding paths */
 export const PROXY_ENDPOINTS = {
   /** Health check endpoint */
   health: `${PROXY_BASE_URL}/health`,
@@ -44,8 +26,8 @@ export const PROXY_ENDPOINTS = {
   aircraftMeta: (icao24: string) => `${PROXY_BASE_URL}/aircraft-meta/${encodeURIComponent(icao24)}`,
   
   /** Ship tracking endpoint with bounding box */
-  ships: (bbox: { minLat: number; maxLat: number; minLon: number; maxLon: number }) =>
-    `${PROXY_BASE_URL}/ships?minLat=${bbox.minLat}&maxLat=${bbox.maxLat}&minLon=${bbox.minLon}&maxLon=${bbox.maxLon}`,
+  ships: ({ minLat, maxLat, minLon, maxLon }: { minLat: number; maxLat: number; minLon: number; maxLon: number }) =>
+    `${PROXY_BASE_URL}/ships?minLat=${minLat}&maxLat=${maxLat}&minLon=${minLon}&maxLon=${maxLon}`,
   
   /** CCTV camera list */
   cctvCameras: `${PROXY_BASE_URL}/api/cctv/cameras`,

@@ -2,16 +2,13 @@
  * CCTV Source Registry — Shared Types
  */
 
-/** Media format a camera can provide */
 export type CameraMediaType = "image" | "hls" | "mp4ts";
 
-/** A single media endpoint for a camera */
 export interface CameraMedia {
   type: CameraMediaType;
   url: string;
 }
 
-/** Normalized camera record returned by all sources */
 export interface CCTVCamera {
   id: string;
   name: string;
@@ -24,10 +21,34 @@ export interface CCTVCamera {
   direction?: string;
 }
 
-/** Interface that every camera source must implement */
 export interface CameraSource {
   readonly name: string;
   fetchCameras(): Promise<CCTVCamera[]>;
-  /** Get a fresh signed HLS URL for token-gated streams (optional) */
   getSignedHlsUrl?(cameraId: string): Promise<string>;
+}
+
+/**
+ * Base class for camera sources with built-in TTL caching
+ */
+export abstract class CachedCameraSource implements CameraSource {
+  abstract readonly name: string;
+  protected cameras: CCTVCamera[] = [];
+  protected cacheTime = 0;
+  protected abstract cacheTtl: number;
+
+  abstract fetchFromUpstream(): Promise<CCTVCamera[]>;
+
+  async fetchCameras(): Promise<CCTVCamera[]> {
+    if (this.cameras.length > 0 && Date.now() - this.cacheTime < this.cacheTtl) {
+      return this.cameras;
+    }
+    try {
+      this.cameras = await this.fetchFromUpstream();
+      this.cacheTime = Date.now();
+      console.log(`[CCTV] Fetched ${this.cameras.length} cameras from ${this.name}`);
+    } catch (error) {
+      console.error(`[CCTV] Error fetching ${this.name} cameras:`, error);
+    }
+    return this.cameras;
+  }
 }

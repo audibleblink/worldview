@@ -83,22 +83,13 @@ export const IATA_TO_ICAO: Record<string, string> = {
 export function convertIataToIcao(callsign: string): string {
   const upper = callsign.toUpperCase();
 
-  // Already has 3-letter prefix (ICAO) - return unchanged
-  if (/^[A-Z]{3}\d/.test(upper)) {
-    return callsign;
-  }
+  // Already has 3-letter ICAO prefix - return unchanged
+  if (/^[A-Z]{3}\d/.test(upper)) return callsign;
 
-  // Check for 2-character IATA prefix (can be alphanumeric like B6, F9, G4)
+  // Match 2-char IATA prefix (alphanumeric like B6, F9, G4) followed by flight number
   const match = upper.match(/^([A-Z0-9]{2})(\d+.*)$/);
-  if (match && match[1] && match[2]) {
-    const iataCode = match[1];
-    const flightNumber = match[2];
-    const icaoCode = IATA_TO_ICAO[iataCode];
-    if (icaoCode) {
-      return icaoCode + flightNumber;
-    }
-  }
+  if (!match) return callsign;
 
-  // Unknown format - return as-is
-  return callsign;
+  const icaoCode = IATA_TO_ICAO[match[1]];
+  return icaoCode ? icaoCode + match[2] : callsign;
 }

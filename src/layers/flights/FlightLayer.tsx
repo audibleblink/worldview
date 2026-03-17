@@ -1,16 +1,8 @@
 /**
- * WorldView - Flight Layer
- *
- * Renders live flights on the globe with:
- * - OpenSky Network data fetching + polling
- * - 3D aircraft models via Entity API
- * - Dead-reckoning position interpolation
- * - Frustum culling for performance
- * - Selection handling
- * - Follow mode via useFollowMode hook
+ * Flight Layer - Live aircraft with 3D models and dead-reckoning
  */
 
-import { onMount, onCleanup, createEffect, createSignal, on } from "solid-js";
+import { onCleanup, createEffect, on } from "solid-js";
 import { useCesium } from "../../cesium/useCesium";
 import { usePreRender } from "../../cesium/hooks/usePreRender";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
@@ -29,25 +21,17 @@ import {
 declare const Cesium: typeof import("cesium");
 
 // Constants
-const FLIGHT_UPDATE_INTERVAL = 10_000; // 10 seconds
-const FLIGHT_INTERP_CAP = 30; // Max seconds to dead-reckon
-const FLIGHT_INTERP_SKIP_FRAMES = 2; // Interpolate every N frames
-const FLIGHT_LABEL_VISIBLE_DISTANCE = 200_000; // meters
+const UPDATE_INTERVAL_MS = 10_000;
+const INTERP_CAP_SEC = 30;
+const INTERP_SKIP_FRAMES = 2;
+const LABEL_VISIBLE_DISTANCE = 200_000;
 const MAX_VISIBLE_FLIGHTS = 50;
-
-// 3D Model settings
 const MODEL_SCALE = 50;
 const MODEL_SCALE_SELECTED = 75;
 const MODEL_MIN_PIXEL_SIZE = 64;
-
-// Conversion constants
 const DEG_TO_RAD = Math.PI / 180;
 const METERS_PER_DEG = 111_320;
 
-/**
- * Shape of the transformed state objects returned by the proxy's /flights endpoint.
- * The proxy pre-processes raw OpenSky arrays into named-property objects.
- */
 interface ProxyFlightState {
   icao24: string;
   callsign: string | null;
@@ -58,23 +42,11 @@ interface ProxyFlightState {
   heading: number | null;
   verticalRate: number | null;
   onGround: boolean;
-  lastContact: number;
 }
 
-/**
- * Parse a proxy-transformed flight state object into FlightRecord.
- *
- * The proxy (/src/server/routes/flights.ts) returns pre-processed objects
- * (not raw OpenSky arrays), so we read named properties directly.
- */
 function parseProxyFlightState(state: ProxyFlightState): FlightRecord | null {
   const { icao24, longitude, latitude, onGround } = state;
-
-  // Filter out records with missing critical data or on ground (proxy already
-  // filters ground traffic, but be defensive here too)
-  if (!icao24 || longitude === null || latitude === null || onGround) {
-    return null;
-  }
+  if (!icao24 || longitude === null || latitude === null || onGround) return null;
 
   return {
     icao24,
@@ -90,86 +62,47 @@ function parseProxyFlightState(state: ProxyFlightState): FlightRecord | null {
   };
 }
 
-/**
- * Compute orientation quaternion from heading and pitch
- */
-function computeOrientation(
-  position: Cesium.Cartesian3,
-  heading: number,
-  pitch: number = 0,
-  roll: number = 0
-): Cesium.Quaternion {
-  // The Cesium Air model's nose points along +X axis by default
-  // Cesium heading 0 = North (+Y in local ENU frame)
-  // We need to rotate the model 90° to align +X (model nose) with +Y (North)
-  const adjustedHeading = heading - 90;
-
+/** Compute orientation quaternion from heading and pitch */
+function computeOrientation(position: Cesium.Cartesian3, heading: number, pitch = 0): Cesium.Quaternion {
+  // Adjust heading: model nose is +X, Cesium heading 0 = North (+Y)
   const hpr = new Cesium.HeadingPitchRoll(
-    Cesium.Math.toRadians(adjustedHeading),
+    Cesium.Math.toRadians(heading - 90),
     Cesium.Math.toRadians(pitch),
-    Cesium.Math.toRadians(roll)
+    0
   );
   return Cesium.Transforms.headingPitchRollQuaternion(position, hpr);
 }
 
-/**
- * Estimate pitch angle from vertical rate and velocity
- */
+/** Estimate pitch from vertical rate and velocity */
 function estimatePitch(verticalRate: number, velocity: number): number {
-  if (velocity < 10) return 0; // Avoid division issues at low speeds
-  const pitchRad = Math.atan2(verticalRate, velocity);
-  return Cesium.Math.toDegrees(pitchRad);
+  return velocity < 10 ? 0 : Cesium.Math.toDegrees(Math.atan2(verticalRate, velocity));
 }
 
-/**
- * Filter flight records to only the N nearest to the camera
- */
-function filterNearestFlights(
-  records: FlightRecord[],
-  cameraPosition: Cesium.Cartesian3,
-  maxCount: number
-): FlightRecord[] {
+/** Filter to N nearest flights to camera */
+function filterNearestFlights(records: FlightRecord[], cameraPos: Cesium.Cartesian3, maxCount: number): FlightRecord[] {
   if (records.length <= maxCount) return records;
 
-  // Calculate distance from camera to each flight
-  const withDistance = records.map((record) => {
-    const flightPos = Cesium.Cartesian3.fromDegrees(
-      record.longitude,
-      record.latitude,
-      record.altitude
-    );
-    const distance = Cesium.Cartesian3.distance(cameraPosition, flightPos);
-    return { record, distance };
-  });
-
-  // Sort by distance and take the nearest N
-  withDistance.sort((a, b) => a.distance - b.distance);
-  return withDistance.slice(0, maxCount).map((item) => item.record);
+  return records
+    .map((record) => ({
+      record,
+      distance: Cesium.Cartesian3.distance(cameraPos, Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude)),
+    }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, maxCount)
+    .map((item) => item.record);
 }
 
-/**
- * Format a flight record into a label string
- */
 function formatLabelText(record: FlightRecord): string {
   const callsign = record.callsign.trim() || record.icao24.toUpperCase();
-  const altFt = Math.round(record.altitude * 3.28084).toLocaleString();
-  const heading = Math.round(record.heading);
-  return `${callsign} | ${altFt}ft | ${heading}°`;
+  return `${callsign} | ${Math.round(record.altitude * 3.28084).toLocaleString()}ft | ${Math.round(record.heading)}°`;
 }
 
-/**
- * Convert FlightRecord to FlightData for selection store
- */
 function toFlightData(record: FlightRecord): FlightData {
   return {
     icao24: record.icao24,
     callsign: record.callsign,
-    originCountry: "", // Not available from OpenSky states
-    position: {
-      lat: record.latitude,
-      lng: record.longitude,
-      alt: record.altitude,
-    },
+    originCountry: "",
+    position: { lat: record.latitude, lng: record.longitude, alt: record.altitude },
     velocity: record.velocity,
     heading: record.heading,
     verticalRate: record.verticalRate,
@@ -177,63 +110,35 @@ function toFlightData(record: FlightRecord): FlightData {
   };
 }
 
-/**
- * FlightLayer - Renders live flights on the globe
- */
 export function FlightLayer() {
   const { viewer, ready } = useCesium();
   const { isFollowing, track, stop: stopFollow } = useFollowMode();
 
-  // Entity and position tracking
   const entityMap = new Map<string, Cesium.Entity>();
   const positionPropertyMap = new Map<string, Cesium.ConstantPositionProperty>();
   const orientationPropertyMap = new Map<string, Cesium.ConstantProperty>();
   const interpolatedPositions = new Map<string, Cesium.Cartesian3>();
 
-  // Frame counter for interpolation skip
   let interpFrameCount = 0;
   let updateInterval: ReturnType<typeof setInterval> | null = null;
   let screenSpaceHandler: Cesium.ScreenSpaceEventHandler | null = null;
 
-  /**
-   * Fetch flights from proxy server
-   */
   async function fetchFlights(): Promise<{ records: FlightRecord[]; total: number }> {
     const response = await fetch(PROXY_ENDPOINTS.flights);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch flights: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Failed to fetch flights: ${response.status}`);
 
     const data = await response.json();
-    if (!data.states || !Array.isArray(data.states)) {
-      return { records: [], total: 0 };
-    }
+    if (!data.states?.length) return { records: [], total: 0 };
 
-    const records: FlightRecord[] = [];
-    for (const state of data.states) {
-      const record = parseProxyFlightState(state as ProxyFlightState);
-      if (record) {
-        records.push(record);
-      }
-    }
-
+    const records = data.states.map((s: ProxyFlightState) => parseProxyFlightState(s)).filter(Boolean) as FlightRecord[];
     return { records, total: data.states.length };
   }
 
-  /**
-   * Add an entity with 3D model and label for an aircraft
-   */
   function addEntity(record: FlightRecord, v: Cesium.Viewer): void {
-    const position = Cesium.Cartesian3.fromDegrees(
-      record.longitude,
-      record.latitude,
-      record.altitude
-    );
-
+    const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
     const pitch = estimatePitch(record.verticalRate, record.velocity);
     const orientation = computeOrientation(position, record.heading, pitch);
 
-    // Create position property and store for efficient updates
     const positionProperty = new Cesium.ConstantPositionProperty(position);
     const orientationProperty = new Cesium.ConstantProperty(orientation);
 
@@ -261,10 +166,7 @@ export function FlightLayer() {
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         scaleByDistance: new Cesium.NearFarScalar(5000, 1.0, 200000, 0.7),
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-          0,
-          FLIGHT_LABEL_VISIBLE_DISTANCE
-        ),
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, LABEL_VISIBLE_DISTANCE),
       },
     });
 
@@ -274,341 +176,163 @@ export function FlightLayer() {
     interpolatedPositions.set(record.icao24, position);
   }
 
-  /**
-   * Update an existing entity position (using setValue - Blocklist #1)
-   */
-  function updateEntityPosition(
-    icao24: string,
-    position: Cesium.Cartesian3,
-    orientation: Cesium.Quaternion
-  ): void {
-    const positionProperty = positionPropertyMap.get(icao24);
-    const orientationProperty = orientationPropertyMap.get(icao24);
-
-    if (positionProperty && orientationProperty) {
-      // CRITICAL: Use setValue() to mutate existing property - never allocate new (Blocklist #1)
-      positionProperty.setValue(position);
-      orientationProperty.setValue(orientation);
-    }
-
+  function updateEntityPosition(icao24: string, position: Cesium.Cartesian3, orientation: Cesium.Quaternion): void {
+    positionPropertyMap.get(icao24)?.setValue(position);
+    orientationPropertyMap.get(icao24)?.setValue(orientation);
     interpolatedPositions.set(icao24, position);
   }
 
-  /**
-   * Update entity label text
-   */
   function updateEntityLabel(entity: Cesium.Entity, record: FlightRecord): void {
-    if (entity.label) {
-      entity.label.text = new Cesium.ConstantProperty(formatLabelText(record));
-    }
+    if (entity.label) entity.label.text = new Cesium.ConstantProperty(formatLabelText(record));
   }
 
-  /**
-   * Highlight selected entity
-   */
   function highlightEntity(icao24: string, selected: boolean): void {
     const entity = entityMap.get(icao24);
-    if (entity?.model) {
-      entity.model.scale = new Cesium.ConstantProperty(
-        selected ? MODEL_SCALE_SELECTED : MODEL_SCALE
-      );
-      entity.model.silhouetteColor = new Cesium.ConstantProperty(
-        selected ? Cesium.Color.YELLOW : Cesium.Color.CYAN
-      );
-      entity.model.silhouetteSize = new Cesium.ConstantProperty(selected ? 2.0 : 1.0);
-    }
+    if (!entity?.model) return;
+    entity.model.scale = new Cesium.ConstantProperty(selected ? MODEL_SCALE_SELECTED : MODEL_SCALE);
+    entity.model.silhouetteColor = new Cesium.ConstantProperty(selected ? Cesium.Color.YELLOW : Cesium.Color.CYAN);
+    entity.model.silhouetteSize = new Cesium.ConstantProperty(selected ? 2.0 : 1.0);
   }
 
-  /**
-   * Remove an entity
-   */
   function removeEntity(icao24: string, v: Cesium.Viewer): void {
     const entity = entityMap.get(icao24);
-    if (entity) {
-      v.entities.remove(entity);
-      entityMap.delete(icao24);
-      positionPropertyMap.delete(icao24);
-      orientationPropertyMap.delete(icao24);
-      interpolatedPositions.delete(icao24);
-    }
+    if (!entity) return;
+    v.entities.remove(entity);
+    entityMap.delete(icao24);
+    positionPropertyMap.delete(icao24);
+    orientationPropertyMap.delete(icao24);
+    interpolatedPositions.delete(icao24);
   }
 
-  /**
-   * Refresh flight data from server
-   */
   async function refreshFlights(v: Cesium.Viewer): Promise<void> {
     try {
       const { records: allRecords, total } = await fetchFlights();
-
-      // Filter to nearest flights only
-      const records = filterNearestFlights(
-        allRecords,
-        v.camera.positionWC,
-        MAX_VISIBLE_FLIGHTS
-      );
-
+      const records = filterNearestFlights(allRecords, v.camera.positionWC, MAX_VISIBLE_FLIGHTS);
       const currentIcaos = new Set(records.map((r) => r.icao24));
 
-      // Update store
       setFlights(records, total);
 
-      // Update or add entities
       for (const record of records) {
-        const existingEntity = entityMap.get(record.icao24);
-        if (existingEntity) {
-          // Update existing entity
-          const position = Cesium.Cartesian3.fromDegrees(
-            record.longitude,
-            record.latitude,
-            record.altitude
-          );
-          const pitch = estimatePitch(record.verticalRate, record.velocity);
-          const orientation = computeOrientation(position, record.heading, pitch);
-
-          updateEntityPosition(record.icao24, position, orientation);
-          updateEntityLabel(existingEntity, record);
+        const existing = entityMap.get(record.icao24);
+        if (existing) {
+          const position = Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, record.altitude);
+          updateEntityPosition(record.icao24, position, computeOrientation(position, record.heading, estimatePitch(record.verticalRate, record.velocity)));
+          updateEntityLabel(existing, record);
         } else {
-          // Add new entity
           addEntity(record, v);
         }
       }
 
-      // Remove entities for aircraft no longer in nearest set
       for (const [icao24] of entityMap) {
         if (!currentIcaos.has(icao24)) {
-          // If this was selected, clear selection
-          if (flightState.selectedIcao24 === icao24) {
-            selectFlight(null);
-            clearSelection();
-          }
-          // If following, stop
-          if (flightState.followingIcao24 === icao24) {
-            unfollowFlight();
-            stopFollow();
-          }
+          if (flightState.selectedIcao24 === icao24) { selectFlight(null); clearSelection(); }
+          if (flightState.followingIcao24 === icao24) { unfollowFlight(); stopFollow(); }
           removeEntity(icao24, v);
         }
       }
-
-      console.log(`[FlightLayer] API returned ${total} total states, filtered to ${records.length} flights`);
-      console.log(`[FlightLayer] Entity map has ${entityMap.size} entities`);
     } catch (error) {
       console.error("[FlightLayer] Refresh error:", error);
     }
   }
 
-  /**
-   * Handle flight selection
-   */
   function handleSelection(icao24: string): void {
-    const previousIcao24 = flightState.selectedIcao24;
+    const prev = flightState.selectedIcao24;
+    if (prev) highlightEntity(prev, false);
 
-    // Unhighlight previous selection
-    if (previousIcao24) {
-      highlightEntity(previousIcao24, false);
-    }
-
-    // Update selection
     selectFlight(icao24);
     highlightEntity(icao24, true);
 
-    // Get flight record and update selection store
     const record = flightState.flights.get(icao24);
-    if (record) {
-      selectEntity("flight", icao24, toFlightData(record));
-    }
+    if (record) selectEntity("flight", icao24, toFlightData(record));
   }
 
-  /**
-   * Get current interpolated position for follow mode
-   */
   function getCurrentPosition(): Cesium.Cartesian3 | null {
     const icao24 = flightState.followingIcao24;
-    if (!icao24) return null;
-    return interpolatedPositions.get(icao24) ?? null;
+    return icao24 ? interpolatedPositions.get(icao24) ?? null : null;
   }
 
-  /**
-   * Start following the selected flight
-   */
   function startFollowingFlight(icao24: string): void {
     followFlight(icao24);
-
-    // Use the follow mode hook with ground-level targeting
-    track(getCurrentPosition, {
-      heading: 0,
-      pitch: Cesium.Math.toRadians(-45),
-      range: 50_000, // 50km initial range
-      useGroundLevel: true,
-    });
+    track(getCurrentPosition, { heading: 0, pitch: Cesium.Math.toRadians(-45), range: 50_000, useGroundLevel: true });
   }
 
-  // Dead-reckoning interpolation using usePreRender
+  // Dead-reckoning interpolation
   usePreRender((scene) => {
     if (!ready()) return;
-
-    // Skip frames for efficiency
-    interpFrameCount++;
-    if (interpFrameCount < FLIGHT_INTERP_SKIP_FRAMES) return;
+    if (++interpFrameCount < INTERP_SKIP_FRAMES) return;
     interpFrameCount = 0;
 
     const v = viewer();
     if (!v || v.isDestroyed()) return;
 
     const now = Date.now();
-    const cullingVolume = scene.camera.frustum.computeCullingVolume(
-      scene.camera.positionWC,
-      scene.camera.directionWC,
-      scene.camera.upWC
-    );
+    const cullingVolume = scene.camera.frustum.computeCullingVolume(scene.camera.positionWC, scene.camera.directionWC, scene.camera.upWC);
 
-    // Iterate over all flights in store
     for (const [icao24, record] of flightState.flights) {
-      // Skip if no entity
       if (!entityMap.has(icao24)) continue;
 
-      // Calculate elapsed time since last update, capped
-      let elapsed = (now - record.lastUpdate) / 1000;
-      if (elapsed > FLIGHT_INTERP_CAP) {
-        elapsed = FLIGHT_INTERP_CAP;
-      }
-
-      // Dead-reckoning along great circle (flat approximation for short intervals)
+      const elapsed = Math.min((now - record.lastUpdate) / 1000, INTERP_CAP_SEC);
       const distM = record.velocity * elapsed;
       const headingRad = record.heading * DEG_TO_RAD;
       const cosLat = Math.cos(record.latitude * DEG_TO_RAD);
       const newLat = record.latitude + (distM * Math.cos(headingRad)) / METERS_PER_DEG;
-      const newLon =
-        record.longitude + (distM * Math.sin(headingRad)) / (METERS_PER_DEG * cosLat);
-
+      const newLon = record.longitude + (distM * Math.sin(headingRad)) / (METERS_PER_DEG * cosLat);
       const pos = Cesium.Cartesian3.fromDegrees(newLon, newLat, record.altitude);
 
-      // Frustum culling: skip position updates for off-screen flights
-      // But always update followed/selected flights
-      const isImportant =
-        icao24 === flightState.selectedIcao24 || icao24 === flightState.followingIcao24;
-
-      if (!isImportant) {
-        const visibility = cullingVolume.computeVisibility(
-          new Cesium.BoundingSphere(pos, 1000)
-        );
-        if (visibility === Cesium.Intersect.OUTSIDE) {
-          // Still update stored position for when it comes back into view
-          interpolatedPositions.set(icao24, pos);
-          continue;
-        }
+      const isImportant = icao24 === flightState.selectedIcao24 || icao24 === flightState.followingIcao24;
+      if (!isImportant && cullingVolume.computeVisibility(new Cesium.BoundingSphere(pos, 1000)) === Cesium.Intersect.OUTSIDE) {
+        interpolatedPositions.set(icao24, pos);
+        continue;
       }
 
-      // Update entity position and orientation
-      const pitch = estimatePitch(record.verticalRate, record.velocity);
-      const orientation = computeOrientation(pos, record.heading, pitch);
-
-      updateEntityPosition(icao24, pos, orientation);
+      updateEntityPosition(icao24, pos, computeOrientation(pos, record.heading, estimatePitch(record.verticalRate, record.velocity)));
     }
-  });
-
-  // Mount lifecycle
-  onMount(() => {
-    console.log("[FlightLayer] mounted");
   });
 
   // Setup when viewer is ready
-  createEffect(
-    on(ready, async (isReady) => {
-      if (!isReady) return;
+  createEffect(on(ready, async (isReady) => {
+    if (!isReady) return;
 
-      const v = viewer();
-      if (!v || v.isDestroyed()) return;
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
 
-      console.log("[FlightLayer] Initializing...");
+    await refreshFlights(v);
 
-      // Initial fetch
-      await refreshFlights(v);
+    updateInterval = setInterval(() => {
+      const current = viewer();
+      if (current && !current.isDestroyed()) refreshFlights(current);
+    }, UPDATE_INTERVAL_MS);
 
-      // Start polling interval
-      updateInterval = setInterval(() => {
-        const currentViewer = viewer();
-        if (currentViewer && !currentViewer.isDestroyed()) {
-          refreshFlights(currentViewer);
-        }
-      }, FLIGHT_UPDATE_INTERVAL);
+    screenSpaceHandler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
 
-      // Setup click handler for selection
-      screenSpaceHandler = new Cesium.ScreenSpaceEventHandler(v.scene.canvas);
-      screenSpaceHandler.setInputAction(
-        (click: { position: Cesium.Cartesian2 }) => {
-          const picked = v.scene.pick(click.position);
+    screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = v.scene.pick(click.position);
+      if (picked?.id instanceof Cesium.Entity && entityMap.has(picked.id.id)) {
+        handleSelection(picked.id.id);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-          if (Cesium.defined(picked) && picked.id && picked.id instanceof Cesium.Entity) {
-            const icao24 = picked.id.id;
+    screenSpaceHandler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
+      const picked = v.scene.pick(click.position);
+      if (picked?.id instanceof Cesium.Entity && entityMap.has(picked.id.id)) {
+        handleSelection(picked.id.id);
+        startFollowingFlight(picked.id.id);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+  }));
 
-            // Check if this entity belongs to us
-            if (entityMap.has(icao24)) {
-              handleSelection(icao24);
-            }
-          }
-        },
-        Cesium.ScreenSpaceEventType.LEFT_CLICK
-      );
-
-      // Setup double-click for follow mode
-      screenSpaceHandler.setInputAction(
-        (click: { position: Cesium.Cartesian2 }) => {
-          const picked = v.scene.pick(click.position);
-
-          if (Cesium.defined(picked) && picked.id && picked.id instanceof Cesium.Entity) {
-            const icao24 = picked.id.id;
-
-            if (entityMap.has(icao24)) {
-              // Select first
-              handleSelection(icao24);
-              // Then follow
-              startFollowingFlight(icao24);
-            }
-          }
-        },
-        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
-      );
-    })
-  );
-
-  // Cleanup on unmount
   onCleanup(() => {
-    console.log("[FlightLayer] unmounting...");
+    if (isFollowing()) stopFollow();
+    if (updateInterval) clearInterval(updateInterval);
+    if (screenSpaceHandler) screenSpaceHandler.destroy();
 
-    // Stop follow mode
-    if (isFollowing()) {
-      stopFollow();
-    }
-
-    // Clear polling interval
-    if (updateInterval) {
-      clearInterval(updateInterval);
-      updateInterval = null;
-    }
-
-    // Destroy screen space handler
-    if (screenSpaceHandler) {
-      screenSpaceHandler.destroy();
-      screenSpaceHandler = null;
-    }
-
-    // Remove all entities
     const v = viewer();
     if (v && !v.isDestroyed()) {
-      for (const [icao24] of entityMap) {
-        removeEntity(icao24, v);
-      }
+      for (const [icao24] of entityMap) removeEntity(icao24, v);
     }
 
-    // Clear store
     clearFlights();
-
-    console.log("[FlightLayer] unmounted");
   });
 
-  // Layers don't render DOM - they add entities to Cesium
   return null;
 }
-
-export default FlightLayer;

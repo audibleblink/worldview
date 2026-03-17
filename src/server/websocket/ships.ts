@@ -274,6 +274,42 @@ export class AISStreamClient {
     }, delay);
   }
 
+  /** Apply a position report (Class A or B) to the ship buffer */
+  private applyPositionReport(
+    mmsi: string,
+    meta: AISStreamMessage["MetaData"],
+    report: { Cog: number; Sog: number; TrueHeading: number; NavigationalStatus?: number }
+  ): void {
+    const existing = this.shipBuffer.get(mmsi);
+
+    if (existing) {
+      existing.latitude = meta.latitude;
+      existing.longitude = meta.longitude;
+      existing.cog = report.Cog ?? existing.cog;
+      existing.sog = report.Sog ?? existing.sog;
+      existing.trueHeading = report.TrueHeading ?? existing.trueHeading;
+      existing.navStatus = report.NavigationalStatus ?? existing.navStatus;
+      existing.timestamp = Date.now();
+      if (existing.name === mmsi && meta.ShipName?.trim()) {
+        existing.name = meta.ShipName.trim();
+      }
+    } else {
+      this.shipBuffer.set(mmsi, {
+        mmsi,
+        name: meta.ShipName?.trim() || mmsi,
+        shipType: 0,
+        shipTypeCategory: "other",
+        latitude: meta.latitude,
+        longitude: meta.longitude,
+        cog: report.Cog ?? 0,
+        sog: report.Sog ?? 0,
+        trueHeading: report.TrueHeading ?? 511,
+        navStatus: report.NavigationalStatus ?? 15,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
   private handleMessage(data: string): void {
     try {
       const msg: AISStreamMessage = JSON.parse(data);
@@ -296,7 +332,7 @@ export class AISStreamClient {
           }
           existing.timestamp = Date.now();
         } else {
-          const record: ShipRecord = {
+          this.shipBuffer.set(mmsi, {
             mmsi,
             name: staticData.Name?.trim() || MetaData.ShipName?.trim() || mmsi,
             shipType: staticData.Type,
@@ -308,82 +344,26 @@ export class AISStreamClient {
             trueHeading: 511,
             navStatus: 15,
             timestamp: Date.now(),
-          };
-          this.shipBuffer.set(mmsi, record);
+          });
         }
         return;
       }
 
-      // Handle PositionReport
+      // Handle PositionReport (Class A)
       if (msg.MessageType === "PositionReport" && Message.PositionReport) {
-        const posReport = Message.PositionReport;
-        const existing = this.shipBuffer.get(mmsi);
-
-        if (existing) {
-          existing.latitude = MetaData.latitude;
-          existing.longitude = MetaData.longitude;
-          existing.cog = posReport.Cog ?? existing.cog;
-          existing.sog = posReport.Sog ?? existing.sog;
-          existing.trueHeading = posReport.TrueHeading ?? existing.trueHeading;
-          existing.navStatus = posReport.NavigationalStatus ?? existing.navStatus;
-          existing.timestamp = Date.now();
-          if (existing.name === mmsi && MetaData.ShipName?.trim()) {
-            existing.name = MetaData.ShipName.trim();
-          }
-        } else {
-          const record: ShipRecord = {
-            mmsi,
-            name: MetaData.ShipName?.trim() || mmsi,
-            shipType: 0,
-            shipTypeCategory: "other",
-            latitude: MetaData.latitude,
-            longitude: MetaData.longitude,
-            cog: posReport.Cog ?? 0,
-            sog: posReport.Sog ?? 0,
-            trueHeading: posReport.TrueHeading ?? 511,
-            navStatus: posReport.NavigationalStatus ?? 15,
-            timestamp: Date.now(),
-          };
-          this.shipBuffer.set(mmsi, record);
-        }
+        this.applyPositionReport(mmsi, MetaData, Message.PositionReport);
         return;
       }
 
       // Handle StandardClassBPositionReport
       if (msg.MessageType === "StandardClassBPositionReport" && Message.StandardClassBPositionReport) {
-        const posReport = Message.StandardClassBPositionReport;
-        const existing = this.shipBuffer.get(mmsi);
-
-        if (existing) {
-          existing.latitude = MetaData.latitude;
-          existing.longitude = MetaData.longitude;
-          existing.cog = posReport.Cog ?? existing.cog;
-          existing.sog = posReport.Sog ?? existing.sog;
-          existing.trueHeading = posReport.TrueHeading ?? existing.trueHeading;
-          existing.timestamp = Date.now();
-          if (existing.name === mmsi && MetaData.ShipName?.trim()) {
-            existing.name = MetaData.ShipName.trim();
-          }
-        } else {
-          const record: ShipRecord = {
-            mmsi,
-            name: MetaData.ShipName?.trim() || mmsi,
-            shipType: 0,
-            shipTypeCategory: "other",
-            latitude: MetaData.latitude,
-            longitude: MetaData.longitude,
-            cog: posReport.Cog ?? 0,
-            sog: posReport.Sog ?? 0,
-            trueHeading: posReport.TrueHeading ?? 511,
-            navStatus: 0,
-            timestamp: Date.now(),
-          };
-          this.shipBuffer.set(mmsi, record);
-        }
+        this.applyPositionReport(mmsi, MetaData, {
+          ...Message.StandardClassBPositionReport,
+          NavigationalStatus: 0,
+        });
         return;
       }
     } catch (error) {
-      // Count parse errors instead of silent catch
       this.parseErrorCount++;
       if (this.parseErrorCount % 100 === 1) {
         console.warn(`[AISStream] Parse error (total: ${this.parseErrorCount}):`, error);
@@ -408,9 +388,7 @@ export class AISStreamClient {
   }
 
   getShips(bbox?: BoundingBox): ShipsResponse {
-    const values: ShipRecord[] = [];
-    this.shipBuffer.forEach((ship) => values.push(ship));
-    let ships = values;
+    let ships = [...this.shipBuffer.values()];
 
     if (bbox) {
       ships = ships.filter(

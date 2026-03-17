@@ -74,22 +74,6 @@ export class OSMFetcher {
     this.onError = callback;
   }
   
-  /** Get last error that occurred */
-  getLastError(): OSMFetcherError | null {
-    return this.lastError;
-  }
-  
-  /** Check if fetcher is in offline/error mode */
-  isInOfflineMode(): boolean {
-    return this.isOffline;
-  }
-  
-  /** Reset offline mode (for retry) */
-  resetOfflineMode(): void {
-    this.isOffline = false;
-    this.lastError = null;
-  }
-  
   /** Emit an error to callback */
   private emitError(error: OSMFetcherError): void {
     this.lastError = error;
@@ -105,7 +89,7 @@ export class OSMFetcher {
       return;
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
@@ -295,56 +279,4 @@ out geom;`;
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Fetch roads for multiple tiles (useful for larger areas)
-   */
-  async fetchRoadsTiled(bbox: BoundingBox, tileSize = 0.02): Promise<RawOSMWay[]> {
-    const tiles: BoundingBox[] = [];
-    
-    for (let lat = bbox.south; lat < bbox.north; lat += tileSize) {
-      for (let lon = bbox.west; lon < bbox.east; lon += tileSize) {
-        tiles.push({
-          south: lat,
-          west: lon,
-          north: Math.min(lat + tileSize, bbox.north),
-          east: Math.min(lon + tileSize, bbox.east),
-        });
-      }
-    }
-
-    // Fetch all tiles (with some rate limiting)
-    const allWays: RawOSMWay[] = [];
-    const seenIds = new Set<number>();
-
-    for (const tile of tiles) {
-      const ways = await this.fetchRoads(tile);
-      for (const way of ways) {
-        if (!seenIds.has(way.id)) {
-          seenIds.add(way.id);
-          allWays.push(way);
-        }
-      }
-      // Small delay between tiles to avoid rate limiting
-      await new Promise((r) => setTimeout(r, 100));
-    }
-
-    return allWays;
-  }
-
-  /** Clear all cached data */
-  async clearCache(): Promise<void> {
-    await this.dbInitPromise;
-    if (!this.db) return;
-
-    return new Promise((resolve) => {
-      const transaction = this.db!.transaction(STORE_NAME, "readwrite");
-      const store = transaction.objectStore(STORE_NAME);
-      store.clear();
-      transaction.oncomplete = () => {
-        console.log("[OSMFetcher] Cache cleared");
-        resolve();
-      };
-      transaction.onerror = () => resolve();
-    });
-  }
 }

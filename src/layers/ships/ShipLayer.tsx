@@ -11,7 +11,7 @@
  * - Uses PROXY_BASE_URL from config.ts
  */
 
-import { onMount, onCleanup, createEffect, createSignal, on } from "solid-js";
+import { onCleanup, createEffect, createSignal, on } from "solid-js";
 import { useCesium } from "../../cesium/useCesium";
 import { createBillboardCollection } from "../../cesium/createBillboardCollection";
 import { useCamera } from "../../cesium/hooks/useCamera";
@@ -811,19 +811,6 @@ export function ShipLayer() {
       // Store interpolated position for follow mode
       interpolatedPositions.set(mmsi, pos);
     }
-  });
-
-  // Setup on mount
-  onMount(async () => {
-    console.info("[ShipLayer] mounted");
-
-    // Wait for viewer to be ready
-    if (!ready()) {
-      // Will be handled by effect
-      return;
-    }
-
-    await initialize();
   });
 
   // Initialize when viewer becomes ready

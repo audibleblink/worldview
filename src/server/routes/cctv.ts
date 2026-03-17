@@ -7,6 +7,13 @@
 
 export type { CCTVCamera } from "./cctv/types.ts";
 import { cctvProxyManager } from "./cctv/index.ts";
+import { errorResponse } from "../types.ts";
+
+/** Extract a path segment after a prefix, e.g. "/api/cctv/thumbnail/abc" → "abc" */
+function extractPathParam(url: URL, prefix: string): string | null {
+  const match = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : null;
+  return match || null;
+}
 
 export async function initializeCCTV(): Promise<void> {
   return cctvProxyManager.initialize();
@@ -17,44 +24,29 @@ export async function handleCameraList(req: Request): Promise<Response> {
 }
 
 export async function handleThumbnail(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/api\/cctv\/thumbnail\/(.+)$/);
-  if (!match?.[1]) {
-    const { errorResponse } = await import("../types.ts");
-    return errorResponse("Missing camera ID", 400);
-  }
-  return cctvProxyManager.handleThumbnail(match[1]);
+  const id = extractPathParam(new URL(req.url), "/api/cctv/thumbnail/");
+  if (!id) return errorResponse("Missing camera ID", 400);
+  return cctvProxyManager.handleThumbnail(id);
 }
 
 export async function handleStream(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/api\/cctv\/stream\/(.+)$/);
-  if (!match?.[1]) {
-    const { errorResponse } = await import("../types.ts");
-    return errorResponse("Missing camera ID", 400);
-  }
-  return cctvProxyManager.handleStream(match[1]);
+  const id = extractPathParam(new URL(req.url), "/api/cctv/stream/");
+  if (!id) return errorResponse("Missing camera ID", 400);
+  return cctvProxyManager.handleStream(id);
 }
 
 export async function handleHlsUrl(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/api\/cctv\/hls\/(.+)$/);
-  if (!match?.[1]) {
-    const { errorResponse } = await import("../types.ts");
-    return errorResponse("Missing camera ID", 400);
-  }
-  return cctvProxyManager.handleHlsUrl(match[1]);
+  const id = extractPathParam(new URL(req.url), "/api/cctv/hls/");
+  if (!id) return errorResponse("Missing camera ID", 400);
+  return cctvProxyManager.handleHlsUrl(id);
 }
 
 /** Handle GET /api/cctv/hls-relay/:id/:path - Proxy HLS content server-side */
 export async function handleHlsRelay(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  // Path format: /api/cctv/hls-relay/:id/:relayPath
   const match = url.pathname.match(/^\/api\/cctv\/hls-relay\/([^/]+)\/(.+)$/);
-  if (!match) {
-    const { errorResponse } = await import("../types.ts");
-    return errorResponse("Invalid relay URL", 400);
-  }
+  if (!match) return errorResponse("Invalid relay URL", 400);
+
   const cameraId = decodeURIComponent(match[1]!);
   const relayPath = match[2]!;
   return cctvProxyManager.handleHlsRelay(cameraId, relayPath);

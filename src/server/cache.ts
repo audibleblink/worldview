@@ -81,7 +81,14 @@ export class TTLCache<K, V> {
    * Check if key exists and is not expired
    */
   has(key: K): boolean {
-    return this.get(key) !== undefined;
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      this.onExpire?.(key, entry.value);
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -188,7 +195,7 @@ export class RequestCoalescer<K, V> {
  *
  * Provides both caching and deduplication of in-flight requests.
  */
-export class CachedFetcher<K extends string | number, V> {
+export class CachedFetcher<K, V> {
   private cache: TTLCache<K, V>;
   private coalescer: RequestCoalescer<K, V>;
 

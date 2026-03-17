@@ -10,8 +10,8 @@ import { jsonResponse, imageResponse, streamResponse, errorResponse, CORS_HEADER
 import { encodePNG, drawText, drawBorder } from "../../utils/png.ts";
 import type { CameraSource, CCTVCamera } from "./types.ts";
 
-const CCTV_THUMBNAIL_TTL = 1000; // 1 second memory cache
-const CCTV_CACHE_DIR = "./cache/cctv";
+const THUMBNAIL_TTL_MS = 1000;
+const CACHE_DIR = "./cache/cctv";
 
 interface ThumbnailCacheEntry {
   data: Uint8Array;
@@ -33,8 +33,7 @@ export class CCTVProxyManager {
   private sourceMap = new Map<string, CameraSource>();
 
   constructor() {
-    // Ensure cache directory exists (fire and forget)
-    mkdir(CCTV_CACHE_DIR, { recursive: true }).catch(() => {});
+    mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
   }
 
   /** Register a camera source */
@@ -43,8 +42,8 @@ export class CCTVProxyManager {
     this.sourceMap.set(source.name, source);
   }
 
-  /** Initialize by fetching cameras from all sources */
-  async initialize(): Promise<void> {
+  /** Refresh cameras from all sources, logging failures */
+  private async refreshCameras(logFailures = false): Promise<void> {
     const results = await Promise.allSettled(this.sources.map((s) => s.fetchCameras()));
     this.allCameras = [];
 
@@ -52,29 +51,22 @@ export class CCTVProxyManager {
       const result = results[i]!;
       if (result.status === "fulfilled") {
         this.allCameras.push(...result.value);
-      } else {
+      } else if (logFailures) {
         console.warn(`[CCTV] Source "${this.sources[i]!.name}" failed:`, result.reason);
       }
     }
+  }
 
+  /** Initialize by fetching cameras from all sources */
+  async initialize(): Promise<void> {
+    await this.refreshCameras(true);
     console.log(`[CCTV] Camera proxy ready — ${this.allCameras.length} cameras from ${this.sources.length} sources`);
   }
 
   /** Fetch all cameras, optionally filtered by source name */
   async fetchAllCameras(sourceName?: string): Promise<CCTVCamera[]> {
-    const results = await Promise.allSettled(this.sources.map((s) => s.fetchCameras()));
-    this.allCameras = [];
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]!;
-      if (result.status === "fulfilled") {
-        this.allCameras.push(...result.value);
-      }
-    }
-
-    if (sourceName) {
-      return this.allCameras.filter((c) => c.source === sourceName);
-    }
+    await this.refreshCameras();
+    if (sourceName) return this.allCameras.filter((c) => c.source === sourceName);
     return this.allCameras;
   }
 
@@ -82,12 +74,8 @@ export class CCTVProxyManager {
     return this.allCameras.find((c) => c.id === id);
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Disk Cache
-  // ─────────────────────────────────────────────────────────────────
-
   private getCachePath(cameraId: string): string {
-    return `${CCTV_CACHE_DIR}/${cameraId.replace(/[^a-zA-Z0-9-_]/g, "_")}.jpg`;
+    return `${CACHE_DIR}/${cameraId.replace(/[^a-zA-Z0-9-_]/g, "_")}.jpg`;
   }
 
   private async loadCachedImage(cameraId: string): Promise<Uint8Array | null> {
@@ -106,10 +94,6 @@ export class CCTVProxyManager {
       // Ignore write errors
     }
   }
-
-  // ─────────────────────────────────────────────────────────────────
-  // Route Handlers
-  // ─────────────────────────────────────────────────────────────────
 
   /** Handle GET /api/cctv/cameras */
   async handleCameraList(req: Request): Promise<Response> {
@@ -155,10 +139,9 @@ export class CCTVProxyManager {
       return imageResponse(offlineFrame, "image/png");
     }
 
-    // Check memory cache
     const now = Date.now();
     const cached = this.thumbnailCache.get(cameraId);
-    if (cached && now - cached.timestamp < CCTV_THUMBNAIL_TTL) {
+    if (cached && now - cached.timestamp < THUMBNAIL_TTL_MS) {
       return imageResponse(cached.data, cached.contentType);
     }
 
@@ -263,25 +246,25 @@ export class CCTVProxyManager {
     return streamResponse(stream, `multipart/x-mixed-replace; boundary=${boundary}`);
   }
 
+  /** Resolve a camera ID like "arkansas-123" to its HLS-capable source */
+  private resolveHlsSource(cameraId: string): CameraSource | Response {
+    const dashIndex = cameraId.indexOf("-");
+    if (dashIndex === -1) return errorResponse("Invalid camera ID format", 400);
+
+    const source = this.sourceMap.get(cameraId.slice(0, dashIndex));
+    if (!source) return errorResponse(`Unknown source: ${cameraId.slice(0, dashIndex)}`, 404);
+    if (!source.getSignedHlsUrl) return errorResponse("Source does not support signed HLS URLs", 400);
+
+    return source;
+  }
+
   /** Handle GET /api/cctv/hls/:id - Get signed HLS URL */
   async handleHlsUrl(cameraId: string): Promise<Response> {
-    const dashIndex = cameraId.indexOf("-");
-    if (dashIndex === -1) {
-      return errorResponse("Invalid camera ID format", 400);
-    }
-    const sourceName = cameraId.slice(0, dashIndex);
-
-    const source = this.sourceMap.get(sourceName);
-    if (!source) {
-      return errorResponse(`Unknown source: ${sourceName}`, 404);
-    }
-
-    if (!source.getSignedHlsUrl) {
-      return errorResponse("Source does not support signed HLS URLs", 400);
-    }
+    const sourceOrError = this.resolveHlsSource(cameraId);
+    if (sourceOrError instanceof Response) return sourceOrError;
 
     try {
-      const signedUrl = await source.getSignedHlsUrl(cameraId);
+      const signedUrl = await sourceOrError.getSignedHlsUrl!(cameraId);
       return jsonResponse({ url: signedUrl });
     } catch (error) {
       console.error(`[CCTV] Error getting signed HLS URL for ${cameraId}:`, error);
@@ -291,21 +274,11 @@ export class CCTVProxyManager {
 
   /** Handle GET /api/cctv/hls-relay/:id/:path - Proxy HLS stream server-side (avoids CORS) */
   async handleHlsRelay(cameraId: string, relayPath: string): Promise<Response> {
-    const dashIndex = cameraId.indexOf("-");
-    if (dashIndex === -1) {
-      return errorResponse("Invalid camera ID format", 400);
-    }
-    const sourceName = cameraId.slice(0, dashIndex);
-    const source = this.sourceMap.get(sourceName);
-    if (!source) {
-      return errorResponse(`Unknown source: ${sourceName}`, 404);
-    }
-    if (!source.getSignedHlsUrl) {
-      return errorResponse("Source does not support signed HLS URLs", 400);
-    }
+    const sourceOrError = this.resolveHlsSource(cameraId);
+    if (sourceOrError instanceof Response) return sourceOrError;
 
     try {
-      const signedUrl = await source.getSignedHlsUrl(cameraId);
+      const signedUrl = await sourceOrError.getSignedHlsUrl!(cameraId);
       const signedUrlObj = new URL(signedUrl);
 
       // Strip the playlist filename to get base path (e.g. /rtplive/R11_272/)
@@ -366,10 +339,6 @@ export class CCTVProxyManager {
       return errorResponse("HLS relay error", 502);
     }
   }
-
-  // ─────────────────────────────────────────────────────────────────
-  // Offline Frame Generation
-  // ─────────────────────────────────────────────────────────────────
 
   private generateOfflineFrame(camera: CCTVCamera): Uint8Array {
     const width = 320;

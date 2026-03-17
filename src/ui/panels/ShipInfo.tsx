@@ -5,44 +5,12 @@
  */
 
 import { Show, createMemo } from "solid-js";
-import { selection, clearSelection, type ShipData } from "../../stores/selection";
-import { setFollowTarget, camera, setFreeCamera } from "../../stores/camera";
+import { selection, type ShipData } from "../../stores/selection";
+import { formatCoordinates, formatSpeedKn, formatHeading } from "../formatters";
+import { useEntityPanel } from "./useEntityPanel";
 
-/**
- * Maps AIS navigation status code to human-readable string
- */
-function navStatusToString(status: number): string {
-  switch (status) {
-    case 0:
-      return "Under way using engine";
-    case 1:
-      return "At anchor";
-    case 2:
-      return "Not under command";
-    case 3:
-      return "Restricted maneuverability";
-    case 4:
-      return "Constrained by draught";
-    case 5:
-      return "Moored";
-    case 6:
-      return "Aground";
-    case 7:
-      return "Engaged in fishing";
-    case 8:
-      return "Under way sailing";
-    case 14:
-      return "AIS-SART active";
-    default:
-      return "Not defined";
-  }
-}
-
-/**
- * Converts ship type code to display text
- */
+/** Converts AIS ship type code to display text */
 function shipTypeToDisplayText(shipType: number): string {
-  // Major AIS ship type categories
   if (shipType >= 70 && shipType <= 79) return "Cargo Vessel";
   if (shipType >= 80 && shipType <= 89) return "Tanker";
   if (shipType >= 60 && shipType <= 69) return "Passenger Vessel";
@@ -54,65 +22,16 @@ function shipTypeToDisplayText(shipType: number): string {
 }
 
 /**
- * Formats latitude/longitude for display
- */
-function formatPosition(lat: number, lng: number): string {
-  const latDir = lat >= 0 ? "N" : "S";
-  const lngDir = lng >= 0 ? "E" : "W";
-  return `${Math.abs(lat).toFixed(4)}°${latDir} ${Math.abs(lng).toFixed(4)}°${lngDir}`;
-}
-
-/**
- * Format speed in knots
- */
-function formatSpeed(speed: number): string {
-  return `${speed.toFixed(1)} kn`;
-}
-
-/**
- * Format heading in degrees
- */
-function formatHeading(heading: number): string {
-  // 511 means "not available" in AIS
-  if (heading === 511) return "N/A";
-  return `${heading}°`;
-}
-
-/**
  * ShipInfo component
  * Displays ship metadata when a ship is selected
  */
 export function ShipInfo() {
-  // Memoize ship data extraction
+  const { isFollowing, handleFollow, handleClose } = useEntityPanel("ship");
+
   const data = createMemo(() => {
     if (selection.type !== "ship") return null;
     return selection.data as ShipData | null;
   });
-
-  // Check if currently following this ship
-  const isFollowing = createMemo(() => {
-    return (
-      camera.mode === "follow" &&
-      camera.target?.type === "ship" &&
-      camera.target?.id === selection.id
-    );
-  });
-
-  const handleFollow = () => {
-    if (isFollowing()) {
-      setFreeCamera();
-    } else if (selection.id) {
-      setFollowTarget("ship", selection.id);
-    }
-  };
-
-  const handleClose = () => {
-    // Stop following if we were following this ship
-    if (isFollowing()) {
-      setFreeCamera();
-    }
-    clearSelection();
-  };
 
   return (
     <Show when={data()}>
@@ -148,13 +67,13 @@ export function ShipInfo() {
               <span class="sat-info-label">POSITION</span>
               <span class="sat-info-value">
                 {shipData().position
-                  ? formatPosition(shipData().position.lat, shipData().position.lng)
+                  ? formatCoordinates(shipData().position.lat, shipData().position.lng)
                   : "—"}
               </span>
             </div>
             <div class="sat-info-row">
               <span class="sat-info-label">SPEED</span>
-              <span class="sat-info-value">{formatSpeed(shipData().speed)}</span>
+              <span class="sat-info-value">{formatSpeedKn(shipData().speed)}</span>
             </div>
             <div class="sat-info-row">
               <span class="sat-info-label">HEADING</span>

@@ -14,7 +14,7 @@ import {
   type JSX,
   type Accessor,
 } from "solid-js";
-import { PROXY_BASE_URL } from "../config";
+import { PROXY_BASE_URL, PROXY_ENDPOINTS } from "../config";
 
 declare const Cesium: typeof import("cesium");
 
@@ -167,11 +167,8 @@ export function CesiumProvider(props: CesiumProviderProps) {
         tileset.tileFailed.addEventListener(
           (event: { url: string; message: string }) => {
             console.warn("Tile failed to load:", event.url, event.message);
-            if (
-              event.message?.includes("403") ||
-              event.message?.includes("401")
-            ) {
-              showApiKeyError(containerRef!);
+            if (event.message && isAuthError(event.message)) {
+              showErrorOverlay(containerRef!, API_KEY_ERROR);
             }
           }
         );
@@ -221,79 +218,56 @@ export function CesiumProvider(props: CesiumProviderProps) {
 
 // ============ Helper Functions ============
 
+const PROXY_NOT_RUNNING = "Proxy server not running.\n\nStart the proxy with:\nbun run proxy";
+const API_KEY_ERROR = `Google Maps API Key Error
+
+The API key is missing or invalid.
+
+1. Get a key from Google Cloud Console
+2. Enable 'Map Tiles API'
+3. Add to .env file:
+   GOOGLE_MAPS_TILE_API_KEY=your_key`;
+
+function isNetworkError(msg: string): boolean {
+  return msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("ECONNREFUSED");
+}
+
+function isAuthError(msg: string): boolean {
+  return msg.includes("403") || msg.includes("401");
+}
+
 async function checkProxyHealth(): Promise<{ ok: boolean; message: string }> {
   try {
-    const response = await fetch(`${PROXY_BASE_URL}/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    const response = await fetch(PROXY_ENDPOINTS.health, { signal: AbortSignal.timeout(5000) });
     return response.ok
       ? { ok: true, message: "Proxy is healthy" }
       : { ok: false, message: `Proxy returned status ${response.status}` };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (
-      msg.includes("Failed to fetch") ||
-      msg.includes("NetworkError") ||
-      msg.includes("ECONNREFUSED")
-    ) {
-      return {
-        ok: false,
-        message:
-          "Proxy server not running.\n\nStart the proxy with:\nbun run proxy",
-      };
-    }
-    return { ok: false, message: `Proxy health check failed: ${msg}` };
+    return { ok: false, message: isNetworkError(msg) ? PROXY_NOT_RUNNING : `Proxy health check failed: ${msg}` };
   }
 }
 
 function handleTileLoadError(container: HTMLElement, error: unknown): void {
   const msg = error instanceof Error ? error.message : String(error);
 
-  if (msg.includes("403") || msg.includes("401")) {
-    showApiKeyError(container);
-  } else if (
-    msg.includes("Failed to fetch") ||
-    msg.includes("NetworkError") ||
-    msg.includes("ECONNREFUSED")
-  ) {
-    showErrorOverlay(
-      container,
-      "Unable to connect to tile proxy server.\n\nMake sure the proxy is running:\nbun run proxy"
-    );
+  if (isAuthError(msg)) {
+    showErrorOverlay(container, API_KEY_ERROR);
+  } else if (isNetworkError(msg)) {
+    showErrorOverlay(container, PROXY_NOT_RUNNING);
   } else {
     showErrorOverlay(container, `Failed to load 3D tiles:\n${msg}`);
   }
 }
 
-let hasShownApiKeyError = false;
-
-function showApiKeyError(container: HTMLElement): void {
-  if (hasShownApiKeyError) return;
-  hasShownApiKeyError = true;
-
-  showErrorOverlay(
-    container,
-    "Google Maps API Key Error\n\n" +
-      "The API key is missing or invalid.\n\n" +
-      "1. Get a key from Google Cloud Console\n" +
-      "2. Enable 'Map Tiles API'\n" +
-      "3. Add to .env file:\n" +
-      "   GOOGLE_MAPS_TILE_API_KEY=your_key"
-  );
-}
-
 function showErrorOverlay(container: HTMLElement, message: string): void {
-  // Remove any existing error overlay
-  const existing = document.getElementById("globe-error-overlay");
-  if (existing) {
-    existing.remove();
-  }
+  // Prevent duplicate overlays
+  if (document.getElementById("globe-error-overlay")) return;
 
   const overlay = document.createElement("div");
   overlay.id = "globe-error-overlay";
   overlay.className = "globe-error-overlay";
   overlay.textContent = message;
-
   container.appendChild(overlay);
 }
 

@@ -59,22 +59,13 @@ export function errorResponse(message: string, status: number): Response {
 
 /**
  * Create an image response with CORS headers
- *
- * @param data - Image data as Uint8Array or ArrayBuffer
- * @param contentType - MIME type (e.g., "image/jpeg", "image/png")
- * @param extraHeaders - Additional headers to include
  */
 export function imageResponse(
   data: Uint8Array | ArrayBuffer,
   contentType: string,
   extraHeaders: Record<string, string> = {}
 ): Response {
-  // Convert to Uint8Array for Response compatibility
-  // Cast via unknown to handle TypeScript Uint8Array generics
-  const body = data instanceof Uint8Array 
-    ? data as unknown as BodyInit
-    : new Uint8Array(data) as unknown as BodyInit;
-  return corsResponse(body, {
+  return corsResponse(data as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": contentType,

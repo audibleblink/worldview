@@ -10,7 +10,7 @@ import { TTLCache } from "../cache.ts";
 import { jsonResponse, errorResponse } from "../types.ts";
 
 const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-const GEOCODE_TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 5000;
 
 /** LRU cache for geocode results */
 const geocodeCache = new TTLCache<string, object>({
@@ -46,13 +46,12 @@ export async function handleGeocode(req: Request): Promise<Response> {
     return errorResponse("Missing address parameter", 400);
   }
 
-  const decodedAddress = decodeURIComponent(address).toLowerCase().trim();
-  const cacheKey = decodedAddress;
+  const normalizedAddress = decodeURIComponent(address).toLowerCase().trim();
 
   // Check cache
-  const cached = geocodeCache.get(cacheKey);
+  const cached = geocodeCache.get(normalizedAddress);
   if (cached) {
-    console.log(`[Geocode] Cache hit for: "${address}"`);
+    console.log(`[Geocode] Cache hit for: "${normalizedAddress}"`);
     return jsonResponse(cached);
   }
 
@@ -62,21 +61,16 @@ export async function handleGeocode(req: Request): Promise<Response> {
     return errorResponse("Geocoding API key not configured", 503);
   }
 
-  console.log(`[Geocode] Looking up: "${decodedAddress}"`);
+  console.log(`[Geocode] Looking up: "${normalizedAddress}"`);
 
   try {
     const geocodeUrl = new URL(GOOGLE_GEOCODE_URL);
-    geocodeUrl.searchParams.set("address", decodedAddress);
+    geocodeUrl.searchParams.set("address", normalizedAddress);
     geocodeUrl.searchParams.set("key", apiKey);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GEOCODE_TIMEOUT_MS);
-
     const response = await fetch(geocodeUrl.toString(), {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error(`[Geocode] Google API HTTP error: ${response.status}`);
@@ -86,7 +80,7 @@ export async function handleGeocode(req: Request): Promise<Response> {
     const data = await response.json();
 
     if (data.status === "ZERO_RESULTS") {
-      console.log(`[Geocode] No results for: "${decodedAddress}"`);
+      console.log(`[Geocode] No results for: "${normalizedAddress}"`);
       const result: GeocodeResponse = { ok: false, error: "ZERO_RESULTS" };
       return jsonResponse(result);
     }
@@ -109,19 +103,17 @@ export async function handleGeocode(req: Request): Promise<Response> {
 
     const successResponse: GeocodeResponse = { ok: true, results };
 
-    // Cache successful response
-    geocodeCache.set(cacheKey, successResponse);
+    geocodeCache.set(normalizedAddress, successResponse);
 
-    console.log(`[Geocode] Found ${results.length} result(s) for: "${decodedAddress}"`);
+    console.log(`[Geocode] Found ${results.length} result(s) for: "${normalizedAddress}"`);
     return jsonResponse(successResponse);
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      console.error(`[Geocode] Request timed out for: "${decodedAddress}"`);
-      return errorResponse("Geocoding request timeout", 504);
-    }
-
-    console.error("[Geocode] Error:", error);
-    return errorResponse("Geocoding service error", 502);
+    const isTimeout = error instanceof Error && error.name === "TimeoutError";
+    console.error(`[Geocode] ${isTimeout ? "Timeout" : "Error"} for "${normalizedAddress}":`, error);
+    return errorResponse(
+      isTimeout ? "Geocoding request timeout" : "Geocoding service error",
+      isTimeout ? 504 : 502
+    );
   }
 }
 

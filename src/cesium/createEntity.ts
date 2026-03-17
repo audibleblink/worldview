@@ -3,97 +3,84 @@
  *
  * Reactive entity binding for Cesium.
  * Creates entity on viewer, updates reactively via createEffect.
- * Position updates use property.setValue() to avoid allocation (Blocklist #1).
+ * Position/orientation updates use property.setValue() to avoid allocation.
  *
  * NOTE: Only use for small numbers of entities (<50).
  * For larger collections, use createBillboardCollection or createPointCollection.
  */
 
 import { createEffect, onCleanup, type Accessor } from "solid-js";
-import { useCesium } from "./useCesium";
+import { useCesium, getActiveViewer } from "./useCesium";
 
 declare const Cesium: typeof import("cesium");
 
-// Use Record types for graphics options to avoid namespace issues with ConstructorOptions
 type GraphicsOptions = Record<string, unknown>;
 
 export interface EntityOptions {
-  /** Unique entity ID */
   id?: string;
-  /** Entity name */
   name?: string;
-  /** Entity description */
   description?: string;
-  /** Position in Cartesian3 */
   position?: Cesium.Cartesian3;
-  /** Billboard options */
   billboard?: GraphicsOptions;
-  /** Point options */
   point?: GraphicsOptions;
-  /** Label options */
   label?: GraphicsOptions;
-  /** Model options (for 3D models) */
   model?: GraphicsOptions;
-  /** Polyline options */
   polyline?: GraphicsOptions;
-  /** Path options (for showing entity trail) */
   path?: GraphicsOptions;
-  /** Orientation (for 3D models) */
   orientation?: Cesium.Quaternion;
-  /** Custom properties */
   properties?: Record<string, unknown>;
 }
 
 export interface CreateEntityReturn {
-  /** The Cesium Entity instance (null until created) */
   entity: Cesium.Entity | null;
+}
+
+/**
+ * Set a ConstantProperty value, creating the property if needed.
+ * Avoids allocation on subsequent calls by reusing existing property.
+ */
+function setOrCreateProperty<T, P extends Cesium.ConstantProperty>(
+  existing: P | null,
+  value: T,
+  PropertyClass: new (v: T) => P,
+): P {
+  if (existing) {
+    existing.setValue(value);
+    return existing;
+  }
+  return new PropertyClass(value);
+}
+
+/** Apply GraphicsOptions to a Cesium graphics object, wrapping each in ConstantProperty. */
+function applyGraphicsUpdates(graphics: any, options: GraphicsOptions, keys: readonly string[]): void {
+  for (const key of keys) {
+    if (options[key] !== undefined) {
+      graphics[key] = new Cesium.ConstantProperty(options[key]);
+    }
+  }
 }
 
 /**
  * Create a reactive Cesium entity.
  *
- * The entity is created when the viewer is ready and updated
- * reactively when the options accessor changes.
- *
- * IMPORTANT: Position updates mutate existing property via setValue()
+ * Position updates mutate existing property via setValue()
  * to avoid allocating new ConstantPositionProperty objects per frame.
- *
- * @param getOptions - Accessor returning entity options
- * @returns Object with entity reference
- *
- * Usage:
- * ```tsx
- * const [position, setPosition] = createSignal(Cesium.Cartesian3.fromDegrees(0, 0, 0));
- *
- * const { entity } = createEntity(() => ({
- *   id: 'my-entity',
- *   position: position(),
- *   billboard: { image: '/icon.png', scale: 1.0 },
- * }));
- *
- * // Update position reactively (uses setValue internally)
- * setPosition(Cesium.Cartesian3.fromDegrees(1, 1, 0));
- * ```
  */
 export function createEntity(getOptions: Accessor<EntityOptions | null>): CreateEntityReturn {
-  const { viewer, ready } = useCesium();
+  const ctx = useCesium();
 
   let entity: Cesium.Entity | null = null;
-
-  // Track the position property for efficient updates
   let positionProperty: Cesium.ConstantPositionProperty | null = null;
-  // Track the orientation property for efficient updates
   let orientationProperty: Cesium.ConstantProperty | null = null;
 
   createEffect(() => {
-    if (!ready()) return;
-
-    const v = viewer();
-    if (!v || v.isDestroyed()) return;
+    if (!ctx.ready()) return;
+    const v = getActiveViewer(ctx);
+    if (!v) return;
 
     const options = getOptions();
 
-    // If options are null, remove entity if it exists
+    // Null options → remove entity
     if (!options) {
       if (entity) {
         v.entities.remove(entity);
@@ -104,14 +91,11 @@ export function createEntity(getOptions: Accessor<EntityOptions | null>): Create
       return;
     }
 
-    // Create entity if it doesn't exist
+    // Create entity on first run
     if (!entity) {
-      // Create position property if position provided
       if (options.position) {
         positionProperty = new Cesium.ConstantPositionProperty(options.position);
       }
-
-      // Create orientation property if orientation provided
       if (options.orientation) {
         orientationProperty = new Cesium.ConstantProperty(options.orientation);
       }
@@ -132,133 +116,47 @@ export function createEntity(getOptions: Accessor<EntityOptions | null>): Create
           ? new Cesium.PropertyBag(options.properties)
           : undefined,
       });
-
       return;
     }
 
-    // Update existing entity - use setValue() to avoid allocation (Blocklist #1)
-
-    // Position update
+    // Update existing entity — use setValue() to avoid allocation
     if (options.position) {
-      if (positionProperty) {
-        // Mutate existing property - no allocation!
-        positionProperty.setValue(options.position);
-      } else {
-        // First time setting position
-        positionProperty = new Cesium.ConstantPositionProperty(options.position);
-        entity.position = positionProperty;
-      }
+      positionProperty = setOrCreateProperty(positionProperty, options.position, Cesium.ConstantPositionProperty);
+      entity.position = positionProperty;
     }
-
-    // Orientation update
     if (options.orientation) {
-      if (orientationProperty) {
-        // Mutate existing property - no allocation!
-        orientationProperty.setValue(options.orientation);
-      } else {
-        // First time setting orientation
-        orientationProperty = new Cesium.ConstantProperty(options.orientation);
-        entity.orientation = orientationProperty;
-      }
+      orientationProperty = setOrCreateProperty(orientationProperty, options.orientation, Cesium.ConstantProperty);
+      entity.orientation = orientationProperty as any;
     }
-
-    // Update other properties that are less performance-critical
-    if (options.name !== undefined) {
-      entity.name = options.name;
-    }
-
+    if (options.name !== undefined) entity.name = options.name;
     if (options.description !== undefined) {
       entity.description = new Cesium.ConstantProperty(options.description);
     }
 
-    // Update graphics options if provided
-    // These create new graphics objects but are typically not updated per-frame
+    // Update graphics (not per-frame critical, so ConstantProperty allocation is fine)
     if (options.billboard && entity.billboard) {
-      updateBillboard(entity.billboard, options.billboard);
+      applyGraphicsUpdates(entity.billboard, options.billboard, ["image", "scale", "color", "rotation", "show"]);
     }
-
     if (options.label && entity.label) {
-      updateLabel(entity.label, options.label);
+      applyGraphicsUpdates(entity.label, options.label, ["text", "font", "fillColor", "show"]);
     }
-
     if (options.model && entity.model) {
-      updateModel(entity.model, options.model);
+      applyGraphicsUpdates(entity.model, options.model, ["scale", "minimumPixelSize", "show"]);
     }
   });
 
   onCleanup(() => {
-    if (entity) {
-      const v = viewer();
-      if (v && !v.isDestroyed()) {
-        v.entities.remove(entity);
-      }
-      entity = null;
-      positionProperty = null;
-      orientationProperty = null;
-    }
+    if (!entity) return;
+    const v = getActiveViewer(ctx);
+    if (v) v.entities.remove(entity);
+    entity = null;
+    positionProperty = null;
+    orientationProperty = null;
   });
 
   return {
-    get entity() {
-      return entity;
-    },
+    get entity() { return entity; },
   };
-}
-
-// Helper functions to update graphics properties without full recreation
-
-function updateBillboard(
-  billboard: Cesium.BillboardGraphics,
-  options: GraphicsOptions
-) {
-  if (options.image !== undefined) {
-    billboard.image = new Cesium.ConstantProperty(options.image);
-  }
-  if (options.scale !== undefined) {
-    billboard.scale = new Cesium.ConstantProperty(options.scale);
-  }
-  if (options.color !== undefined) {
-    billboard.color = new Cesium.ConstantProperty(options.color);
-  }
-  if (options.rotation !== undefined) {
-    billboard.rotation = new Cesium.ConstantProperty(options.rotation);
-  }
-  if (options.show !== undefined) {
-    billboard.show = new Cesium.ConstantProperty(options.show);
-  }
-}
-
-function updateLabel(
-  label: Cesium.LabelGraphics,
-  options: GraphicsOptions
-) {
-  if (options.text !== undefined) {
-    label.text = new Cesium.ConstantProperty(options.text);
-  }
-  if (options.font !== undefined) {
-    label.font = new Cesium.ConstantProperty(options.font);
-  }
-  if (options.fillColor !== undefined) {
-    label.fillColor = new Cesium.ConstantProperty(options.fillColor);
-  }
-  if (options.show !== undefined) {
-    label.show = new Cesium.ConstantProperty(options.show);
-  }
-}
-
-function updateModel(
-  model: Cesium.ModelGraphics,
-  options: GraphicsOptions
-) {
-  if (options.scale !== undefined) {
-    model.scale = new Cesium.ConstantProperty(options.scale);
-  }
-  if (options.minimumPixelSize !== undefined) {
-    model.minimumPixelSize = new Cesium.ConstantProperty(options.minimumPixelSize);
-  }
-  if (options.show !== undefined) {
-    model.show = new Cesium.ConstantProperty(options.show);
-  }
 }
 
 export default createEntity;

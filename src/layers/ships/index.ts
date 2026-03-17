@@ -7,9 +7,7 @@
 
 import { registerLayer } from "../registry";
 import { ShipLayer } from "./ShipLayer";
-import { shipState } from "./store";
 
-// Re-export store and types for external use
 export * from "./store";
 export { ShipLayer };
 
@@ -18,6 +16,5 @@ registerLayer({
   name: "Ships",
   icon: "ship",
   component: ShipLayer,
-  store: shipState,
   defaultEnabled: true,
 });

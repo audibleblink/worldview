@@ -5,7 +5,7 @@
  * Must be used within a CesiumProvider.
  */
 
-import { useContext } from "solid-js";
+import { useContext, createEffect, on, onCleanup } from "solid-js";
 import { CesiumContext, type CesiumContextValue } from "./CesiumProvider";
 
 declare const Cesium: typeof import("cesium");
@@ -15,26 +15,12 @@ declare const Cesium: typeof import("cesium");
  * Returns the context value with viewer and ready accessors.
  *
  * @throws Error if used outside of CesiumProvider
- *
- * Usage:
- * ```tsx
- * const { viewer, ready } = useCesium();
- *
- * createEffect(() => {
- *   if (ready()) {
- *     const v = viewer();
- *     // Use viewer...
- *   }
- * });
- * ```
  */
 export function useCesium(): CesiumContextValue {
   const context = useContext(CesiumContext);
-
   if (!context) {
     throw new Error("useCesium must be used within a CesiumProvider");
   }
-
   return context;
 }
 
@@ -43,14 +29,6 @@ export function useCesium(): CesiumContextValue {
  * Use this when you need to guarantee the viewer exists.
  *
  * @throws Error if viewer is not ready
- *
- * Usage:
- * ```tsx
- * onMount(() => {
- *   const viewer = useViewer();
- *   // Viewer is guaranteed to exist here
- * });
- * ```
  */
 export function useViewer(): Cesium.Viewer {
   const { viewer, ready } = useCesium();
@@ -65,6 +43,48 @@ export function useViewer(): Cesium.Viewer {
   }
 
   return v;
+}
+
+/**
+ * Return the live viewer if it's ready and not destroyed, or null.
+ * Eliminates the repeated `const v = viewer(); if (!v || v.isDestroyed()) return;` guard.
+ */
+export function getActiveViewer(ctx: CesiumContextValue): Cesium.Viewer | null {
+  const v = ctx.viewer();
+  return v && !v.isDestroyed() ? v : null;
+}
+
+/**
+ * Subscribe to a Cesium event that depends on the viewer being ready.
+ * Handles the full lifecycle: wait for ready → subscribe → cleanup on
+ * ready-change or component unmount.
+ *
+ * Eliminates the repeated pattern of:
+ *   let removeListener; createEffect(on(ready, ...)); onCleanup(...)
+ */
+export function useViewerEvent(
+  subscribe: (viewer: Cesium.Viewer) => (() => void) | void,
+): void {
+  const { viewer, ready } = useCesium();
+  let cleanup: (() => void) | null = null;
+
+  createEffect(
+    on(ready, (isReady) => {
+      cleanup?.();
+      cleanup = null;
+
+      if (!isReady) return;
+      const v = viewer();
+      if (!v || v.isDestroyed()) return;
+
+      cleanup = subscribe(v) ?? null;
+    }),
+  );
+
+  onCleanup(() => {
+    cleanup?.();
+    cleanup = null;
+  });
 }
 
 export default useCesium;

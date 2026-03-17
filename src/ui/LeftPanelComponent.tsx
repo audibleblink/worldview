@@ -5,34 +5,14 @@
 
 import { createSignal, createMemo, For, Show, onMount } from "solid-js";
 import { layers, toggleLayer, type LayerId } from "../stores/layers";
-import { getAllLayers } from "../layers/registry";
 import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/store";
 import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
 import { satelliteState, toggleCategory } from "../layers/satellites/store";
 import type { SatelliteCategory } from "../layers/satellites/types";
 import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
-import poisData from "../data/pois.json";
 import { useCesium } from "../cesium/useCesium";
 import { CCTVCameraListPanel } from "./panels/CCTVCameraListPanel";
-
-declare const Cesium: typeof import("cesium");
-
-// Types for POI data
-interface POI {
-  name: string;
-  lat: number;
-  lng: number;
-  altitude: number;
-  pitch: number;
-}
-
-interface City {
-  name: string;
-  pois: POI[];
-}
-
-// Load cities from JSON
-const cities = poisData as City[];
+import { cities, flyToPOI } from "./navigation";
 
 // Layer display configuration
 interface LayerConfig {
@@ -61,7 +41,6 @@ const SATELLITE_CATEGORIES: CategoryConfig[] = [
   { id: "starlink", name: "STARLINK" },
 ];
 
-// Log entry types
 type LogType = "info" | "error" | "success";
 
 interface LogEntry {
@@ -70,7 +49,6 @@ interface LogEntry {
   type: LogType;
 }
 
-// Log entry counter for unique IDs
 let logIdCounter = 0;
 
 /**
@@ -94,105 +72,49 @@ export function LeftPanel() {
   const canGoPrev = createMemo(() => ui.currentPOIIndex > 0);
   const canGoNext = createMemo(() => ui.currentPOIIndex < poiCount() - 1);
 
-  /** Add a log entry */
   function addLogEntry(message: string, type: LogType = "info"): void {
-    const entry: LogEntry = { id: logIdCounter++, message, type };
-    setLogEntries((prev) => {
-      const updated = [entry, ...prev];
-      // Keep only last 20 entries
-      return updated.slice(0, 20);
-    });
+    setLogEntries((prev) => [{ id: logIdCounter++, message, type }, ...prev].slice(0, 20));
   }
 
-  /** Fly the camera to a POI */
-  function flyToPOI(poi: POI): void {
-    const v = viewer();
-    if (!v || v.isDestroyed()) return;
-
-    // Offset latitude slightly to compensate for oblique camera angle
-    const pitch = poi.pitch ?? -45;
-    const pitchRad = Math.abs(pitch) * (Math.PI / 180);
-    const latOffset = (poi.altitude / 111000) * Math.tan(pitchRad);
-
-    v.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        poi.lng,
-        poi.lat - latOffset,
-        poi.altitude
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(0),
-        pitch: Cesium.Math.toRadians(pitch),
-        roll: 0,
-      },
-      duration: 2,
-    });
-  }
-
-  /** Handle city selection change */
-  function handleCityChange(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    const index = parseInt(select.value, 10);
+  function handleCityChange(e: Event): void {
+    const index = parseInt((e.target as HTMLSelectElement).value, 10);
     setCurrentCityIndex(index);
     setCurrentPOIIndex(0);
     addLogEntry(`[NAV] Flying to ${cities[index]?.name}`);
-
-    // Fly to first POI of selected city
     const firstPOI = cities[index]?.pois[0];
-    if (firstPOI) {
-      flyToPOI(firstPOI);
+    if (firstPOI) flyToPOI(viewer(), firstPOI);
+  }
+
+  function navigatePOI(delta: -1 | 1): void {
+    const newIndex = ui.currentPOIIndex + delta;
+    if (newIndex < 0 || newIndex >= poiCount()) return;
+    setCurrentPOIIndex(newIndex);
+    const poi = currentCity()?.pois[newIndex];
+    if (poi) {
+      addLogEntry(`[NAV] POI: ${poi.name}`);
+      flyToPOI(viewer(), poi);
     }
   }
 
-  /** Navigate to previous POI */
-  function handlePrevPOI(): void {
-    if (canGoPrev()) {
-      const newIndex = ui.currentPOIIndex - 1;
-      setCurrentPOIIndex(newIndex);
-      const poi = currentCity()?.pois[newIndex];
-      if (poi) {
-        addLogEntry(`[NAV] POI: ${poi.name}`);
-        flyToPOI(poi);
-      }
-    }
-  }
-
-  /** Navigate to next POI */
-  function handleNextPOI(): void {
-    if (canGoNext()) {
-      const newIndex = ui.currentPOIIndex + 1;
-      setCurrentPOIIndex(newIndex);
-      const poi = currentCity()?.pois[newIndex];
-      if (poi) {
-        addLogEntry(`[NAV] POI: ${poi.name}`);
-        flyToPOI(poi);
-      }
-    }
-  }
-
-  /** Toggle a layer */
   function handleToggleLayer(id: LayerId): void {
+    const wasEnabled = layers[id];
     toggleLayer(id);
-    const isEnabled = !layers[id]; // State will toggle, so check inverse
-    addLogEntry(`[${id.toUpperCase()}] Layer ${isEnabled ? "disabled" : "enabled"}`);
+    addLogEntry(`[${id.toUpperCase()}] Layer ${wasEnabled ? "disabled" : "enabled"}`);
   }
 
-  /** Toggle a satellite category */
   function handleToggleCategory(category: SatelliteCategory): void {
     const wasVisible = !satelliteState.hiddenCategories.has(category);
     toggleCategory(category);
     addLogEntry(`[SAT] ${category.toUpperCase()} ${wasVisible ? "OFF" : "ON"}`);
   }
 
-  /** Toggle a ground sub-layer */
   function handleToggleSubLayer(subLayer: GroundSubLayer): void {
-    toggleSubLayer(subLayer);
     const stateKey = `${subLayer}Enabled` as keyof typeof groundState;
-    const isEnabled = !groundState[stateKey]; // State will toggle
-    addLogEntry(`[GROUND] ${subLayer.toUpperCase()} ${isEnabled ? "OFF" : "ON"}`);
+    const wasEnabled = groundState[stateKey];
+    toggleSubLayer(subLayer);
+    addLogEntry(`[GROUND] ${subLayer.toUpperCase()} ${wasEnabled ? "OFF" : "ON"}`);
   }
 
-  /** Cycle traffic style mode */
   function handleCycleTrafficStyle(): void {
     const nextStyle: StyleMode = groundState.trafficStyle === "heatmap" ? "terminal" : "heatmap";
     setTrafficStyle(nextStyle);
@@ -200,14 +122,10 @@ export function LeftPanel() {
   }
 
   onMount(() => {
-    console.log("[LeftPanel] Mounted");
-
     // Fly to initial POI after a short delay (viewer may not be ready immediately)
     setTimeout(() => {
       const poi = currentPOI();
-      if (poi) {
-        flyToPOI(poi);
-      }
+      if (poi) flyToPOI(viewer(), poi);
     }, 2000);
   });
 
@@ -231,7 +149,7 @@ export function LeftPanel() {
           class="nav-btn" 
           id="prev-poi" 
           disabled={!canGoPrev()}
-          onClick={handlePrevPOI}
+          onClick={() => navigatePOI(-1)}
         >
           PREV
         </button>
@@ -242,7 +160,7 @@ export function LeftPanel() {
           class="nav-btn" 
           id="next-poi" 
           disabled={!canGoNext()}
-          onClick={handleNextPOI}
+          onClick={() => navigatePOI(1)}
         >
           NEXT
         </button>
