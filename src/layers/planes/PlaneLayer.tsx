@@ -449,7 +449,75 @@ export function PlaneLayer() {
     unfollowPlane();
   }
 
+  // Dead-reckoning interpolation: animate planes between polls
   usePreRender(() => {
+    const now = Date.now();
+
+    // Interpolate each plane's position based on velocity and heading
+    for (const [icao24, record] of planeState.planes) {
+      // Calculate time elapsed since last server update (in seconds)
+      const elapsedSec = (now - record.timestamp) / 1000;
+      
+      // Skip if no movement data or on ground
+      if (record.velocity <= 0 || record.onGround || elapsedSec <= 0) {
+        continue;
+      }
+
+      // Cap interpolation to 30 seconds to avoid runaway extrapolation
+      const cappedElapsed = Math.min(elapsedSec, 30);
+
+      // Distance traveled in meters
+      const distanceM = record.velocity * cappedElapsed;
+
+      // Convert heading to radians (heading is clockwise from north)
+      const headingRad = Cesium.Math.toRadians(record.heading);
+
+      // Get current position as cartographic
+      const startCarto = Cesium.Cartographic.fromDegrees(
+        record.longitude,
+        record.latitude,
+        record.altitude
+      );
+
+      // Calculate new position using simple spherical projection
+      // Earth radius ~6371km
+      const earthRadius = 6371000;
+      const angularDistance = distanceM / earthRadius;
+
+      const lat1 = startCarto.latitude;
+      const lon1 = startCarto.longitude;
+
+      // Spherical law of cosines for destination point
+      const lat2 = Math.asin(
+        Math.sin(lat1) * Math.cos(angularDistance) +
+        Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(headingRad)
+      );
+      const lon2 = lon1 + Math.atan2(
+        Math.sin(headingRad) * Math.sin(angularDistance) * Math.cos(lat1),
+        Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+      );
+
+      // Account for vertical rate (altitude change)
+      const altitudeChange = record.verticalRate * cappedElapsed;
+      const newAltitude = Math.max(0, record.altitude + altitudeChange);
+
+      // Create interpolated position
+      const interpolatedPos = Cesium.Cartesian3.fromRadians(lon2, lat2, newAltitude);
+
+      // Update the stored interpolated position (used by follow mode)
+      interpolatedPositions.set(icao24, interpolatedPos);
+
+      // Update billboard position
+      billboardApi.update(icao24, { position: interpolatedPos });
+
+      // Update label position
+      const label = labelMap.get(icao24);
+      if (label) {
+        label.position = interpolatedPos;
+      }
+    }
+
+    // Update trail polylines
     for (const [icao24, positions] of planeState.trails) {
       if (positions.length < 2) continue;
 
