@@ -8,8 +8,8 @@ import { shaders, setParameter, PARAMETER_MAPPINGS, type ShaderMode } from "../s
 import { selection } from "../stores/selection";
 import { CesiumContext } from "../cesium/CesiumProvider";
 import { SatelliteInfo } from "./panels/SatelliteInfo";
-import { FlightInfo } from "./panels/FlightInfo";
 import { ShipInfo } from "./panels/ShipInfo";
+import { PlaneInfo } from "./panels/PlaneInfo";
 import { formatLatitude, formatLongitude, formatAltitude, formatDistance } from "./formatters";
 
 declare const Cesium: typeof import("cesium");
@@ -123,11 +123,11 @@ export function RightPanel() {
         <Match when={selection.type === "satellite"}>
           <SatelliteInfo />
         </Match>
-        <Match when={selection.type === "flight"}>
-          <FlightInfo />
-        </Match>
         <Match when={selection.type === "ship"}>
           <ShipInfo />
+        </Match>
+        <Match when={selection.type === "flight"}>
+          <PlaneInfo />
         </Match>
       </Switch>
 
