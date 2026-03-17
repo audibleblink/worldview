@@ -12,10 +12,10 @@ import { applyMiddleware, createRoutes } from "./middleware.ts";
 import { corsResponse, jsonResponse } from "./types.ts";
 import type { RouteHandler } from "./types.ts";
 import { handleTLE, getTLECacheStats } from "./routes/tle.ts";
-import { handleFlights, handleAircraftMeta, handleFlightRoute, getFlightsCacheStats } from "./routes/flights.ts";
 import { handleGeocode, getGeocodeCacheStats } from "./routes/geocode.ts";
 import { handleCameraList, handleThumbnail, handleStream, handleHlsUrl, handleHlsRelay, initializeCCTV } from "./routes/cctv.ts";
 import { handleShips } from "./routes/ships.ts";
+import { handlePlanes, handlePlanesSearch } from "./routes/planes.ts";
 import { handleOSM } from "./routes/osm.ts";
 import { proxyGoogleTiles, handleMapTiles } from "./routes/tiles.ts";
 import { initAISStreamClient } from "./websocket/ships.ts";
@@ -46,11 +46,12 @@ const staticRoutes = createRoutes({
   // TLE proxy
   "/tle": handleTLE,
 
-  // Flights
-  "/flights": handleFlights,
-
   // Ships
   "/ships": handleShips,
+
+  // Planes
+  "/planes": handlePlanes,
+  "/planes/search": handlePlanesSearch,
 
   // Geocoding
   "/geocode": handleGeocode,
@@ -64,7 +65,6 @@ const staticRoutes = createRoutes({
   // Cache stats (for monitoring)
   "/api/stats": () => jsonResponse({
     tle: getTLECacheStats(),
-    flights: getFlightsCacheStats(),
     geocode: getGeocodeCacheStats(),
   }),
 });
@@ -75,8 +75,6 @@ const staticRoutes = createRoutes({
  * (e.g. /api/cctv/hls-relay/ before /api/cctv/hls/).
  */
 const dynamicRoutes: Array<[prefix: string, handler: RouteHandler]> = [
-  ["/flight-route/", handleFlightRoute],
-  ["/aircraft-meta/", handleAircraftMeta],
   ["/api/cctv/thumbnail/", handleThumbnail],
   ["/api/cctv/stream/", handleStream],
   ["/api/cctv/hls-relay/", handleHlsRelay],
@@ -130,8 +128,9 @@ console.log(`Server running at http://localhost:${SERVER_PORT}`);
 console.log(`Endpoints:`);
 console.log(`  GET  /health                - Health check`);
 console.log(`  GET  /tle?group=<name>      - TLE satellite data`);
-console.log(`  GET  /flights               - OpenSky flight data`);
 console.log(`  GET  /ships                 - AIS ship data`);
+console.log(`  GET  /planes                - OpenSky plane data`);
+console.log(`  GET  /planes/search         - Search planes by callsign`);
 console.log(`  GET  /geocode?address=<q>   - Geocoding`);
 console.log(`  GET  /api/cctv/cameras      - CCTV camera list`);
 console.log(`  GET  /api/cctv/thumbnail/:id - Camera thumbnail`);
