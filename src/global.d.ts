@@ -39,6 +39,8 @@ declare global {
     export type Label = CesiumModule.Label;
     export type LabelGraphics = CesiumModule.LabelGraphics;
     export type ModelGraphics = CesiumModule.ModelGraphics;
+    export type PrimitiveCollection = CesiumModule.PrimitiveCollection;
+    export type Primitive = CesiumModule.Primitive;
 
     // Interaction
     export type ScreenSpaceEventHandler = CesiumModule.ScreenSpaceEventHandler;
