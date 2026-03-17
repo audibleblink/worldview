@@ -498,8 +498,8 @@ export function PlaneLayer() {
         Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
       );
 
-      // Account for vertical rate (altitude change)
-      const altitudeChange = record.verticalRate * cappedElapsed;
+      // Account for vertical rate (altitude change) - also at 50% speed
+      const altitudeChange = record.verticalRate * elapsedSec * 0.5;
       const newAltitude = Math.max(0, record.altitude + altitudeChange);
 
       // Create interpolated position
