@@ -6,18 +6,18 @@ import { createStore } from "solid-js/store";
 
 export interface LayerState {
   satellites: boolean;
-  flights: boolean;
   ships: boolean;
   ground: boolean;
+  planes: boolean;
 }
 
 export type LayerId = keyof LayerState;
 
 const [layers, setLayers] = createStore<LayerState>({
   satellites: false,
-  flights: false,
   ships: false,
   ground: false,
+  planes: false,
 });
 
 // --- Mutations (named for future event-sourcing) ---
