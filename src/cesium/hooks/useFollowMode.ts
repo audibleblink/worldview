@@ -2,12 +2,11 @@
  * WorldView - useFollowMode Hook
  *
  * Single shared implementation of camera follow mode.
- * Tracks a position with heading/pitch/range, detects user orbit input,
- * and provides proper cleanup on stop or unmount.
+ * Tracks a position with heading/pitch/range.
  */
 
 import { createSignal, onCleanup, type Accessor } from "solid-js";
-import { useCesium, getActiveViewer } from "../useCesium";
+import { useCesium } from "../useCesium";
 import { usePreRender } from "./usePreRender";
 
 declare const Cesium: typeof import("cesium");
@@ -35,97 +34,112 @@ const DEFAULT_HEADING = 0;
 const DEFAULT_PITCH = -Math.PI / 4;
 const DEFAULT_RANGE = 500;
 
-/** Project a position down to ground/sea level (height = 0). */
-function toGroundLevel(position: Cesium.Cartesian3): Cesium.Cartesian3 {
-  const carto = Cesium.Cartographic.fromCartesian(position);
-  return Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, 0);
-}
-
-/**
- * Shared follow mode hook for tracking entities.
- */
 export function useFollowMode(): UseFollowModeReturn {
-  const ctx = useCesium();
+  const { viewer } = useCesium();
   const [isFollowing, setIsFollowing] = createSignal(false);
 
-  // Mutable follow state (not reactive — updated per-frame)
   let positionGetter: (() => Cesium.Cartesian3 | null) | null = null;
-  let currentHeading = DEFAULT_HEADING;
-  let currentPitch = DEFAULT_PITCH;
-  let currentRange = DEFAULT_RANGE;
-  let groundLevel = false;
-  let lastCamPos: Cesium.Cartesian3 | null = null;
+  let useGroundLevel = false;
+  let targetRange = DEFAULT_RANGE;
 
+  // Pre-render: just keep the camera pointed at the target
+  // Let Cesium's default camera controller handle user orbit/zoom
   usePreRender(() => {
-    if (!isFollowing() || !positionGetter) return;
+    if (!isFollowing()) return;
+    if (!positionGetter) return;
 
-    const v = getActiveViewer(ctx);
-    if (!v) return;
+    const v = viewer();
+    if (!v || v.isDestroyed()) return;
 
     const position = positionGetter();
     if (!position) return;
 
-    const target = groundLevel ? toGroundLevel(position) : position;
-    const { camera } = v;
-
-    // Detect user orbit input by comparing camera position to last frame
-    if (lastCamPos !== null) {
-      const userMoved = !Cesium.Cartesian3.equalsEpsilon(
-        camera.positionWC, lastCamPos, 0, 1.0,
+    let target: Cesium.Cartesian3;
+    if (useGroundLevel) {
+      const cartographic = Cesium.Cartographic.fromCartesian(position);
+      target = Cesium.Cartesian3.fromRadians(
+        cartographic.longitude,
+        cartographic.latitude,
+        0
       );
-      if (userMoved) {
-        currentHeading = camera.heading;
-        currentPitch = camera.pitch;
-        currentRange = Cesium.Cartesian3.distance(camera.positionWC, target);
-      }
+    } else {
+      target = position;
     }
 
-    camera.lookAt(target, new Cesium.HeadingPitchRange(currentHeading, currentPitch, currentRange));
-    lastCamPos = Cesium.Cartesian3.clone(camera.positionWC);
+    // Get current camera state BEFORE lookAt (user's orbit/zoom choices)
+    const camera = v.camera;
+    const currentRange = Cesium.Cartesian3.distance(camera.positionWC, target);
+    
+    // Use the current heading/pitch (preserves user orbit)
+    // Use current range if user has zoomed, otherwise use target range
+    const range = Math.abs(currentRange - targetRange) > 1000 ? currentRange : targetRange;
+
+    camera.lookAt(
+      target,
+      new Cesium.HeadingPitchRange(camera.heading, camera.pitch, range)
+    );
   });
 
   const track = (
     getPosition: () => Cesium.Cartesian3 | null,
-    options: FollowOptions = {},
+    options: FollowOptions = {}
   ) => {
+    // If already following, stop first to release lookAt constraint
+    if (isFollowing()) {
+      const v = viewer();
+      if (v && !v.isDestroyed()) {
+        v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      }
+      setIsFollowing(false);
+    }
+
     positionGetter = getPosition;
-    currentHeading = options.heading ?? DEFAULT_HEADING;
-    currentPitch = options.pitch ?? DEFAULT_PITCH;
-    currentRange = options.range ?? DEFAULT_RANGE;
-    groundLevel = options.useGroundLevel ?? false;
-    lastCamPos = null;
+    targetRange = options.range ?? DEFAULT_RANGE;
+    useGroundLevel = options.useGroundLevel ?? false;
 
     const position = getPosition();
-    const v = getActiveViewer(ctx);
+    const v = viewer();
 
-    if (position && v && options.flyToFirst !== false) {
-      const target = groundLevel ? toGroundLevel(position) : position;
+    if (position && v && !v.isDestroyed() && options.flyToFirst !== false) {
+      let target = position;
+      if (useGroundLevel) {
+        const cartographic = Cesium.Cartographic.fromCartesian(position);
+        target = Cesium.Cartesian3.fromRadians(
+          cartographic.longitude,
+          cartographic.latitude,
+          0
+        );
+      }
+
+      const heading = options.heading ?? DEFAULT_HEADING;
+      const pitch = options.pitch ?? DEFAULT_PITCH;
 
       v.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(target, currentRange),
+        new Cesium.BoundingSphere(target, 0),
         {
-          offset: new Cesium.HeadingPitchRange(currentHeading, currentPitch, currentRange),
+          offset: new Cesium.HeadingPitchRange(heading, pitch, targetRange),
           duration: 1.5,
           complete: () => {
             setIsFollowing(true);
-            console.log("[useFollowMode] Follow mode started (after flyTo)");
+            console.log("[useFollowMode] Follow mode started");
           },
-        },
+        }
       );
     } else {
       setIsFollowing(true);
-      console.log("[useFollowMode] Follow mode started");
+      console.log("[useFollowMode] Follow mode started (no flyTo)");
     }
   };
 
   const stop = () => {
     if (!isFollowing()) return;
 
-    const v = getActiveViewer(ctx);
-    if (v) v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    const v = viewer();
+    if (v && !v.isDestroyed()) {
+      v.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    }
 
     positionGetter = null;
-    lastCamPos = null;
     setIsFollowing(false);
     console.log("[useFollowMode] Follow mode stopped");
   };

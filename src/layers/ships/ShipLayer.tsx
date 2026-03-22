@@ -457,6 +457,7 @@ export function ShipLayer() {
       color,
       rotation: -Cesium.Math.toRadians(heading),
       data: { mmsi: record.mmsi, type: "ship" },
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
 
     // Add label
@@ -654,18 +655,11 @@ export function ShipLayer() {
     handler.setInputAction((click: { position: Cesium.Cartesian2 }) => {
       const pickedObject = v.scene.pick(click.position);
       
-      if (Cesium.defined(pickedObject)) {
-        const primitive = pickedObject.primitive;
-        
-        // Check if it's our billboard collection
-        if (primitive === billboardApi.collection) {
-          const billboard = pickedObject.id;
-          if (billboard && billboard.id) {
-            const mmsi = billboard.id as string;
-            handleShipSelection(mmsi);
-            return;
-          }
-        }
+      // Cesium returns the billboard's id property directly as pickedObject.id
+      const id = pickedObject?.id;
+      if (typeof id === "string" && getShipByMmsi(id)) {
+        handleShipSelection(id);
+        return;
       }
       
       // Clicked empty space - deselect

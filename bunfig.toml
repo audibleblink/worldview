@@ -3,6 +3,5 @@
 [install]
 auto = true
 
-# Configure plugins for Bun.serve() HTML imports
-[serve.static]
-plugins = ["bun-plugin-solid"]
+# Preload plugin for SolidJS compilation
+preload = ["./plugins.ts"]
