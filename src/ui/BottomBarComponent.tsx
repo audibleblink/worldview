@@ -5,8 +5,9 @@
 
 import { createMemo, For } from "solid-js";
 import { shaders, setShader, type ShaderMode } from "../stores/shaders";
-import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
+import { ui, setCurrentCityIndex, setCurrentPOIIndex, setMyLocationActive } from "../stores/ui";
 import { useCesium } from "../cesium/useCesium";
+import { getUserLocation } from "../cesium/getUserLocation";
 import { cities, CITY_ABBREVS, flyToPOI } from "./navigation";
 
 type ViewMode = "NORMAL" | ShaderMode;
@@ -26,8 +27,23 @@ export function BottomBar() {
   function handleCityClick(index: number): void {
     setCurrentCityIndex(index);
     setCurrentPOIIndex(0);
+    setMyLocationActive(false);
     const firstPOI = cities[index]?.pois[0];
     if (firstPOI) flyToPOI(viewer(), firstPOI);
+  }
+
+  async function handleMyLocationClick(): Promise<void> {
+    const location = await getUserLocation();
+    if (!location) return;
+    setMyLocationActive(true);
+    setCurrentCityIndex(-1);
+    flyToPOI(viewer(), {
+      name: "My Location",
+      lat: location.lat,
+      lng: location.lng,
+      altitude: 500,
+      pitch: -45,
+    });
   }
 
   return (
@@ -63,6 +79,12 @@ export function BottomBar() {
             </button>
           )}
         </For>
+        <button
+          class={`city-tab ${ui.myLocationActive ? "active" : ""}`}
+          onClick={handleMyLocationClick}
+        >
+          MY LOC
+        </button>
       </div>
 
       {/* Right Section - Location Tooltip */}

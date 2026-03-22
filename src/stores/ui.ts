@@ -24,6 +24,7 @@ export interface UIState {
   currentCity: City | null;
   currentCityIndex: number;
   currentPOIIndex: number;
+  myLocationActive: boolean;
 }
 
 const [ui, setUI] = createStore<UIState>({
@@ -33,6 +34,7 @@ const [ui, setUI] = createStore<UIState>({
   currentCity: null,
   currentCityIndex: 0,
   currentPOIIndex: 0,
+  myLocationActive: false,
 });
 
 // --- Mutations (named for future event-sourcing) ---
@@ -71,6 +73,10 @@ export function setCurrentCityIndex(index: number): void {
 
 export function setCurrentPOIIndex(index: number): void {
   setUI("currentPOIIndex", index);
+}
+
+export function setMyLocationActive(active: boolean): void {
+  setUI("myLocationActive", active);
 }
 
 export { ui };

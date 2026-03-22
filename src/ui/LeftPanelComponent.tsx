@@ -9,7 +9,7 @@ import { groundState, toggleSubLayer, setTrafficStyle } from "../layers/ground/s
 import type { GroundSubLayer, StyleMode } from "../layers/ground/types";
 import { satelliteState, toggleCategory } from "../layers/satellites/store";
 import type { SatelliteCategory } from "../layers/satellites/types";
-import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
+import { ui, setCurrentCityIndex, setCurrentPOIIndex, setMyLocationActive } from "../stores/ui";
 import { useCesium } from "../cesium/useCesium";
 import { getUserLocation } from "../cesium/getUserLocation";
 import { CCTVCameraListPanel } from "./panels/CCTVCameraListPanel";
@@ -130,6 +130,8 @@ export function LeftPanel() {
     setTimeout(async () => {
       const userLocation = await locationPromise;
       if (userLocation) {
+        setCurrentCityIndex(-1);
+        setMyLocationActive(true);
         flyToPOI(viewer(), {
           name: "User Location",
           lat: userLocation.lat,
