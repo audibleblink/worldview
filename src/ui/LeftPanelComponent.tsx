@@ -11,6 +11,7 @@ import { satelliteState, toggleCategory } from "../layers/satellites/store";
 import type { SatelliteCategory } from "../layers/satellites/types";
 import { ui, setCurrentCityIndex, setCurrentPOIIndex } from "../stores/ui";
 import { useCesium } from "../cesium/useCesium";
+import { getUserLocation } from "../cesium/getUserLocation";
 import { CCTVCameraListPanel } from "./panels/CCTVCameraListPanel";
 import { cities, flyToPOI } from "./navigation";
 
@@ -122,10 +123,24 @@ export function LeftPanel() {
   }
 
   onMount(() => {
-    // Fly to initial POI after a short delay (viewer may not be ready immediately)
-    setTimeout(() => {
-      const poi = currentPOI();
-      if (poi) flyToPOI(viewer(), poi);
+    // Start geolocation request immediately (runs in parallel with viewer-ready delay)
+    const locationPromise = getUserLocation();
+
+    // Fly to user's location or fall back to initial POI
+    setTimeout(async () => {
+      const userLocation = await locationPromise;
+      if (userLocation) {
+        flyToPOI(viewer(), {
+          name: "User Location",
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          altitude: 500,
+          pitch: -45,
+        });
+      } else {
+        const poi = currentPOI();
+        if (poi) flyToPOI(viewer(), poi);
+      }
     }, 2000);
   });
 
