@@ -142,7 +142,7 @@ Satellites are excluded from frames — SGP4 positions are deterministic from TL
 }
 ```
 
-**Recorder loop:** A `setInterval` at 5s reads the current SolidJS layer stores (planes, ships, seismic) and POSTs a frame to `POST /api/recordings/:id/frames`. The server appends it as an NDJSON line.
+**Recorder loop:** Per-layer cadences matching live fetch rates — planes every 10s, ships every 5s, seismic every 60s. A coordinator ticks every 5s and snapshots whichever layers are due. Frame POSTed to `POST /api/recordings/:id/frames`; server appends as NDJSON line. Dropped frames (network blip) are accepted as best-effort — interpolation between surrounding frames covers the gap at playback time. Server enforces the 6h cap: if `stop` is never called, the session is auto-finalized after 6h with `complete: false`.
 
 **Stop:** Calls `POST /api/recordings/:id/stop` — server writes `endTime` and `frameCount` to `meta.json`.
 
@@ -159,15 +159,20 @@ Satellites are excluded from frames — SGP4 positions are deterministic from TL
 **Rendering path:** Each layer component exports a `PlaybackHandle`:
 ```ts
 interface PlaybackHandle {
-  update(prev: Frame, next: Frame, alpha: number): void; // called each rAF tick
-  clear(): void;                                          // called on playback exit
+  update(prev: Frame, next: Frame, alpha: number): void; // all layers except satellites
+  updateAtTime?(t: number): void;                        // satellites only (SGP4 takes absolute time)
+  clear(): void;                                         // called on playback exit
 }
 ```
-`PlaybackEngine` holds a `layerId → PlaybackHandle` map. `update()` writes directly to each layer's billboard collection via the same `billboardApi.update()` path the live pre-render loop uses — this reuses the existing `itemMap` without exposing it.
+`PlaybackEngine` calls `updateAtTime(t)` for satellites, `update(prev, next, alpha)` for everything else. Each handle writes directly to the layer's billboard collection via `billboardApi.update()` — same path the live pre-render loop uses, reusing the `itemMap` without exposing it.
 
-**Satellites during playback:** Re-run SGP4 from TLEs stored in `meta.json` (raw line strings, re-parsed with `twoline2satrec()` at playback start — the processed `satrec` object is not JSON-serializable). Same `satellite.js` code as live mode.
+**Satellites during playback:** Re-run SGP4 from TLEs stored in `meta.json` (raw line strings, re-parsed with `twoline2satrec()` at playback start — `satrec` is not JSON-serializable). Same `satellite.js` code as live mode.
 
-**Layer toggles:** Layer chips toggle `layerStore` visibility booleans. `LayerRenderer` is modified to not unmount during playback — it passes a `hidden` prop, letting each layer hide its billboard collection without destroying it or its `itemMap`.
+**Layer toggles during playback:** The SEISMIC chip toggles `groundState.seismicEnabled` (single source of truth — no new `layers.seismic` key). Other chips toggle their existing `layerStore` boolean. `LayerRenderer` and `GroundLayer` pass a `hidden` prop during playback instead of unmounting — each layer calls `billboardCollection.setVisible(false)` without destroying the `itemMap`. `createBillboardCollection` gains a `setVisible(b)` helper for this.
+
+**Mode transition ordering:**
+- *Entering playback:* pause all layer fetch intervals → keep all layer components mounted (hidden prop, not unmount) → register `PlaybackHandle` refs → load frames → start rAF loop
+- *Exiting playback:* stop rAF loop → call `handle.clear()` on all handles → remove hidden prop → restart fetch intervals (next tick repopulates stores from live data)
 
 **Scrub (seek):** User drags scrubber → set `currentTime` directly → next rAF tick picks it up.
 
@@ -254,13 +259,15 @@ Top bar's existing `mode-indicator` element shows `PLAYBACK` (in cyan) during pl
 |---|---|
 | `src/ui/RightPanelComponent.tsx` | Import and render `<RecordSection />` at bottom |
 | `src/ui/ShellComponent.tsx` | Import and render `<PlaybackBar />` conditionally |
-| `src/server/index.ts` | Register recording routes; add path-parameter extraction helper |
-| `src/stores/layers.ts` | Add `seismic: boolean` key for independent playback visibility |
+| `src/server/index.ts` | Register recording routes via `Bun.serve()` `routes:` object (native `:id` support — no helper needed) |
+| `src/stores/layers.ts` | No changes — seismic visibility in playback uses existing `groundState.seismicEnabled` |
 | `src/layers/LayerRenderer.tsx` | Replace `<Show>` unmount with `hidden` prop during playback — prevents `onCleanup` destroying billboard collections on layer chip toggle |
+| `src/layers/ground/GroundLayer.tsx` | Replace `<Show when={groundState.seismicEnabled}>` with `hidden` prop pass-through during playback, same pattern as `LayerRenderer` |
+| `src/cesium/createBillboardCollection.ts` | Add `setVisible(b: boolean)` helper so `hidden` prop hides billboards uniformly across all layers |
 | `src/layers/planes/PlaneLayer.tsx` | Gate 10s fetch interval behind `appMode !== 'playback'`; export `PlaybackHandle` |
 | `src/layers/ships/ShipLayer.tsx` | Gate 8s polling interval behind `appMode !== 'playback'`; export `PlaybackHandle` |
-| `src/layers/satellites/SatelliteLayer.tsx` | Gate 2.5s update interval behind `appMode !== 'playback'`; export `PlaybackHandle` |
-| `src/layers/ground/SeismicLayer.tsx` | Gate polling behind `appMode !== 'playback'`; switch from Entity/CallbackProperty to billboard rendering; export `PlaybackHandle` |
+| `src/layers/satellites/SatelliteLayer.tsx` | Gate 2.5s update interval behind `appMode !== 'playback'`; export `PlaybackHandle` (uses `updateAtTime(t)` variant — SGP4 takes absolute time) |
+| `src/layers/ground/SeismicLayer.tsx` | Gate polling behind `appMode !== 'playback'`; export `PlaybackHandle`; ring animation driven from `currentTime` via `usePreRender` instead of `performance.now()` so rings animate correctly at any playback speed |
 
 ---
 
@@ -278,4 +285,4 @@ Top bar's existing `mode-indicator` element shows `PLAYBACK` (in cyan) during pl
 - Sharing recordings between users
 - Recording name editing
 - Export to file
-- Recordings longer than 6 hours
+- Recordings longer than 6 hours (server auto-finalizes at 6h with `complete: false`)
