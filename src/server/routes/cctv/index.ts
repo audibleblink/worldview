@@ -11,11 +11,17 @@ import { ArkansasSource } from "./sources/arkansas.ts";
 import { AustinSource } from "./sources/austin.ts";
 import { CaltransSource } from "./sources/caltrans.ts";
 import { NY511Source } from "./sources/ny511.ts";
+import { IPeak511Source, IPEAK_511_SOURCES } from "./sources/iPeak511.ts";
+import { MDOTSource } from "./sources/mdot.ts";
+import { LiveEnvStreamsSource } from "./sources/liveEnvStreams.ts";
 
 const manager = new CCTVProxyManager();
 manager.register(new ArkansasSource());
 manager.register(new AustinSource());
 manager.register(new CaltransSource());
 manager.register(new NY511Source());
+manager.register(new MDOTSource());
+manager.register(new LiveEnvStreamsSource());
+for (const cfg of IPEAK_511_SOURCES) manager.register(new IPeak511Source(cfg));
 
 export const cctvProxyManager = manager;
