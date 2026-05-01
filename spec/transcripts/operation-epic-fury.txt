@@ -1,0 +1,350 @@
+All right. So, a week ago, I built
+Worldview,
+basically my personal geospatial [music]
+command center with live open source
+intelligence all running in my browser.
+It was just a prototype, a fun weekend
+project, but the internet kind of went
+crazy over it. It's like being shared by
+all these people. OIcoded Palunteer.
+Like, then Saturday morning, the Iran
+strikes happen. And I'm sitting there
+watching the news and I suddenly
+realize, holy [snorts] crap, I'm sitting
+on the perfect infrastructure to
+actually monitor this situation. [music]
+So, while this was happening, I set
+loose an AI agent swarm to basically
+capture every open- source signal that I
+could find before the [music] cash is
+clear. And what I got back is a full 4D
+reconstruction of Operation Epic Fury.
+From the satellites flying over to the
+first strike to ships and planes getting
+rerouted to the retaliatory response,
+it's all captured and replayable on a
+[music] 3D globe. and I'm going to break
+it down for you minute by minute what
+actually happened and show you some
+intel you're not going to see anywhere
+[music] else unless you have a security
+clearance. Let's get into it. All right,
+welcome to World View. We're now in
+playback mode and on the bottom you'll
+see we have the entire timeline of
+Operation Epic Fury, the entire strike
+on Iran and the response therein. I've
+got all sorts of data in here. We've got
+the satellites that are flying over
+orbit. We've got the commercial flights.
+We've got military flights. We've got
+GPS jamming which are the red tiles over
+here. And if you zoom really in, we've
+even got maritime data of like boats and
+ships that are moving around. So, let's
+talk about all of it. So, the first
+thing you'll notice is that we've got a
+bunch of commercial flights down here,
+but we're seeing a sudden spike in GPS
+jamming. This is all derived from ADSB
+data, and you will see very quickly that
+starts getting pretty freaking spicy.
+Another really interesting view is to
+see what are the commercial and defense
+satellites that are flying over Iran
+right before the first strike happens.
+So we see the Pades Neo World View
+Legion spot satellites and you'll start
+seeing lines connect when they actually
+go over an area of interest. And it
+might be interesting for us to see what
+are some of these satellites. So let's
+look up Persona 3. Persona 3 is a class
+of Russian highresolution military
+surveillance satellites. And what you'll
+find is this only escalates further. So
+we got worldview which is Maxar Vantor
+commercialist satellite imagery
+provider. We've got Galfen 11. Let's
+look that one up real quick. So, Galen
+11 and 12 are Chinese highresolution
+microwave remote sensing satellites.
+There is the world view constellation
+again, worldview legion. There we got
+Galen 12, the Chinese satellite going
+over Iran. Uh-oh. Directly over the
+point of interest, we got Capella and
+Galen. So, Capella is a synthetic
+aperture radar satellite. The thing that
+was used to like map the stuff below the
+pyramids that's been going viral. And
+the cool thing about synthetic aperture
+radar is like it can see through clouds.
+So, whether you have clouds or not, this
+thing will penetrate. Palades Neo, a
+really nice European satellite. Another
+Chinese satellite. And so, as we get to
+zero hour here with the First Strike,
+you'll see a lot of countries are
+interested in what's going down. Of
+course, you got the Chinese, we got the
+Russians, and let's take a second to
+look at this satellite over here. USA
+234 Topaz. Wonder what that is. Oh,
+that's right. Cool. Very cool. All
+right. So we have zero hour strike on
+the nuclear base in Iran and the Topaz
+military spy satellites going over and
+then right after you have a flurry of
+activity, the Chinese and the Americans
+making sure they're imaging what it is
+they bombed. So my guess is what's
+happening is the initial satellites are
+documenting the initial positions and
+then right after events start
+escalating, you've got other satellites
+imaging what happened after the [music]
+fact. So, what you'll notice as other
+events pop up on the map, they're
+typically very closely aligned with
+satellites flying over. And there we go.
+Terron's and internet blackouts, but the
+satellites fly over Iran just continues,
+especially as you see strikes in other
+parts of the country. And by the way,
+this doesn't include all the other spy
+satellites cuz a few of them just aren't
+tracked or we only have the last known
+position for when, you know, open source
+folks are actually doing the tracking.
+And then as all the strikes complete, we
+get a completely new suite. We got the
+spy satellites going over. We got the
+commercial satellites, all of them. And
+by the way, like 90% of the business of
+most of these commercial satellite
+providers is the US government. And then
+it's like companies like Google, Apple,
+and Microsoft for maps and things like
+this. So very cool. I haven't seen
+anyone else really correlate satellite
+flyovers with these type of global
+events, which makes a ton of sense,
+right? Like what are the areas of
+interest that are being imaged? And uh
+what does that tell us about the various
+sites? So, another interesting thing
+that you'll notice here is like
+obviously we got a bunch of commercial
+flights, but as GPS jamming intensifies
+and we get closer towards zero hour.
+Notice how a bunch of these flights
+start redirecting. They're just going
+straight right like uh-uh I'm getting
+the hell out of dodge. I ain't going
+that way. But yet, there are a few brave
+ones that trudge on. Let's see which
+ones those are. Let's see. We got THY
+631 and VIR 354. And okay, this is now
+we got Terron in a freaking blackout.
+And you've still got a bunch of these
+flights that are stuck in the middle of
+this all. And these flights that are
+continuing, they're going full Leroy
+Jenkins. And this one is Turkish
+Airlines. They want to get to Turkey,
+which is on the other side, which kind
+of makes sense, right? Like there's a
+bunch of commercial air traffic and
+stuff going on over here. But yeah,
+imagine being on these flights as shit's
+going down. Oh my god, that has to be
+absolutely crazy. Meanwhile, all these
+other flights that we saw that are
+getting the hell out of dodge are just
+happy to be out just in the nick of time
+before Iran is declared a no-fly zone.
+Now, let's take a look at the various
+airspaces getting shut down after the
+first strike happens. Very quickly,
+you'll see, but as soon as Iran's a
+no-fly zone, Iraq is right next to it,
+right? Like, they're the next to go
+down. They're like, "Holy [&nbsp;__&nbsp;] get the
+hell out of dodge. This is about to go
+crazy." And you'll see Iraq pop up over
+here. So their airspace is largely
+cleared out and then the other Gulf
+countries are going to follow suit. So
+you'll see right as we get to about
+here, Kuwait closes down its airspace.
+These are Iran's retaliatory strikes,
+right? So the US has air bases all over
+the place, right? Including in Bahin and
+Qatar. And you'll see they're going to
+get targeted next by the Iran. So there
+we go. That's the fifth fleet. That's a
+military base run by the US that got
+hit. You've get al- Udid that was hit as
+well. And with some of the air defense
+systems, you've got civilian bleed over,
+right? like basically crap falling out
+of the sky in civilian zones. So as all
+the airspaces are all shut down and then
+Kuwait gets hit. Now this part of the
+world has some of the busiest commercial
+air traffic and you will see a cascading
+effect as these no-fly zones pop up.
+Right? So Tyrron's down at this point as
+we mentioned, you got a bunch of the
+strikes going down. Another interesting
+thing to see is if we go back to the
+start and now I give you a much faster
+time lapse. Basically 15 minutes per
+second. You can notice how robust the
+commercial air traffic is between this
+region, right? This is one of the
+busiest areas in the world. And you'll
+see the moment that all these no-fly
+zones come up, this commercial traffic
+is going to completely thin out. So,
+look at this. All completely gone. And
+what's funny is like if I zoom in and
+actually slow things down, you can see a
+bunch of planes go into this like
+holding formation before they figure out
+where the hell are they supposed to
+actually go. It's [laughter] kind of
+crazy. It's like what do we do? What do
+we do? Oh my god. And then all the
+airspaces start shutting down. They're
+like, "Oh [&nbsp;__&nbsp;] UAE shut down. Where do
+we go now?" So they like creep right
+below between these like no-fly zones
+and pop out over here. By the way, a
+bunch of these yellow planes are
+military planes. So another interesting
+thing to observe is after the air
+traffic completely clears out, what
+about maritime trade, right? Like this
+is the Gulf region. What happened is
+essentially the straight of Hermos got
+closed down. Essentially the Islamic
+Revolutionary Guard was like, "Yo, this
+is basically closed. Get the hell out of
+here." There were reports of some ships
+being attacked. And by the way, as all
+these other tankers are clearing out,
+this is the tanker that actually got
+hit. Now, what's crazy is if I come out
+to about this zoom level and just play
+everything at a much faster clip, like a
+time lapse, if you will, being able to
+see the GPS jamming intensify, you've
+got commercial traffic that's like
+trying to make its way in and
+immediately starts getting the hell out
+of dodge. You've got all the military
+and commercial satellites that are
+trying to image the area of interest
+that's about to get totally bombed. And
+then suddenly back to back with actual
+oent data like things happening on the
+ground completely correlated on a 3D
+globe seeing all the strikes pan out.
+Then you go down and see like the Gulf
+airspace completely get cleared out. And
+then you get to see the cascading impact
+of all the other countries around close
+their airspace. The retaliatory strikes
+airspace over here getting closed down.
+And then of course when we zoom in we've
+got the Gulf of Hormuz over here and the
+closures that happen. I mean it's kind
+of crazy that I'm able to put this stuff
+together. It's really cool to see folks
+that who worked at Loheed Martin and
+DARPA talk about this. And I mean like I
+would echo this too. Like I spent so
+many years working on Google Maps,
+Google Earth, and a bunch of AR 3D
+platform stuff with so many talented
+engineers and I cannot tell you how
+insane it is that I was able to do this
+over a freaking weekend just by myself.
+And it's interesting, right? Like when I
+shared my worldview project with the
+world last week, the response was
+phenomenal. But it was interesting like
+a lot of people were just saying like
+Palanteer is cooked. And it was to the
+point where like the Palanteer
+co-founder felt compelled to respond
+noting his company's edge and secure
+large scale defense integrations with
+classified data. And that's absolutely
+true. I mean like some of the stuff
+they're doing is phenomenal. And I could
+only dream of the type of data that they
+have access to. Like of course I don't
+have the feeds from Fort me. And yet,
+it's kind of insane how complete of a
+picture you can put together without
+proprietary data fusion just by taking
+advantage of the open- source
+intelligence that we all have access to.
+I mean, to me, this is more compelling
+than any journalistic coverage that I've
+seen of the events that are playing out,
+the order of operations, and the
+cascading impact that it had across the
+region. I mean, it's kind of nuts. And
+I'm just one person doing this over the
+weekend. Holy crap, y'all. We are in a
+new era. And the response to this has
+kind of been crazy. like people on the
+OSENT side that want this, on the
+journalism side that want it, folks that
+just want to monitor the situation on a
+big ass monitor, kind of like what we're
+doing right now. What's been
+particularly crazy is defense tech
+founders hitting me up wanting to
+partner, saying that the capabilities
+that I'm showing are like leaps and
+bounds in terms of visualization above
+systems that the Department of War is
+buying. Like it's this funny thing where
+the government has access to some of the
+most exquisite sensor systems on the
+planet, like satellites that can
+literally capture a license plate or
+your face from space. But the software
+itself, it sounds like, hasn't
+completely caught up. But for the rest
+of us who want to monitor something in
+the most immersive way possible, feeling
+like you got access to like a freaking
+keyhole satellite or Argus is overhead
+imagery system, this is the spot for
+you. And I'm excited to share. I'll be
+opening up World View in April. So stay
+tuned for that. Everyone that's been
+emailing me for access to help out, keep
+it coming. You can find my email online.
+And if you haven't seen my previous
+video about World View itself, you can
+check that out over here. Stay tuned for
+a lot of cool projects like this. I've
+got like six other items on the
+Worldview Road that are going to be
+freaking amazing. So, you're going to
+want to stay tuned for that. Anyway, if
+you enjoy this video, please be sure to
+hit that like button, comment, let me
+know what would you like me to cover
+next. Maybe there's going to be a lot
+more situations to monitor and I will be
+there with worldview at hand. Bavo
+signing off and I'll see y'all in the
+next one. Cheers.
