@@ -7,7 +7,10 @@
 
 ## Overview
 
-Add a recording and playback system to WorldView. Users record all live layer data for a geographic area over up to 24 hours, then scrub through it on a full-width timeline bar anchored to the bottom of the screen. Layer visibility can be toggled during playback.
+Add a recording and playback system to WorldView. Users record all live layer
+data for a geographic area over up to 24 hours, then scrub through it on
+a full-width timeline bar anchored to the bottom of the screen. Layer
+visibility can be toggled during playback.
 
 ---
 
