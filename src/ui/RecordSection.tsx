@@ -239,6 +239,7 @@ export function RecordSection() {
                   title="Delete recording"
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!confirm(`Delete recording ${formatTimestamp(rec.startTime)}?`)) return;
                     await deleteRecording(rec.id);
                     setRecordingsList(await listRecordings());
                   }}
