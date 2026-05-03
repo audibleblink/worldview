@@ -14,6 +14,7 @@ import { PlaybackBar } from "./PlaybackBar";
 import { PerformanceMonitor } from "./PerformanceMonitorComponent";
 import { CommandBar } from "./CommandBar";
 import { CCTVPanel } from "./panels/CCTVPanel";
+import { Compass } from "./Compass";
 
 /** Keyboard number keys map to shader modes (1 = normal/null, 2-5 = effects) */
 const MODE_SHORTCUTS: Record<string, ShaderMode | null> = {
@@ -178,6 +179,9 @@ export function Shell() {
 
       {/* CCTV Panel (shown when a camera is selected) */}
       <CCTVPanel />
+
+      {/* Compass */}
+      <Compass />
     </>
   );
 }
