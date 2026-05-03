@@ -1,0 +1,38 @@
+{
+  "nextId": 4,
+  "tasks": [
+    {
+      "id": "2",
+      "subject": "Phase 2: Server recording endpoints",
+      "description": "Implement Phase 2 of the timetravel feature:\n1. Create src/server/recordings.ts with all 6 route handlers + storage helpers\n2. Add .gitignore entry for recordings/\n3. Wire recording routes into src/server/index.ts\n4. Create src/__tests__/server-recordings.test.ts with full test suite\n5. Create scripts/verify-phase2.sh\n6. Run: bun test src/__tests__/server-recordings.test.ts\n7. git commit Phase 2 changes\n8. Update plan.md checkboxes for Phase 2 tasks\n\nFull spec: spec/008-timetravel/plan.md (Phase 2 / Chunk 2)",
+      "status": "completed",
+      "activeForm": "Implementing Phase 2 server endpoints",
+      "metadata": {
+        "agentType": "general-purpose",
+        "agentId": "4b52551f-baa4-4f0",
+        "result": "Phase 2 is complete. Summary of what was implemented:\n\n**`src/server/recordings.ts`** — 6 route handlers dispatched by a single `handleRecordings()` function:\n- `POST /api/recordings` — creates recording, writes `meta.json` + empty `frames.ndjson`, arms 6h watchdog\n- `POST /api/recordings/:id/frames` — appends frame line via `node:fs/promises appendFile`, increments in-memory counter\n- `POST /api/recordings/:id/stop` — counts lines, sets `complete=true`, cancels watchdog\n- `GET /api/recordings` — lists dirs, reads each `meta.json`, sorts by `startTime` desc\n- `GET /api/recordings/:id/frames` — streams `frames.ndjson` as `application/x-ndjson`\n- `DELETE /api/recordings/:id` — `rm -rf` the directory\n\nKey design notes: `getRecordingsDir()` reads `process.env.WORLDVIEW_RECORDINGS_DIR` on every call (not at module load) so tests can override it. `_testOnlyFireFinalize()` is exported to trigger the watchdog logic synchronously in tests.\n\n**`src/server/index.ts`** — `[\"/api/recordings\", handleRecordings]` added to the dynamic prefix table.\n\n**`.gitignore`** — `recordings/` added.\n\n**`src/__tests__/server-recordings.test.ts`** — 9 tests, all passing: covers create, append+stop, list, fetch-frames, delete, 404-on-unknown, watchdog.\n\n**`scripts/verify-phase2.sh`** — boots a minimal server on port 3099, exercises all 6 endpoints with curl, exits 0 with `OK`."
+      },
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1777834264254,
+      "updatedAt": 1777834469304,
+      "owner": "4b52551f-baa4-4f0"
+    },
+    {
+      "id": "3",
+      "subject": "Phase 3: Recorder (client) + Right-Panel UI",
+      "description": "Implement Phase 3 of the timetravel feature:\n1. Create src/recording/snapshot.ts (pure snapshot functions)\n2. Create src/recording/api.ts (fetch wrapper for recording endpoints)\n3. Create src/recording/Recorder.ts (snapshot loop)\n4. Create src/ui/RecordSection.tsx (right panel record button + list)\n5. Wire RecordSection into src/ui/RightPanelComponent.tsx\n6. Create tests: snapshot.test.ts and recorder.test.ts\n7. Run all tests to verify\n8. git commit Phase 3 changes\n9. Update plan.md checkboxes for Phase 3 tasks",
+      "status": "in_progress",
+      "activeForm": "Implementing Phase 3 recorder and UI",
+      "metadata": {
+        "agentType": "general-purpose",
+        "agentId": "ab1b5d99-d360-465"
+      },
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1777834480656,
+      "updatedAt": 1777834554417,
+      "owner": "ab1b5d99-d360-465"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { SatelliteInfo } from "./panels/SatelliteInfo";
 import { ShipInfo } from "./panels/ShipInfo";
 import { PlaneInfo } from "./panels/PlaneInfo";
 import { formatLatitude, formatLongitude, formatAltitude, formatDistance } from "./formatters";
+import { RecordSection } from "./RecordSection";
 
 declare const Cesium: typeof import("cesium");
 
@@ -205,6 +206,8 @@ export function RightPanel() {
           </span>
         </div>
       </div>
+
+      <RecordSection />
       </div>
     </>
   );
