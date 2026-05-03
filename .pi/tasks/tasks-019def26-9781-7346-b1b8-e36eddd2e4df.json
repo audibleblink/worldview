@@ -1,21 +1,38 @@
 {
-  "nextId": 5,
+  "nextId": 6,
   "tasks": [
     {
       "id": "4",
       "subject": "Phase 4: Playback Engine + layer hide-not-unmount",
       "description": "Implement Phase 4 of the timetravel feature:\n1. Create src/recording/interpolate.ts (lerp, lerpAngle, findBracket)\n2. Create src/recording/PlaybackEngine.ts (frame loading, rAF loop, handle registry)\n3. Modify LayerRenderer.tsx and GroundLayer.tsx for hide-not-unmount pattern\n4. Modify per-layer files: PlaneLayer, ShipLayer, SatelliteLayer, SeismicLayer\n5. Create tests: interpolate.test.ts, playback-engine.test.ts, layer-hidden.test.ts\n6. Run all tests\n7. git commit Phase 4 changes\n8. Update plan.md checkboxes for Phase 4 tasks",
-      "status": "in_progress",
+      "status": "completed",
       "activeForm": "Implementing Phase 4 playback engine",
       "metadata": {
         "agentType": "general-purpose",
-        "agentId": "8e0824dc-9844-474"
+        "agentId": "8e0824dc-9844-474",
+        "result": "Phase 4 is complete. Here's a summary of what was implemented:\n\n## Phase 4 Summary\n\n**Files created:**\n- `src/recording/interpolate.ts` — `lerp`, `lerpAngle` (360° wraparound with normalized output), `findBracket` (binary search returning `[prev, next, alpha]`)\n- `src/recording/PlaybackEngine.ts` — class with rAF loop, handle registry, `load/start/stop/play/pause/setTime/setSpeed`; module singleton `playbackEngine` + `window.__playback` debug access\n- `src/__tests__/interpolate.test.ts` — 18 tests\n- `src/__tests__/playback-engine.test.ts` — 13 tests (mocked rAF + fetch, isolated with `afterAll` restore)\n- `src/__tests__/layer-hidden.test.ts` — 7 tests for the hide-not-unmount guarantee\n\n**Files modified:**\n- `LayerRenderer.tsx` — `<Show>` replaced with hide-not-unmount: layers stay mounted during playback, receive `hidden` prop\n- `GroundLayer.tsx` — same pattern for `SeismicLayer`\n- `PlaneLayer.tsx` — PlaybackHandle with `lerp`/`lerpAngle`, gate `refreshPlanes` on playback, `hidden` prop → `setVisible`\n- `ShipLayer.tsx` — same pattern for ships\n- `SatelliteLayer.tsx` — SGP4-based `updateAtTime` handle with `setupForPlayback`, hidden prop\n- `SeismicLayer.tsx` — entity reconciliation handle, demo/fetcher gated during playback\n\n**Test results:** 127 pass, 0 fail (13 integration tests skipped as before)"
       },
       "blocks": [],
       "blockedBy": [],
       "createdAt": 1777834920115,
-      "updatedAt": 1777835267289,
+      "updatedAt": 1777835773608,
       "owner": "8e0824dc-9844-474"
+    },
+    {
+      "id": "5",
+      "subject": "Phase 5: Playback UI bar + mode-indicator + integration",
+      "description": "Implement Phase 5 of the timetravel feature:\n1. Create src/ui/PlaybackBar.tsx + PlaybackBar.css\n2. Create src/ui/playbackBarHandlers.ts (pure event handlers)\n3. Modify src/ui/ShellComponent.tsx (add PlaybackBar, update mode indicator)\n4. Modify src/ui/RecordSection.tsx (wire click-to-play)\n5. Create tests: src/__tests__/playback-bar.test.ts\n6. Run all tests\n7. git commit Phase 5\n8. Update plan.md checkboxes for Phase 5 tasks",
+      "status": "in_progress",
+      "activeForm": "Implementing Phase 5 playback UI",
+      "metadata": {
+        "agentType": "general-purpose",
+        "agentId": "607f5d16-bd82-4b6"
+      },
+      "blocks": [],
+      "blockedBy": [],
+      "createdAt": 1777835785411,
+      "updatedAt": 1777835890397,
+      "owner": "607f5d16-bd82-4b6"
     }
   ]
 }

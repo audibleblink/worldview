@@ -3,7 +3,7 @@
  */
 
 import { createSignal, createEffect, onMount, onCleanup, For, Show, useContext } from "solid-js";
-import { recording, setMode, setActiveRecordingId, setRecordingsList } from "../stores/recording";
+import { recording, setMode, setActiveRecordingId, setRecordingsList, setPlayback } from "../stores/recording";
 import { satelliteState } from "../layers/satellites/store";
 import { planeState } from "../layers/planes/store";
 import { shipState } from "../layers/ships/store";
@@ -11,6 +11,7 @@ import { groundState } from "../layers/ground/store";
 import { CesiumContext } from "../cesium/CesiumProvider";
 import { createRecording, listRecordings } from "../recording/api";
 import { Recorder, getActiveRecorder, setActiveRecorder } from "../recording/Recorder";
+import { playbackEngine } from "../recording/PlaybackEngine";
 import type { BBox, TLERecord } from "../recording/types";
 
 declare const Cesium: typeof import("cesium");
@@ -125,6 +126,21 @@ export function RecordSection() {
     }
   }
 
+  async function handleEnterPlayback(id: string) {
+    try {
+      const frames = await playbackEngine.load(id);
+      if (frames.length === 0) {
+        console.warn("[RecordSection] No frames to play");
+        return;
+      }
+      setMode("playback");
+      setPlayback({ recordingId: id, frames, currentTime: frames[0]!.t, playing: true, speed: 1 });
+      playbackEngine.start();
+    } catch (err) {
+      console.error("[RecordSection] Failed to load recording:", err);
+    }
+  }
+
   return (
     <div style={{ "margin-top": "auto" }}>
       <div class="panel-header" style={{ "margin-top": "var(--spacing-lg)" }}>
@@ -185,7 +201,7 @@ export function RecordSection() {
                   color: "var(--text-secondary, #aaa)",
                   "border-bottom": "1px solid var(--border-color, #222)",
                 }}
-                onClick={() => console.log("entering playback", rec.id)}
+                onClick={() => handleEnterPlayback(rec.id)}
               >
                 {formatTimestamp(rec.startTime)}
                 {!rec.complete ? " (incomplete)" : ""}

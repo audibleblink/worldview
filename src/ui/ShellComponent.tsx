@@ -6,9 +6,11 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { ui, toggleLeftPanel, toggleRightPanel, setCommandMode } from "../stores/ui";
 import { shaders, setShader, type ShaderMode } from "../stores/shaders";
+import { recording } from "../stores/recording";
 import { LeftPanel } from "./LeftPanelComponent";
 import { RightPanel } from "./RightPanelComponent";
 import { BottomBar } from "./BottomBarComponent";
+import { PlaybackBar } from "./PlaybackBar";
 import { PerformanceMonitor } from "./PerformanceMonitorComponent";
 import { CommandBar } from "./CommandBar";
 import { CCTVPanel } from "./panels/CCTVPanel";
@@ -113,7 +115,17 @@ export function Shell() {
     document.removeEventListener("keydown", handleKeydown);
   });
 
-  const modeDisplay = () => shaders.active?.toUpperCase() ?? "NORMAL";
+  const modeDisplay = () => {
+    if (recording.mode === "playback") return "PLAYBACK";
+    if (recording.mode === "recording") return "RECORDING";
+    return shaders.active?.toUpperCase() ?? "NORMAL";
+  };
+
+  const modeColor = () => {
+    if (recording.mode === "playback") return "#00d4d4";
+    if (recording.mode === "recording") return "#ff3a3a";
+    return undefined;
+  };
 
   return (
     <>
@@ -134,7 +146,7 @@ export function Shell() {
           <Show when={showFPS()}>
             <PerformanceMonitor />
           </Show>
-          <div class="mode-indicator">{modeDisplay()}</div>
+          <div class="mode-indicator" style={modeColor() ? `color: ${modeColor()}` : undefined}>{modeDisplay()}</div>
           <div class="rec-section">
             <div class="rec-indicator">
               <span class="rec-dot" />
@@ -157,7 +169,9 @@ export function Shell() {
       </Show>
 
       {/* Bottom Bar */}
-      <BottomBar />
+      <Show when={recording.mode === "playback"} fallback={<BottomBar />}>
+        <PlaybackBar />
+      </Show>
 
       {/* Command Bar (vim-style, activated with : key) */}
       <CommandBar />

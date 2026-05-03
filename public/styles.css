@@ -1768,3 +1768,87 @@ select option {
 .cctv-image {
   object-fit: cover;
 }
+
+
+/* ============================================================
+   Playback Bar
+   ============================================================ */
+
+.playback-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(10, 15, 20, 0.95);
+  border-top: 1px solid #00d4d4;
+  padding: 8px 16px;
+  font-family: "Courier New", monospace;
+  z-index: 1000;
+}
+
+.playback-bar .pb-row1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+}
+
+.playback-bar .pb-scrubber {
+  flex: 1;
+}
+
+.playback-bar .pb-row2 {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 10px;
+  color: #7ab8a8;
+}
+
+.playback-bar .pb-row3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  font-size: 11px;
+}
+
+.playback-bar .pb-chip {
+  background: transparent;
+  border: 1px solid #7ab8a8;
+  color: #7ab8a8;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+}
+
+.playback-bar .pb-chip.active {
+  border-color: #00d4d4;
+  color: #00d4d4;
+}
+
+.playback-bar .pb-time {
+  font-size: 12px;
+  color: #00d4d4;
+  min-width: 65px;
+}
+
+.playback-bar .pb-btn {
+  background: transparent;
+  border: 1px solid #00d4d4;
+  color: #00d4d4;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+.playback-bar .pb-exit {
+  border-color: #ff3a3a;
+  color: #ff3a3a;
+}
+
+.playback-bar input[type="range"] {
+  accent-color: #00d4d4;
+}

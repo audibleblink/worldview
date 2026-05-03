@@ -411,31 +411,31 @@ bun test
 
 ### Tasks
 
-- [ ] **5.1 PlaybackBar layout (matches spec ASCII art)**
+- [x] **5.1 PlaybackBar layout (matches spec ASCII art)**
     - Row 1: play/pause button | current-time label | scrubber (HTML `<input type=range>` styled flat) | end-time label | speed button | exit (✕)
     - Row 2 (under scrubber): ~5 evenly-spaced HH:MM labels across `[frames[0].t, frames[frames.length-1].t]`. (Spec line 235 says "tick marks at 6h intervals" — actual spacing depends on recording length, capped at 6h.)
     - Row 3: `LAYERS:` + chips for PLANES / SHIPS / SATS / SEISMIC (no CCTV per spec)
 
-- [ ] **5.2 Wiring**
-    - [ ] Play/pause button: toggles `recording.playback.playing` via store mutation; calls `playbackEngine.play()`/`.pause()`
-    - [ ] **Scrubber display sync** (resolves the no-store-writes-at-60fps constraint from Phase 4): the bar runs its own `setInterval(() => setPlaybackTime(playbackEngine.currentTime), 250)` (4 Hz). The scrubber reads from `recording.playback.currentTime` for thumb position. User-driven `onInput` writes immediately: `playbackEngine.setTime(value); setPlaybackTime(value);` — the engine adopts on the next rAF tick.
-    - [ ] Speed button: shows current speed × suffix; click → `cyclePlaybackSpeed()` (returns the new value) → `playbackEngine.setSpeed(newValue)`
-    - [ ] Layer chips: clicking PLANES toggles `layers.planes`; SHIPS → `layers.ships`; SATS → `layers.satellites`; SEISMIC → `groundState.seismicEnabled` directly (per spec — single source of truth)
-    - [ ] Exit (✕) button:
+- [x] **5.2 Wiring**
+    - [x] Play/pause button: toggles `recording.playback.playing` via store mutation; calls `playbackEngine.play()`/`.pause()`
+    - [x] **Scrubber display sync** (resolves the no-store-writes-at-60fps constraint from Phase 4): the bar runs its own `setInterval(() => setPlaybackTime(playbackEngine.currentTime), 250)` (4 Hz). The scrubber reads from `recording.playback.currentTime` for thumb position. User-driven `onInput` writes immediately: `playbackEngine.setTime(value); setPlaybackTime(value);` — the engine adopts on the next rAF tick.
+    - [x] Speed button: shows current speed × suffix; click → `cyclePlaybackSpeed()` (returns the new value) → `playbackEngine.setSpeed(newValue)`
+    - [x] Layer chips: clicking PLANES toggles `layers.planes`; SHIPS → `layers.ships`; SATS → `layers.satellites`; SEISMIC → `groundState.seismicEnabled` directly (per spec — single source of truth)
+    - [x] Exit (✕) button:
         1. `playbackEngine.stop()` (calls `handle.clear()` per layer)
         2. `clearPlayback()`
         3. `setMode("live")`
         4. Layers see mode change → re-arm their `setInterval`s in their `createEffect` (per Task 4.4); next tick they refetch.
-    - [ ] **RecordSection click-to-play wiring** (replaces Phase-3 `console.log`): on row click `const frames = await playbackEngine.load(id); setMode("playback"); setPlayback({ recordingId: id, frames, currentTime: frames[0].t, playing: true, speed: 1 }); playbackEngine.start();`. Relies on `playbackEngine.load()` returning the frames array (added in Phase 4 Task 4.2).
+    - [x] **RecordSection click-to-play wiring** (replaces Phase-3 `console.log`): on row click `const frames = await playbackEngine.load(id); setMode("playback"); setPlayback({ recordingId: id, frames, currentTime: frames[0].t, playing: true, speed: 1 }); playbackEngine.start();`. Relies on `playbackEngine.load()` returning the frames array (added in Phase 4 Task 4.2).
 
-- [ ] **5.3 Mode indicator update in `ShellComponent.tsx`**
-    - [ ] New computed: `modeLabel = () => recording.mode === "playback" ? "PLAYBACK" : recording.mode === "recording" ? "RECORDING" : (shaders.active?.toUpperCase() ?? "NORMAL")`
-    - [ ] Add inline color: `playback → cyan` (spec-required), `recording → red` (polish addition; spec only mandates PLAYBACK)
+- [x] **5.3 Mode indicator update in `ShellComponent.tsx`**
+    - [x] New computed: `modeLabel = () => recording.mode === "playback" ? "PLAYBACK" : recording.mode === "recording" ? "RECORDING" : (shaders.active?.toUpperCase() ?? "NORMAL")`
+    - [x] Add inline color: `playback → cyan` (spec-required), `recording → red` (polish addition; spec only mandates PLAYBACK)
 
-- [ ] **5.4 Conditional bar render**
-    - [ ] In `ShellComponent.tsx`: during playback, **replace** `<BottomBar />` with `<PlaybackBar />`: `<Show when={recording.mode === "playback"} fallback={<BottomBar />}><PlaybackBar /></Show>`. Spec calls for full-width bottom anchoring with hard top border; replacement avoids stacking ambiguity entirely.
+- [x] **5.4 Conditional bar render**
+    - [x] In `ShellComponent.tsx`: during playback, **replace** `<BottomBar />` with `<PlaybackBar />`: `<Show when={recording.mode === "playback"} fallback={<BottomBar />}><PlaybackBar /></Show>`. Spec calls for full-width bottom anchoring with hard top border; replacement avoids stacking ambiguity entirely.
 
-- [ ] **5.5 Tests (`playback-bar.test.ts` — logic-only, no DOM)**
+- [x] **5.5 Tests (`playback-bar.test.ts` — logic-only, no DOM)**
     - [ ] Solid component-DOM testing isn't established in this project. Instead of rendering JSX, **extract the bar's event handlers into pure functions** in a small `src/ui/playbackBarHandlers.ts` and unit-test those:
         - `onPlayClick(engine, store)` — flips `playing`, calls engine.play/pause
         - `onSpeedClick(engine, store)` — cycles speed, calls engine.setSpeed
@@ -445,7 +445,7 @@ bun test
     - [ ] Tests instantiate fake `engine` (object with spy methods) and a real store; assert each handler's effect on store + spy calls.
     - [ ] PlaybackBar.tsx becomes a thin JSX wrapper over these handlers — no logic to test in the component itself.
 
-- [ ] **5.6 End-to-end smoke (`scripts/verify-phase5.md`)**
+- [x] **5.6 End-to-end smoke (`scripts/verify-phase5.md`)**
     1. Start server + app
     2. Record 30s
     3. Stop. Click the row in the recordings list
