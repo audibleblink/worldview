@@ -24,7 +24,10 @@ export async function handleOSM(req: Request): Promise<Response> {
 
     const response = await fetch(OVERPASS_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
+      headers: {
+        "Content-Type": "text/plain",
+        "User-Agent": "WorldView/1.0",  // Overpass 406s Bun's default User-Agent
+      },
       body: query,
     });
 
