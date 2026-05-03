@@ -10,12 +10,13 @@ const BASE = `${PROXY_BASE_URL}/api/recordings`;
 export async function createRecording(
   bbox: BBox,
   tles: TLERecord[],
+  cameraAltitude?: number,
   name?: string,
 ): Promise<{ id: string }> {
   const res = await fetch(BASE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bbox, tles, name }),
+    body: JSON.stringify({ bbox, tles, cameraAltitude, name }),
   });
   if (!res.ok) throw new Error(`createRecording failed: ${res.status}`);
   return res.json();

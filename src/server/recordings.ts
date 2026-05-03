@@ -142,7 +142,7 @@ const frameCounts = new Map<string, number>();
 // ---------------------------------------------------------------------------
 
 async function createRecordingHandler(req: Request): Promise<Response> {
-  let body: { bbox?: unknown; tles?: unknown; name?: string };
+  let body: { bbox?: unknown; tles?: unknown; name?: string; cameraAltitude?: number };
   try {
     body = await req.json();
   } catch {
@@ -163,6 +163,7 @@ async function createRecordingHandler(req: Request): Promise<Response> {
     startTime: Date.now(),
     endTime: null,
     bbox: body.bbox as RecordingMeta["bbox"],
+    cameraAltitude: body.cameraAltitude ?? 0,
     tles: body.tles as RecordingMeta["tles"],
     frameCount: 0,
     complete: false,

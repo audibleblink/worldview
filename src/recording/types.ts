@@ -28,6 +28,7 @@ export interface RecordingMeta {
   startTime: number;
   endTime: number | null;
   bbox: BBox;
+  cameraAltitude: number;   // meters — camera height at record-start, used to restore view on playback
   tles: TLERecord[];
   frameCount: number;
   complete: boolean;

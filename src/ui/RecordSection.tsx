@@ -93,7 +93,8 @@ export function RecordSection() {
     }));
 
     try {
-      const { id } = await createRecording(bbox, tles);
+      const cameraAltitude = viewer.camera.positionCartographic.height;
+      const { id } = await createRecording(bbox, tles, cameraAltitude);
       setActiveRecordingId(id);
       setMode("recording");
 
@@ -126,7 +127,7 @@ export function RecordSection() {
     }
   }
 
-  async function handleEnterPlayback(id: string, bbox?: { west: number; south: number; east: number; north: number }) {
+  async function handleEnterPlayback(id: string, bbox?: { west: number; south: number; east: number; north: number }, cameraAltitude?: number) {
     try {
       const frames = await playbackEngine.load(id);
       if (frames.length === 0) {
@@ -142,9 +143,9 @@ export function RecordSection() {
         if (viewer) {
           const centerLon = (bbox.west + bbox.east) / 2;
           const centerLat = (bbox.south + bbox.north) / 2;
-          const currentHeight = viewer.camera.positionCartographic.height;
+          const height = cameraAltitude ?? viewer.camera.positionCartographic.height;
           viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, currentHeight),
+            destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, height),
             duration: 1.5,
           });
         }
@@ -221,7 +222,7 @@ export function RecordSection() {
               >
                 <span
                   style={{ flex: "1", cursor: "pointer" }}
-                  onClick={() => handleEnterPlayback(rec.id, rec.bbox)}
+                  onClick={() => handleEnterPlayback(rec.id, rec.bbox, rec.cameraAltitude)}
                 >
                   {formatTimestamp(rec.startTime)}
                   {!rec.complete ? " (incomplete)" : ""}
