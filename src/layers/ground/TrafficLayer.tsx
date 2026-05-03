@@ -164,10 +164,7 @@ export function TrafficLayer() {
     if (!osmFetcher || !ready()) return;
 
     const bbox = getViewportBbox();
-    if (!bbox) {
-      console.log("[TrafficLayer] Cannot determine viewport");
-      return;
-    }
+    if (!bbox) return; // camera at oblique angle — no ground intersection, try again on next move
 
     // Check viewport size
     const lonSpan = bbox.east - bbox.west;
