@@ -205,50 +205,50 @@ bash scripts/verify-phase2.sh   # boots its own server, runs curl checks, kills 
 
 ### Tasks
 
-- [ ] **3.1 Snapshot pure functions (`src/recording/snapshot.ts`)**
-    - [ ] `snapshotPlanes(records: PlaneRecord[]): PlaneSnapshot[]` — pick the seven fields
-    - [ ] `snapshotShips(records: ShipRecord[]): ShipSnapshot[]` — map `name` → `shipName`, keep `sog`
-    - [ ] `snapshotSeismic(quakes: EarthquakeData[]): SeismicSnapshot[]` — map `time: Date` → `time: number` (`.getTime()`)
+- [x] **3.1 Snapshot pure functions (`src/recording/snapshot.ts`)**
+    - [x] `snapshotPlanes(records: PlaneRecord[]): PlaneSnapshot[]` — pick the seven fields
+    - [x] `snapshotShips(records: ShipRecord[]): ShipSnapshot[]` — map `name` → `shipName`, keep `sog`
+    - [x] `snapshotSeismic(quakes: EarthquakeData[]): SeismicSnapshot[]` — map `time: Date` → `time: number` (`.getTime()`)
 
-- [ ] **3.2 Recorder class (`src/recording/Recorder.ts`)**
-    - [ ] Imports the API wrapper from `src/recording/api.ts` (Task 3.3)
-    - [ ] Constructor takes `id: string` + injected store getters (planes, ships, ground) + optional `Clock` (default real `setInterval/clearInterval/Date.now`) so the class is testable without SolidJS
-    - [ ] **Single 5s coordinator** (per spec): one `setInterval(tick, 5_000)`. The handler maintains last-emit timestamps `{planes: 0, ships: 0, seismic: 0}` and emits each layer once its cadence elapses (planes 10s, ships 5s, seismic 60s).
-    - [ ] Each tick builds a `Frame` containing **all three arrays always present**, with empty arrays for layers not due this tick. (Locks the wire format so the playback engine can rely on shape.)
-    - [ ] POST the frame via `appendFrame(id, frame)` — best-effort: failed posts are logged + dropped (spec: "interpolation covers gaps")
-    - [ ] `stop()` — clears coordinator, calls `stopRecording(id)`
-    - [ ] **Active-recorder reference**: `Recorder.ts` exports a module-scoped `let activeRecorder: Recorder | null` plus `getActiveRecorder()` and `setActiveRecorder(r)` helpers. `RecordSection` calls these — no instance variable lives in component state.
+- [x] **3.2 Recorder class (`src/recording/Recorder.ts`)**
+    - [x] Imports the API wrapper from `src/recording/api.ts` (Task 3.3)
+    - [x] Constructor takes `id: string` + injected store getters (planes, ships, ground) + optional `Clock` (default real `setInterval/clearInterval/Date.now`) so the class is testable without SolidJS
+    - [x] **Single 5s coordinator** (per spec): one `setInterval(tick, 5_000)`. The handler maintains last-emit timestamps `{planes: 0, ships: 0, seismic: 0}` and emits each layer once its cadence elapses (planes 10s, ships 5s, seismic 60s).
+    - [x] Each tick builds a `Frame` containing **all three arrays always present**, with empty arrays for layers not due this tick. (Locks the wire format so the playback engine can rely on shape.)
+    - [x] POST the frame via `appendFrame(id, frame)` — best-effort: failed posts are logged + dropped (spec: "interpolation covers gaps")
+    - [x] `stop()` — clears coordinator, calls `stopRecording(id)`
+    - [x] **Active-recorder reference**: `Recorder.ts` exports a module-scoped `let activeRecorder: Recorder | null` plus `getActiveRecorder()` and `setActiveRecorder(r)` helpers. `RecordSection` calls these — no instance variable lives in component state.
 
-- [ ] **3.3 API wrapper (`src/recording/api.ts`)**
-    - [ ] `createRecording(bbox, tles, name?): Promise<{id}>`
-    - [ ] `appendFrame(id, frame): Promise<void>`
-    - [ ] `stopRecording(id): Promise<RecordingMeta>`
-    - [ ] `listRecordings(): Promise<RecordingMeta[]>`
-    - [ ] `fetchFrames(id): Promise<Frame[]>` — streams NDJSON, splits on `\n`, parses each line
-    - [ ] `deleteRecording(id): Promise<void>`
+- [x] **3.3 API wrapper (`src/recording/api.ts`)**
+    - [x] `createRecording(bbox, tles, name?): Promise<{id}>`
+    - [x] `appendFrame(id, frame): Promise<void>`
+    - [x] `stopRecording(id): Promise<RecordingMeta>`
+    - [x] `listRecordings(): Promise<RecordingMeta[]>`
+    - [x] `fetchFrames(id): Promise<Frame[]>` — streams NDJSON, splits on `\n`, parses each line
+    - [x] `deleteRecording(id): Promise<void>`
 
-- [ ] **3.4 RecordSection component**
-    - [ ] Reads `recording.mode` from store
-    - [ ] Obtains the Cesium viewer via the existing `useCesium()` hook (same pattern other UI components use). Do **not** read `window.__viewer`.
-    - [ ] Renders two sub-headers in `panel-header` style per spec §"Right panel — record section":
+- [x] **3.4 RecordSection component**
+    - [x] Reads `recording.mode` from store
+    - [x] Obtains the Cesium viewer via the existing `useCesium()` hook (same pattern other UI components use). Do **not** read `window.__viewer`.
+    - [x] Renders two sub-headers in `panel-header` style per spec §"Right panel — record section":
         - `RECORDING` header above the start/stop button
         - `PAST` header above the recordings list, only shown when `recording.recordings.length > 0`
-    - [ ] Idle state: button `● START REC` (red border, dark bg). On click:
+    - [x] Idle state: button `● START REC` (red border, dark bg). On click:
         - Capture viewport bbox from `viewer.camera.computeViewRectangle()`. If it returns `undefined` (oblique angle), fall back to a ±5° box around `viewer.camera.positionCartographic` and `console.warn`.
         - Build `TLERecord[]` by reading **raw `name`, `noradId`, `line1`, `line2`, `category`** from each entry in the satellite store (per spec — `satrec` is non-serializable and must not be included)
         - `await createRecording({bbox, tles})` → get id
         - `setActiveRecordingId(id)`, `setMode("recording")`, `setActiveRecorder(new Recorder(id, getters)); getActiveRecorder().start()`
-    - [ ] Recording state: solid red `■ STOP REC` + elapsed timer (mm:ss) — timer driven by a local `setInterval(() => setNow(Date.now()), 1000)` signal cleaned up on unmount
-    - [ ] On stop: `getActiveRecorder()?.stop(); setActiveRecorder(null); setMode("live")`; then `await listRecordings()` → `setRecordingsList`
-    - [ ] Recordings list: `<For>` over `recording.recordings` sorted by `startTime` desc; each row shows formatted timestamp + `(incomplete)` suffix if `!complete`; clicking a row is a Phase-3 no-op `console.log("entering playback", id)` (Phase 5 wires it)
-    - [ ] On mount: `listRecordings()` → `setRecordingsList`
+    - [x] Recording state: solid red `■ STOP REC` + elapsed timer (mm:ss) — timer driven by a local `setInterval(() => setNow(Date.now()), 1000)` signal cleaned up on unmount
+    - [x] On stop: `getActiveRecorder()?.stop(); setActiveRecorder(null); setMode("live")`; then `await listRecordings()` → `setRecordingsList`
+    - [x] Recordings list: `<For>` over `recording.recordings` sorted by `startTime` desc; each row shows formatted timestamp + `(incomplete)` suffix if `!complete`; clicking a row is a Phase-3 no-op `console.log("entering playback", id)` (Phase 5 wires it)
+    - [x] On mount: `listRecordings()` → `setRecordingsList`
 
-- [ ] **3.5 Wire `<RecordSection />` into `RightPanelComponent.tsx`**
-    - [ ] Append after the LIVE READOUT block; ensure outer container is flex-column so `margin-top: auto` on `RecordSection` pushes it to the bottom
+- [x] **3.5 Wire `<RecordSection />` into `RightPanelComponent.tsx`**
+    - [x] Append after the LIVE READOUT block; ensure outer container is flex-column so `margin-top: auto` on `RecordSection` pushes it to the bottom
 
-- [ ] **3.6 Tests**
-    - [ ] `snapshot.test.ts`: feed canned `PlaneRecord[]` → expect exact `PlaneSnapshot[]`. Same for ships (verifying name→shipName), seismic (verifying time→number).
-    - [ ] `recorder.test.ts`:
+- [x] **3.6 Tests**
+    - [x] `snapshot.test.ts`: feed canned `PlaneRecord[]` → expect exact `PlaneSnapshot[]`. Same for ships (verifying name→shipName), seismic (verifying time→number).
+    - [x] `recorder.test.ts`:
         - Mock `fetch` (`globalThis.fetch = mock(...)`)
         - Use `Bun`'s `setTimeout` directly with manual advance via a fake clock (`bun:test` doesn't have built-in fake timers — implement a tiny `Clock` injection in `Recorder` constructor, default `setInterval/clearInterval`, swap in test)
         - Start recorder; advance 5s; assert no fetch yet (none due — planes due at 10s, ships at 5s)
