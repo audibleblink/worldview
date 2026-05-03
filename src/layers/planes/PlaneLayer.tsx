@@ -390,6 +390,7 @@ export function PlaneLayer(props: PlaneLayerProps = {}) {
       clearTrailsExcept(planeState.followingIcao24);
       updatePlanes(records, currentIcao24s);
       setLastBbox(bbox);
+      v.scene.requestRender();
     } catch (error) {
       console.error("[PlaneLayer] Refresh error:", error);
       if (planeState.planes.size === 0) setError("Failed to load planes");

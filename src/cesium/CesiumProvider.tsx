@@ -68,6 +68,7 @@ export function CesiumProvider(props: CesiumProviderProps) {
   const [ready, setReady] = createSignal(false);
 
   let containerRef: HTMLDivElement | undefined;
+  let visibilityHandler: (() => void) | null = null;
 
   onMount(async () => {
     if (!containerRef) {
@@ -101,8 +102,8 @@ export function CesiumProvider(props: CesiumProviderProps) {
       // Enable standard mouse/touch controls (CesiumJS defaults)
       scene3DOnly: true,
 
-      // Performance settings
-      requestRenderMode: false,
+      // Performance settings — render on demand, not 60fps continuously
+      requestRenderMode: true,
       maximumRenderTimeChange: Infinity,
 
       // Rendering quality
@@ -151,7 +152,7 @@ export function CesiumProvider(props: CesiumProviderProps) {
           {
             shadows: Cesium.ShadowMode.DISABLED,
             maximumScreenSpaceError: opts.maximumScreenSpaceError ?? 16,
-            preloadWhenHidden: true,
+            preloadWhenHidden: false,
             preferLeaves: true,
             skipLevelOfDetail: true,
             baseScreenSpaceError: 1024,
@@ -181,11 +182,21 @@ export function CesiumProvider(props: CesiumProviderProps) {
       handleTileLoadError(containerRef, error);
     }
 
+    // Pause rendering when the tab is hidden; resume and re-render when visible again
+    visibilityHandler = () => {
+      if (!cesiumViewer.isDestroyed()) {
+        cesiumViewer.useDefaultRenderLoop = !document.hidden;
+        if (!document.hidden) cesiumViewer.scene.requestRender();
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+
     setReady(true);
     console.log("[CesiumProvider] Cesium viewer initialized");
   });
 
   onCleanup(() => {
+    if (visibilityHandler) document.removeEventListener("visibilitychange", visibilityHandler);
     const v = viewer();
     if (v && !v.isDestroyed()) {
       v.destroy();

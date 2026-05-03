@@ -21,10 +21,16 @@ export type PreRenderCallback = (scene: Cesium.Scene, time: Cesium.JulianDate) =
 export function usePreRender(callback: PreRenderCallback): void {
   useViewerEvent((viewer) => {
     const { scene } = viewer;
-    scene.preRender.addEventListener(callback);
+    // Wrap callback: after it runs, request the next frame so continuous animations
+    // keep ticking under requestRenderMode: true without burning 60fps when idle.
+    const wrapped: PreRenderCallback = (s, t) => {
+      callback(s, t);
+      scene.requestRender();
+    };
+    scene.preRender.addEventListener(wrapped);
     return () => {
       if (!viewer.isDestroyed()) {
-        scene.preRender.removeEventListener(callback);
+        scene.preRender.removeEventListener(wrapped);
       }
     };
   });

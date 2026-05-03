@@ -154,6 +154,7 @@ export function useShaderSystem(): void {
     const animate = () => {
       const t = Math.min((performance.now() - startTime) / TRANSITION_MS, 1);
       blend = easeInOutQuad(t);
+      v.scene.requestRender();
 
       if (t < 1) {
         transitionRafId = requestAnimationFrame(animate);

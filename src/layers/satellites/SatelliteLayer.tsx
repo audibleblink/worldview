@@ -268,6 +268,7 @@ export function SatelliteLayer(props: SatelliteLayerProps = {}) {
       update(record.noradId, { position: cartesian });
       satellitePositions.set(record.noradId, cartesian);
     }
+    viewer()?.scene.requestRender();
   }
 
   function selectSatellite(noradId: string) {

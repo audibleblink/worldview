@@ -642,6 +642,7 @@ export function ShipLayer(props: ShipLayerProps = {}) {
       // Update store
       updateShips(records, currentMmsis);
       setLastBbox(bbox);
+      v.scene.requestRender();
 
       console.info(`[ShipLayer] Updated ${records.length} ships`);
     } catch (error) {
