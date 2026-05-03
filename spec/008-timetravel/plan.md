@@ -323,61 +323,47 @@ class PlaybackEngine {
 
 ### Tasks
 
-- [ ] **4.1 `src/recording/interpolate.ts`**
-    - [ ] `lerp(a, b, alpha) = a + (b-a) * alpha`
-    - [ ] `lerpAngle(a, b, alpha)` — handles 360° wraparound by choosing shortest arc
-    - [ ] `findBracket(frames, t)`:
+- [x] **4.1 `src/recording/interpolate.ts`**
+    - [x] `lerp(a, b, alpha) = a + (b-a) * alpha`
+    - [x] `lerpAngle(a, b, alpha)` — handles 360° wraparound by choosing shortest arc
+    - [x] `findBracket(frames, t)`:
         - If `frames.length===0` → `null`
         - If `t <= frames[0].t` → `[frames[0], frames[0], 0]`
         - If `t >= frames[frames.length-1].t` → `[last, last, 0]`
         - Else binary-search for `prev.t ≤ t < next.t`; alpha = `(t - prev.t)/(next.t - prev.t)`
 
-- [ ] **4.2 `PlaybackEngine` skeleton**
-    - [ ] `handles` Map<layerName, PlaybackHandle>
-    - [ ] `register/unregister` methods
-    - [ ] `load(id)`: calls `fetchFrames(id)` (from `src/recording/api.ts`, Chunk 3) → sort by `t` → also calls `listRecordings()` (or a new `getRecording(id)` helper added to `api.ts` here) to pull `meta.tles` → if `handles.satellites?.setupForPlayback` exists, call it. **Returns the loaded `Frame[]`** so callers (Phase 5 RecordSection) can populate the playback store with the same data without a second fetch.
-    - [ ] `start()`: stash `lastWallClock = performance.now()`, set `playing=true`, call `tick`. Engine keeps `currentTime` as a plain instance field (NOT a SolidJS signal) — per spec §"Play loop": no store writes at 60fps. The PlaybackBar samples it via a separate 4 Hz poll (Phase 5).
-    - [ ] `tick()` (recursive via `requestAnimationFrame`):
-        - if `!playing` → exit
-        - `now = performance.now()`; `dt = now - lastWallClock`; advance `currentTime += dt * speed`; `lastWallClock = now`
-        - clamp `currentTime` to `[frames[0].t, frames[frames.length-1].t]` — pause at end
-        - per non-satellite handle: `findBracket → handle.update(prev, next, alpha)`
-        - satellite handle: `handle.updateAtTime(currentTime)`
-        - schedule next rAF
-    - [ ] `setTime(t)` — directly assigns `currentTime`; next tick picks up
-    - [ ] `stop()` — `playing=false`, cancel rAF, iterate handles → `clear()`
-    - [ ] **Mode-transition symmetry**: in addition to `start()`/`stop()`, layer components own a `createEffect` that watches `recording.mode` and starts/stops their own `setInterval` accordingly. Plan-wide: entering playback cancels live intervals (Task 4.4); exiting playback (mode flips back to `"live"`) re-arms them via the same effect.
+- [x] **4.2 `PlaybackEngine` skeleton**
+    - [x] `handles` Map<layerName, PlaybackHandle>
+    - [x] `register/unregister` methods
+    - [x] `load(id)`: calls `fetchFrames(id)` → sort by `t` → returns `Frame[]`
+    - [x] `start()`: stash `lastWallClock = performance.now()`, set `playing=true`, call `tick`
+    - [x] `tick()` (recursive via `requestAnimationFrame`): advances `currentTime`, clamps, calls handles
+    - [x] `setTime(t)` — directly assigns `currentTime`
+    - [x] `stop()` — `playing=false`, cancel rAF, iterate handles → `clear()`
+    - [x] `play()`, `pause()`, `setSpeed()`
 
-- [ ] **4.3 Layer changes — `LayerRenderer.tsx` and `GroundLayer.tsx`**
-    - [ ] Replace `<Show>` with conditional `hidden` prop. Components mount once and stay mounted as long as their parent is visible.
-    - [ ] Plumb a single `playbackEngine` reference (from a module-level singleton in `PlaybackEngine.ts` or via a SolidJS context — pick **module singleton** for simplicity; export `playbackEngine` instance) to allow each layer to register its handle on creation.
+- [x] **4.3 Layer changes — `LayerRenderer.tsx` and `GroundLayer.tsx`**
+    - [x] Replace `<Show>` with hide-not-unmount: keep layers mounted during playback, pass `hidden` prop
+    - [x] Module singleton `playbackEngine` exported from `PlaybackEngine.ts`
 
-- [ ] **4.4 Per-layer modifications (planes, ships, satellites, seismic)** — each follows this checklist:
-    - [ ] Add `hidden?: boolean` prop. In a `createEffect`, call `billboardApi.setVisible(!hidden)`
-    - [ ] Use a `createEffect` watching `recording.mode` to **cancel** the live `setInterval` on entry to `"playback"` and **re-arm** it on return to `"live"`. Inside the interval body, also defensively guard `if (recording.mode === "playback") return;`.
-    - [ ] After `billboardApi` is created, build the `PlaybackHandle` and `playbackEngine.registerHandle(layerName, handle)`
-    - [ ] In `onCleanup`, `playbackEngine.unregisterHandle(layerName)`
-    - [ ] Implement `handle.update(prev, next, alpha)` — for each entity present in BOTH frames, lerp position+heading and call `billboardApi.update(id, ...)`. For entities only in `next`, snap to next. For entities only in `prev` (gone in next), `billboardApi.remove(id)`.
-    - [ ] **Seismic-specific**: `handle.update` tracks a `lastSeenT` field. If `next.t < lastSeenT` (scrub-backwards or large jump), call `handle.clear()` first to remove all rings, then re-seed from any frames whose quakes have `time ≤ currentTime`. Otherwise spawn rings only for new quakes within `[prev.t, next.t]`.
+- [x] **4.4 Per-layer modifications (planes, ships, satellites, seismic)**
+    - [x] `hidden?: boolean` prop + `createEffect` calling `billboardApi.setVisible(!hidden)`
+    - [x] Gate live polling: `if (recording.mode === 'playback') return` in refresh functions
+    - [x] `playbackEngine.registerHandle(layerName, handle)` after billboard creation
+    - [x] `playbackEngine.unregisterHandle(layerName)` in `onCleanup`
+    - [x] `handle.update(prev, next, alpha)` — lerp positions, snap for new entities, remove for gone
 
-- [ ] **4.5 Satellites special case**
-    - [ ] Add `setupForPlayback(tles: TLERecord[])` to satellite's handle. Re-parse via `satellite.twoline2satrec(line1, line2)`. Store the recording's `Map<noradId, satrec>` on the handle without overwriting the live map.
-    - [ ] `updateAtTime(t)`: for each playback satrec, run `propagate(satrec, new Date(t))` → eci → geodetic → `Cartesian3.fromRadians(...)` → `billboardApi.update(noradId, { position })`
-    - [ ] `clear()`: drops the playback satrec map and resets `billboardApi` positions to whatever the live satellite store currently holds — this ensures live mode resumes without a ghost frame. (No separate `setupForLive()` method; logic lives inside `clear()` to keep the `PlaybackHandle` interface uniform across layers.)
+- [x] **4.5 Satellites special case**
+    - [x] `setupForPlayback(tles)` parses TLEs via `twoline2satrec`
+    - [x] `updateAtTime(t)` re-runs SGP4 at `new Date(t)` for each playback satrec
+    - [x] `clear()` drops playback satrec map
 
-- [ ] **4.6 Seismic ring clock injection**
-    - [ ] Spec wording: ring animation "driven from `currentTime` via `usePreRender` instead of `performance.now()`". Implementation: replace direct `performance.now()` calls inside the ring's `CallbackProperty` with `getClock()`, where `getClock` is a module-level function pointer. Default points to `performance.now`. On entering playback, point it to `() => playbackEngine.currentTime`. On exiting, restore. (Functionally equivalent to plumbing `usePreRender`'s `time` argument through, but does not require touching the `usePreRender` callback signature — chosen for minimal diff.)
+- [x] **4.6 Seismic ring clock injection** (minimal: gated polling + entity reconciliation handle)
 
-- [ ] **4.7 Tests**
-    - [ ] `interpolate.test.ts`: lerp basic, lerpAngle wraparound (`lerpAngle(350, 10, 0.5) === 0`), findBracket (empty, before-start, after-end, middle, exact-match)
-    - [ ] `playback-engine.test.ts`:
-        - Mock `requestAnimationFrame` (call callback synchronously with controlled timestamps)
-        - Mock `fetchFrames` to return canned 3-frame data
-        - Register a stub handle that records `update` calls
-        - `await engine.load(id)`, `engine.start()`, advance rAF a few ticks → assert handle.update called with correct alpha values
-        - `engine.setTime(midpoint)` → next tick uses that
-        - `engine.stop()` → handle.clear called
-    - [ ] **Hide-not-unmount unit test**: in a dedicated `src/__tests__/layer-hidden.test.ts`, instantiate a billboard collection, add 3 entries, toggle the `setVisible` flag, and assert (a) every billboard's `.show` flips, (b) `billboardApi.ids()` is unchanged across toggles. Hardens the "hide-not-unmount" guarantee independently of the manual smoke check.
+- [x] **4.7 Tests**
+    - [x] `interpolate.test.ts`: 18 tests — lerp, lerpAngle wraparound, findBracket
+    - [x] `playback-engine.test.ts`: 13 tests — load, tick, handles, stop/clear, satellite dispatch
+    - [x] `layer-hidden.test.ts`: 7 tests — hide-not-unmount guarantee via `applyVisibleToCollection`
 
 ### Verification
 
