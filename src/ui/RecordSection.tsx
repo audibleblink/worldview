@@ -126,7 +126,7 @@ export function RecordSection() {
     }
   }
 
-  async function handleEnterPlayback(id: string) {
+  async function handleEnterPlayback(id: string, bbox?: { west: number; south: number; east: number; north: number }) {
     try {
       const frames = await playbackEngine.load(id);
       if (frames.length === 0) {
@@ -136,6 +136,19 @@ export function RecordSection() {
       // Switch mode first — gates live usePreRender loops before rAF fires
       setMode("playback");
       setPlayback({ recordingId: id, frames, currentTime: frames[0]!.t, playing: true, speed: 1 });
+      // Snap camera to the bbox center where the recording was made
+      if (bbox) {
+        const viewer = cesiumCtx?.viewer();
+        if (viewer) {
+          const centerLon = (bbox.west + bbox.east) / 2;
+          const centerLat = (bbox.south + bbox.north) / 2;
+          const currentHeight = viewer.camera.positionCartographic.height;
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, currentHeight),
+            duration: 1.5,
+          });
+        }
+      }
       // Clear live billboard state so playback starts from a clean slate
       playbackEngine.clearHandles();
       playbackEngine.start();
@@ -204,7 +217,7 @@ export function RecordSection() {
                   color: "var(--text-secondary, #aaa)",
                   "border-bottom": "1px solid var(--border-color, #222)",
                 }}
-                onClick={() => handleEnterPlayback(rec.id)}
+                onClick={() => handleEnterPlayback(rec.id, rec.bbox)}
               >
                 {formatTimestamp(rec.startTime)}
                 {!rec.complete ? " (incomplete)" : ""}
