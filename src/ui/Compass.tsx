@@ -7,6 +7,7 @@
 
 import { createMemo } from "solid-js";
 import { useCamera } from "../cesium/hooks/useCamera";
+import { ui } from "../stores/ui";
 
 declare const Cesium: typeof import("cesium");
 
@@ -18,18 +19,19 @@ export function Compass() {
     Cesium.Math.toDegrees(state().heading)
   );
 
-  // pitch: 0 = horizontal, -π/2 = straight down
-  // scaleY: 1 when level (pitch=0), approaching 0 when nadir (pitch=-90°)
+  // pitch: 0 = horizon, -π/2 = straight down (top-down)
+  // scaleY: 1.0 when top-down (pitch=-90°), shrinks toward horizon (pitch=0°)
   const scaleY = createMemo(() => {
     const pitchDeg = Cesium.Math.toDegrees(state().pitch); // −90..0
-    // clamp to [-90, 0]
     const clamped = Math.max(-90, Math.min(0, pitchDeg));
-    // 0° pitch → scaleY 1.0, −90° pitch → scaleY 0.18 (squished but still visible)
-    return 1.0 - (Math.abs(clamped) / 90) * 0.82;
+    // -90° (top-down) → 1.0, 0° (horizon) → 0.18
+    return (Math.abs(clamped) / 90) * 0.82 + 0.18;
   });
 
+  const rightOffset = () => ui.rightPanelOpen ? "calc(var(--panel-width) + 16px)" : "20px";
+
   return (
-    <div class="compass-widget">
+    <div class="compass-widget" style={{ right: rightOffset() }}>
       <svg
         viewBox="0 0 64 64"
         width="56"
