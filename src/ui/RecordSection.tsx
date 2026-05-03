@@ -9,7 +9,7 @@ import { planeState } from "../layers/planes/store";
 import { shipState } from "../layers/ships/store";
 import { groundState } from "../layers/ground/store";
 import { CesiumContext } from "../cesium/CesiumProvider";
-import { createRecording, listRecordings } from "../recording/api";
+import { createRecording, listRecordings, deleteRecording } from "../recording/api";
 import { Recorder, getActiveRecorder, setActiveRecorder } from "../recording/Recorder";
 import { playbackEngine } from "../recording/PlaybackEngine";
 import type { BBox, TLERecord } from "../recording/types";
@@ -211,16 +211,38 @@ export function RecordSection() {
             {(rec) => (
               <div
                 style={{
+                  display: "flex",
+                  "align-items": "center",
                   padding: "4px 0",
-                  cursor: "pointer",
                   "font-size": "11px",
                   color: "var(--text-secondary, #aaa)",
                   "border-bottom": "1px solid var(--border-color, #222)",
                 }}
-                onClick={() => handleEnterPlayback(rec.id, rec.bbox)}
               >
-                {formatTimestamp(rec.startTime)}
-                {!rec.complete ? " (incomplete)" : ""}
+                <span
+                  style={{ flex: "1", cursor: "pointer" }}
+                  onClick={() => handleEnterPlayback(rec.id, rec.bbox)}
+                >
+                  {formatTimestamp(rec.startTime)}
+                  {!rec.complete ? " (incomplete)" : ""}
+                </span>
+                <button
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#ff3a3a",
+                    padding: "0 0 0 6px",
+                    "font-size": "12px",
+                    opacity: "0.6",
+                  }}
+                  title="Delete recording"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await deleteRecording(rec.id);
+                    setRecordingsList(await listRecordings());
+                  }}
+                >🗑</button>
               </div>
             )}
           </For>
