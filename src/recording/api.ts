@@ -3,8 +3,9 @@
  */
 
 import type { BBox, TLERecord, RecordingMeta, Frame } from "./types";
+import { PROXY_BASE_URL } from "../config";
 
-const BASE = "/api/recordings";
+const BASE = `${PROXY_BASE_URL}/api/recordings`;
 
 export async function createRecording(
   bbox: BBox,
