@@ -120,53 +120,53 @@ recordings/
 
 ### Tasks
 
-- [ ] **2.1 `src/server/recordings.ts`: storage helpers**
-    - [ ] `RECORDINGS_DIR` constant — resolved relative to `process.cwd()` (override via env `WORLDVIEW_RECORDINGS_DIR` for tests)
-    - [ ] `recordingDir(id)`, `metaPath(id)`, `framesPath(id)`
-    - [ ] `ensureDir(path)` — `await mkdir(path, { recursive: true })`
-    - [ ] `readMeta(id): Promise<RecordingMeta|null>` (returns null on not-found)
-    - [ ] `writeMeta(id, meta)` — `Bun.write(metaPath(id), JSON.stringify(meta))`
-    - [ ] `appendFrameLine(id, line: string)` — open in append mode via `Bun.file(...).writer({ append: true })` (or `node:fs` `appendFile` if Bun.file writer doesn't support append; pick one and document)
-    - [ ] `genId()` — `${new Date().toISOString().replace(/[:.]/g, "-")}_${randomHex(4)}`
+- [x] **2.1 `src/server/recordings.ts`: storage helpers**
+    - [x] `RECORDINGS_DIR` constant — resolved relative to `process.cwd()` (override via env `WORLDVIEW_RECORDINGS_DIR` for tests)
+    - [x] `recordingDir(id)`, `metaPath(id)`, `framesPath(id)`
+    - [x] `ensureDir(path)` — `await mkdir(path, { recursive: true })`
+    - [x] `readMeta(id): Promise<RecordingMeta|null>` (returns null on not-found)
+    - [x] `writeMeta(id, meta)` — `Bun.write(metaPath(id), JSON.stringify(meta))`
+    - [x] `appendFrameLine(id, line: string)` — uses `node:fs/promises` `appendFile` (Bun.file writer append unreliable)
+    - [x] `genId()` — `${new Date().toISOString().replace(/[:.]/g, "-")}_${randomHex(4)}`
 
-- [ ] **2.2 Route handlers**
-    - [ ] `POST /api/recordings` — body `{ bbox, tles, name? }`. Validate shape. Build `RecordingMeta` with `startTime=Date.now()`, `endTime=null`, `frameCount=0`, `complete=false`. Write `meta.json`. Touch empty `frames.ndjson`. Return `{ id }` 201.
-    - [ ] `POST /api/recordings/:id/frames` — body is one Frame JSON. Append `JSON.stringify(frame) + "\n"` to `frames.ndjson`. Increment in-memory frame counter (do NOT rewrite `meta.json` per frame — too much I/O). Return `204`.
-    - [ ] `POST /api/recordings/:id/stop` — read `meta.json`, set `endTime=Date.now()`, count lines in `frames.ndjson` for `frameCount`, set `complete=true`, write back. Return updated meta `200`.
-    - [ ] `GET /api/recordings` — list directories under `recordings/`, read each `meta.json`, return `RecordingMeta[]` sorted by `startTime` desc. Skip directories whose `meta.json` is missing or unreadable (log + skip).
-    - [ ] `GET /api/recordings/:id/frames` — stream `frames.ndjson` with `Content-Type: application/x-ndjson`. Use `Bun.file(framesPath(id)).stream()` directly as Response body.
-    - [ ] `DELETE /api/recordings/:id` — `rm -rf` the directory via `await rm(dir, { recursive: true, force: true })`. Return `204`.
+- [x] **2.2 Route handlers**
+    - [x] `POST /api/recordings` — body `{ bbox, tles, name? }`. Validate shape. Build `RecordingMeta` with `startTime=Date.now()`, `endTime=null`, `frameCount=0`, `complete=false`. Write `meta.json`. Touch empty `frames.ndjson`. Return `{ id }` 201.
+    - [x] `POST /api/recordings/:id/frames` — body is one Frame JSON. Append `JSON.stringify(frame) + "\n"` to `frames.ndjson`. Increment in-memory frame counter (do NOT rewrite `meta.json` per frame — too much I/O). Return `204`.
+    - [x] `POST /api/recordings/:id/stop` — read `meta.json`, set `endTime=Date.now()`, count lines in `frames.ndjson` for `frameCount`, set `complete=true`, write back. Return updated meta `200`.
+    - [x] `GET /api/recordings` — list directories under `recordings/`, read each `meta.json`, return `RecordingMeta[]` sorted by `startTime` desc. Skip directories whose `meta.json` is missing or unreadable (log + skip).
+    - [x] `GET /api/recordings/:id/frames` — stream `frames.ndjson` with `Content-Type: application/x-ndjson`. Use `Bun.file(framesPath(id)).stream()` directly as Response body.
+    - [x] `DELETE /api/recordings/:id` — `rm -rf` the directory via `await rm(dir, { recursive: true, force: true })`. Return `204`.
 
-- [ ] **2.3 6-hour auto-finalize watchdog**
-    - [ ] Per-recording `setTimeout` on create, 6h, that calls the same finalize logic as `/stop` but leaves `complete=false`. Cancel timer on explicit stop.
-    - [ ] Tracker is a `Map<id, Timer>` in module scope. On server restart, in-flight recordings stay un-finalized — that's acceptable for v1 (matches spec: "incomplete recordings appear with `(incomplete)` label").
+- [x] **2.3 6-hour auto-finalize watchdog**
+    - [x] Per-recording `setTimeout` on create, 6h, that calls the same finalize logic as `/stop` but leaves `complete=false`. Cancel timer on explicit stop.
+    - [x] Tracker is a `Map<id, Timer>` in module scope. On server restart, in-flight recordings stay un-finalized — that's acceptable for v1 (matches spec: "incomplete recordings appear with `(incomplete)` label").
 
-- [ ] **2.4 Wire into `src/server/index.ts`**
-    - [ ] Add `["/api/recordings", handleRecordings]` to the dynamic route prefix table
-    - [ ] `handleRecordings(req)` parses path + method, dispatches to one of the six handlers
-    - [ ] Apply existing CORS headers to all responses
+- [x] **2.4 Wire into `src/server/index.ts`**
+    - [x] Add `["/api/recordings", handleRecordings]` to the dynamic route prefix table
+    - [x] `handleRecordings(req)` parses path + method, dispatches to one of the six handlers
+    - [x] Apply existing CORS headers to all responses
 
-- [ ] **2.5 Tests (`src/__tests__/server-recordings.test.ts`)**
-    - [ ] `beforeEach`: set `WORLDVIEW_RECORDINGS_DIR` to a tmpdir (`fs.mkdtemp`); `afterEach`: `rm -rf` it
-    - [ ] Spin up `Bun.serve({ port: 0, fetch: ... })` with the recordings handler bound; capture `server.port`
-    - [ ] Test: create returns id; meta.json on disk has correct shape
-    - [ ] Test: append two frames; stop; meta.json has `frameCount=2, complete=true`
-    - [ ] Test: list returns recently-created recording
-    - [ ] Test: fetch frames streams two NDJSON lines
-    - [ ] Test: delete removes the directory; subsequent list excludes it
-    - [ ] Test: GET frames on unknown id returns 404
-    - [ ] Test: 6h watchdog — replace `setTimeout` with a fake (inject via test seam, e.g., a `scheduleFinalize` function that the module exports for tests, or use `bun:test` mock); fire it; meta has `complete=false` and `endTime` set
+- [x] **2.5 Tests (`src/__tests__/server-recordings.test.ts`)**
+    - [x] `beforeEach`: set `WORLDVIEW_RECORDINGS_DIR` to a tmpdir (`fs.mkdtemp`); `afterEach`: `rm -rf` it
+    - [x] Spin up `Bun.serve({ port: 0, fetch: ... })` with the recordings handler bound; capture `server.port`
+    - [x] Test: create returns id; meta.json on disk has correct shape
+    - [x] Test: append two frames; stop; meta.json has `frameCount=2, complete=true`
+    - [x] Test: list returns recently-created recording
+    - [x] Test: fetch frames streams two NDJSON lines
+    - [x] Test: delete removes the directory; subsequent list excludes it
+    - [x] Test: GET frames on unknown id returns 404
+    - [x] Test: 6h watchdog — `_testOnlyFireFinalize(id)` exported; fire it; meta has `complete=false` and `endTime` set
 
-- [ ] **2.6 `scripts/verify-phase2.sh`**
-    - [ ] Assumes server running on `localhost:3001` (the existing proxy port)
-    - [ ] `curl POST /api/recordings` → capture id
-    - [ ] `curl POST .../frames` x2 with sample bodies
-    - [ ] `curl POST .../stop`
-    - [ ] `curl GET /api/recordings` → grep for id
-    - [ ] `curl GET .../frames` → assert 2 lines
-    - [ ] `curl DELETE` → assert 204
-    - [ ] `set -e` and exit 0 only if all assertions pass
-    - [ ] Print final `OK` line
+- [x] **2.6 `scripts/verify-phase2.sh`**
+    - [x] Boots its own server on port 3099 using the recordings handler
+    - [x] `curl POST /api/recordings` → capture id
+    - [x] `curl POST .../frames` x2 with sample bodies
+    - [x] `curl POST .../stop`
+    - [x] `curl GET /api/recordings` → grep for id
+    - [x] `curl GET .../frames` → assert 2 lines
+    - [x] `curl DELETE` → assert 204
+    - [x] `set -e` and exit 0 only if all assertions pass
+    - [x] Print final `OK` line
 
 ### Verification
 
