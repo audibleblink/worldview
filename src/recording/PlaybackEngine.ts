@@ -33,6 +33,11 @@ export class PlaybackEngine {
     return this.frames;
   }
 
+  /** Clear all handle billboard state without stopping the engine. */
+  clearHandles(): void {
+    for (const h of this.handles.values()) h.clear();
+  }
+
   /** Begin playback from the current time. */
   start(): void {
     this.playing = true;

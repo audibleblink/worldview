@@ -133,8 +133,11 @@ export function RecordSection() {
         console.warn("[RecordSection] No frames to play");
         return;
       }
+      // Switch mode first — gates live usePreRender loops before rAF fires
       setMode("playback");
       setPlayback({ recordingId: id, frames, currentTime: frames[0]!.t, playing: true, speed: 1 });
+      // Clear live billboard state so playback starts from a clean slate
+      playbackEngine.clearHandles();
       playbackEngine.start();
     } catch (err) {
       console.error("[RecordSection] Failed to load recording:", err);
