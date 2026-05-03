@@ -15,6 +15,7 @@ import { handleTLE, getTLECacheStats } from "./routes/tle.ts";
 import { handleGeocode, getGeocodeCacheStats } from "./routes/geocode.ts";
 import { handleCameraList, handleThumbnail, handleStream, handleHlsUrl, handleHlsRelay, initializeCCTV } from "./routes/cctv.ts";
 import { handleShips } from "./routes/ships.ts";
+import { handleRecordings } from "./recordings.ts";
 import { handlePlanes, handlePlanesSearch } from "./routes/planes.ts";
 import { handleOSM } from "./routes/osm.ts";
 import { proxyGoogleTiles, handleMapTiles } from "./routes/tiles.ts";
@@ -75,6 +76,7 @@ const staticRoutes = createRoutes({
  * (e.g. /api/cctv/hls-relay/ before /api/cctv/hls/).
  */
 const dynamicRoutes: Array<[prefix: string, handler: RouteHandler]> = [
+  ["/api/recordings", handleRecordings],
   ["/api/cctv/thumbnail/", handleThumbnail],
   ["/api/cctv/stream/", handleStream],
   ["/api/cctv/hls-relay/", handleHlsRelay],
