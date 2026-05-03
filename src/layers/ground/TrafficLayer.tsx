@@ -41,6 +41,7 @@ export function TrafficLayer() {
   const { getViewportBBox } = useCamera();
 
   // Local state
+  let groundAltitude = 0; // sampled once per road load; particles sit on 3D tile surface
   const [network, setNetwork] = createSignal<RoadNetwork | null>(null);
   const [particles, setParticles] = createSignal<TrafficParticle[]>([]);
   const [lastLoadedBbox, setLastLoadedBbox] = createSignal<{
@@ -145,6 +146,18 @@ export function TrafficLayer() {
       setNetwork(newNetwork);
       setLastLoadedBbox(bbox);
 
+      // Sample ground height at bbox center so particles sit on 3D tile surface
+      // (scene.sampleHeight works for tiles already in view; falls back to 0)
+      const v = viewer();
+      if (v && !v.isDestroyed()) {
+        const centerLat = (bbox.south + bbox.north) / 2;
+        const centerLon = (bbox.west + bbox.east) / 2;
+        const sampled = v.scene.sampleHeight(
+          Cesium.Cartographic.fromDegrees(centerLon, centerLat)
+        );
+        groundAltitude = sampled ?? 0;
+      }
+
       // Spawn particles
       spawnParticles(newNetwork);
 
@@ -232,7 +245,7 @@ export function TrafficLayer() {
           // Add to point collection
           pointCollection.add({
             id,
-            position: Cesium.Cartesian3.fromDegrees(lon, lat, 5),
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, groundAltitude + 5),
             color: toCesiumColor(color),
             pixelSize: CONFIG.particleSize,
           });
@@ -398,7 +411,7 @@ export function TrafficLayer() {
 
       updates.push({
         id: particle.id,
-        options: { position: Cesium.Cartesian3.fromDegrees(lon, lat, 5) },
+        options: { position: Cesium.Cartesian3.fromDegrees(lon, lat, groundAltitude + 5) },
       });
     }
 
@@ -503,14 +516,18 @@ export function TrafficLayer() {
 
     v.camera.moveEnd.addEventListener(handleCameraChange);
 
-    // Initial load
-    loadRoadsForViewport();
-
     onCleanup(() => {
       if (!v.isDestroyed()) {
         v.camera.moveEnd.removeEventListener(handleCameraChange);
       }
     });
+  });
+
+  // Initial load — deferred by one microtask so createCollectionFactory's own
+  // createEffect (which sets up the PointPrimitiveCollection) runs first.
+  createEffect(() => {
+    if (!ready()) return;
+    Promise.resolve().then(() => loadRoadsForViewport());
   });
 
   // Cleanup
