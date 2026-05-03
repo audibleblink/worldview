@@ -25,6 +25,7 @@ export interface CameraSource {
   readonly name: string;
   fetchCameras(): Promise<CCTVCamera[]>;
   getSignedHlsUrl?(cameraId: string): Promise<string>;
+  invalidateToken?(cameraId: string): void;
 }
 
 /**

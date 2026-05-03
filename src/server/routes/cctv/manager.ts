@@ -277,7 +277,7 @@ export class CCTVProxyManager {
     const sourceOrError = this.resolveHlsSource(cameraId);
     if (sourceOrError instanceof Response) return sourceOrError;
 
-    try {
+    const doRelay = async (): Promise<Response> => {
       const signedUrl = await sourceOrError.getSignedHlsUrl!(cameraId);
       const signedUrlObj = new URL(signedUrl);
 
@@ -334,7 +334,22 @@ export class CCTVProxyManager {
           "Cache-Control": "no-cache",
         },
       });
+    };
+
+    try {
+      return await doRelay();
     } catch (error) {
+      // On connection-level failure, the cached token may be expired/rejected.
+      // Invalidate it and retry once with a fresh token.
+      if (sourceOrError.invalidateToken) {
+        sourceOrError.invalidateToken(cameraId);
+        try {
+          return await doRelay();
+        } catch (retryError) {
+          console.error(`[CCTV] HLS relay error for ${cameraId}/${relayPath}:`, retryError);
+          return errorResponse("HLS relay error", 502);
+        }
+      }
       console.error(`[CCTV] HLS relay error for ${cameraId}/${relayPath}:`, error);
       return errorResponse("HLS relay error", 502);
     }

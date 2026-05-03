@@ -39,6 +39,10 @@ export class ArkansasSource extends CachedCameraSource {
       }));
   }
 
+  invalidateToken(cameraId: string): void {
+    this.tokenCache.delete(cameraId);
+  }
+
   async getSignedHlsUrl(cameraId: string): Promise<string> {
     const cached = this.tokenCache.get(cameraId);
     if (cached && Date.now() < cached.expiresAt) return cached.url;
