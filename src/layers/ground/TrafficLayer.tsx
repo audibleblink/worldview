@@ -7,6 +7,7 @@ import { createEffect, onCleanup, createSignal, on } from "solid-js";
 import { createPointCollection } from "../../cesium/createPointCollection.ts";
 import { usePreRender } from "../../cesium/hooks/usePreRender.ts";
 import { useCesium } from "../../cesium/useCesium.ts";
+import { useCamera } from "../../cesium/hooks/useCamera.ts";
 import { groundState, setTrafficLoading, setTrafficError } from "./store.ts";
 import { PROXY_ENDPOINTS } from "../../config.ts";
 import { RoadNetwork, type RoadSegment } from "../../ground/traffic/RoadNetwork.ts";
@@ -37,6 +38,7 @@ const CONFIG = {
  */
 export function TrafficLayer() {
   const { viewer, ready } = useCesium();
+  const { getViewportBBox } = useCamera();
 
   // Local state
   const [network, setNetwork] = createSignal<RoadNetwork | null>(null);
@@ -74,66 +76,10 @@ export function TrafficLayer() {
     console.log("[TrafficLayer] Initialized");
   });
 
-  // Get viewport bounding box
-  function getViewportBbox(): {
-    south: number;
-    west: number;
-    north: number;
-    east: number;
-  } | null {
-    const v = viewer();
-    if (!v || v.isDestroyed()) return null;
-
-    const camera = v.camera;
-    const canvas = v.scene.canvas;
-    const ellipsoid = v.scene.globe.ellipsoid;
-
-    // Get corner positions
-    const corners = [
-      new Cesium.Cartesian2(0, 0),
-      new Cesium.Cartesian2(canvas.clientWidth, 0),
-      new Cesium.Cartesian2(0, canvas.clientHeight),
-      new Cesium.Cartesian2(canvas.clientWidth, canvas.clientHeight),
-    ];
-
-    let minLat = Infinity,
-      maxLat = -Infinity,
-      minLon = Infinity,
-      maxLon = -Infinity;
-    let validCorners = 0;
-
-    for (const corner of corners) {
-      const ray = camera.getPickRay(corner);
-      if (!ray) continue;
-
-      const position = v.scene.globe.pick(ray, v.scene);
-      if (!position) continue;
-
-      const cartographic = ellipsoid.cartesianToCartographic(position);
-      if (!cartographic) continue;
-
-      const lat = Cesium.Math.toDegrees(cartographic.latitude);
-      const lon = Cesium.Math.toDegrees(cartographic.longitude);
-
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLon = Math.min(minLon, lon);
-      maxLon = Math.max(maxLon, lon);
-      validCorners++;
-    }
-
-    if (validCorners < 2) return null;
-
-    // Add padding
-    const latPadding = (maxLat - minLat) * CONFIG.frustumPadding;
-    const lonPadding = (maxLon - minLon) * CONFIG.frustumPadding;
-
-    return {
-      south: minLat - latPadding,
-      north: maxLat + latPadding,
-      west: minLon - lonPadding,
-      east: maxLon + lonPadding,
-    };
+  // Get viewport bounding box — delegates to useCamera which uses pickEllipsoid
+  // (works with globe.show=false / photorealistic 3D tiles)
+  function getViewportBbox() {
+    return getViewportBBox();
   }
 
   // Check if viewport changed enough to reload
@@ -164,7 +110,7 @@ export function TrafficLayer() {
     if (!osmFetcher || !ready()) return;
 
     const bbox = getViewportBbox();
-    if (!bbox) return; // camera at oblique angle — no ground intersection, try again on next move
+    if (!bbox) return; // pickEllipsoid returned null (camera above horizon?) — retry on next moveEnd
 
     // Check viewport size
     const lonSpan = bbox.east - bbox.west;
