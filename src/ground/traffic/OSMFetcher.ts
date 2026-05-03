@@ -162,13 +162,10 @@ export class OSMFetcher {
   /** Build Overpass QL query for roads in bounding box */
   private buildQuery(bbox: BoundingBox): string {
     const bboxStr = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
-    const highwayRegex = HIGHWAY_TYPES.join("|");
-    
-    return `[out:json][timeout:25];
-(
-  way["highway"~"^(${highwayRegex})$"](${bboxStr});
-);
-out geom;`;
+    // Use exact key-value matches (indexed) instead of a regex union (full scan).
+    // Regex queries on highway= take 8-10s; exact matches return in ~1s.
+    const wayLines = HIGHWAY_TYPES.map((h) => `  way["highway"="${h}"](${bboxStr});`).join("\n");
+    return `[out:json][timeout:25];\n(\n${wayLines}\n);\nout geom;`;
   }
 
   /**
