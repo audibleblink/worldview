@@ -491,6 +491,7 @@ export function PlaneLayer(props: PlaneLayerProps = {}) {
 
   // Dead-reckoning interpolation: animate planes between polls
   usePreRender(() => {
+    if (recording.mode === "playback") return;
     const now = Date.now();
 
     // Interpolate each plane's position based on velocity and heading

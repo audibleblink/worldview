@@ -786,6 +786,7 @@ export function ShipLayer(props: ShipLayerProps = {}) {
   // Pre-render callback for interpolation
   // NOTE: Interpolates ALL ships, not just 60 like old code
   usePreRender(() => {
+    if (recording.mode === "playback") return;
     // Skip frames to reduce CPU load
     interpFrameCount++;
     if (interpFrameCount < INTERP_SKIP_FRAMES) return;
