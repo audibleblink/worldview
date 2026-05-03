@@ -45,30 +45,30 @@ Each phase has a verification block. The autonomous feedback loop is `bun test` 
 
 ### Tasks
 
-- [ ] **1.1 Define shared recording types** in `src/recording/types.ts`
-    - [ ] `AppMode = "live" | "recording" | "playback"`
-    - [ ] `BBox = { west, south, east, north }` (numbers)
-    - [ ] `TLERecord = { name, noradId, line1, line2, category }` — match `SatelliteCategory` import from `src/layers/satellites/types.ts`
-    - [ ] `RecordingMeta = { id, name, startTime, endTime: number|null, bbox, tles: TLERecord[], frameCount, complete }`
-    - [ ] `PlaneSnapshot` — exact subset of `PlaneRecord`: `icao24, latitude, longitude, altitude, heading, velocity, callsign`
-    - [ ] `ShipSnapshot` — exact subset of `ShipRecord`: `mmsi, latitude, longitude, trueHeading, sog, shipType, shipName` (note: `shipName` maps to existing `name` field — document the mapping inline)
-    - [ ] `SeismicSnapshot` — `id, latitude, longitude, magnitude, depth, time`
-    - [ ] `Frame = { t: number, planes: PlaneSnapshot[], ships: ShipSnapshot[], seismic: SeismicSnapshot[] }`
-    - [ ] `PlaybackHandle = { update?(prev, next, alpha): void; updateAtTime?(t: number): void; clear(): void }`
+- [x] **1.1 Define shared recording types** in `src/recording/types.ts`
+    - [x] `AppMode = "live" | "recording" | "playback"`
+    - [x] `BBox = { west, south, east, north }` (numbers)
+    - [x] `TLERecord = { name, noradId, line1, line2, category }` — match `SatelliteCategory` import from `src/layers/satellites/types.ts`
+    - [x] `RecordingMeta = { id, name, startTime, endTime: number|null, bbox, tles: TLERecord[], frameCount, complete }`
+    - [x] `PlaneSnapshot` — exact subset of `PlaneRecord`: `icao24, latitude, longitude, altitude, heading, velocity, callsign`
+    - [x] `ShipSnapshot` — exact subset of `ShipRecord`: `mmsi, latitude, longitude, trueHeading, sog, shipType, shipName` (note: `shipName` maps to existing `name` field — document the mapping inline)
+    - [x] `SeismicSnapshot` — `id, latitude, longitude, magnitude, depth, time`
+    - [x] `Frame = { t: number, planes: PlaneSnapshot[], ships: ShipSnapshot[], seismic: SeismicSnapshot[] }`
+    - [x] `PlaybackHandle = { update?(prev, next, alpha): void; updateAtTime?(t: number): void; clear(): void }`
 
-- [ ] **1.2 Create `src/stores/recording.ts`**
-    - [ ] `createStore` for state shape from spec §"Recording Engine (client)"
-    - [ ] Exports: `recording` (store), `setMode`, `setActiveRecordingId`, `setRecordingsList`, `setPlayback`, `setPlaybackTime`, `setPlaybackPlaying`, `setPlaybackSpeed`, `clearPlayback`
-    - [ ] Speed cycle helper: `cyclePlaybackSpeed()` rotates through `[1, 5, 30, 60, 300]`
+- [x] **1.2 Create `src/stores/recording.ts`**
+    - [x] `createStore` for state shape from spec §"Recording Engine (client)"
+    - [x] Exports: `recording` (store), `setMode`, `setActiveRecordingId`, `setRecordingsList`, `setPlayback`, `setPlaybackTime`, `setPlaybackPlaying`, `setPlaybackSpeed`, `clearPlayback`
+    - [x] Speed cycle helper: `cyclePlaybackSpeed()` rotates through `[1, 5, 30, 60, 300]`
 
-- [ ] **1.3 Add `setVisible(visible)` to `createBillboardCollection`**
-    - [ ] Walk `collection.length`, set `collection.get(i).show = visible`
-    - [ ] No-op when `collection` is null
-    - [ ] Does NOT touch `itemMap`
+- [x] **1.3 Add `setVisible(visible)` to `createBillboardCollection`**
+    - [x] Walk `collection.length`, set `collection.get(i).show = visible`
+    - [x] No-op when `collection` is null
+    - [x] Does NOT touch `itemMap`
 
-- [ ] **1.4 Tests**
-    - [ ] `recording-store.test.ts`: starts in `live`; `setMode("recording")` flips it; speed cycle wraps after 300; `clearPlayback` resets `playback` to `null`
-    - [ ] `billboard-setvisible.test.ts`: add 3 billboards, `setVisible(false)`, every billboard has `show === false`; `setVisible(true)` flips back; `itemMap` ids unchanged
+- [x] **1.4 Tests**
+    - [x] `recording-store.test.ts`: starts in `live`; `setMode("recording")` flips it; speed cycle wraps after 300; `clearPlayback` resets `playback` to `null`
+    - [x] `billboard-setvisible.test.ts`: add 3 billboards, `setVisible(false)`, every billboard has `show === false`; `setVisible(true)` flips back; `itemMap` ids unchanged
 
 ### Verification
 

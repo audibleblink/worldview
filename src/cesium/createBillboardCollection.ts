@@ -43,6 +43,23 @@ export interface CreateBillboardCollectionReturn {
   clear: () => void;
   count: () => number;
   ids: () => Set<string>;
+  /** Show or hide every billboard in the collection without affecting itemMap. */
+  setVisible: (visible: boolean) => void;
+}
+
+/**
+ * Show or hide every billboard in a collection.
+ * Extracted for unit-testability — pass any object with `length` and `get(i)`.
+ * @internal
+ */
+export function applyVisibleToCollection(
+  collection: { length: number; get(i: number): { show: boolean } } | null,
+  visible: boolean,
+): void {
+  if (!collection) return;
+  for (let i = 0; i < collection.length; i++) {
+    collection.get(i).show = visible;
+  }
 }
 
 /** Properties that can be directly assigned on a Cesium.Billboard. */
@@ -105,6 +122,8 @@ export function createBillboardCollection(
     clear: base.clear,
     count: base.count,
     ids: base.ids,
+    setVisible: (visible) =>
+      applyVisibleToCollection(base.getCollection() as Cesium.BillboardCollection | null, visible),
   };
 }
 
