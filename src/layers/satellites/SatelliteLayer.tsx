@@ -7,6 +7,9 @@ import * as satellite from "satellite.js";
 import { useCesium } from "../../cesium/useCesium";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
 import { createBillboardCollection } from "../../cesium/createBillboardCollection";
+import { playbackEngine } from "../../recording/PlaybackEngine";
+import { recording } from "../../stores/recording";
+import type { PlaybackHandle, TLERecord } from "../../recording/types";
 import { PROXY_ENDPOINTS } from "../../config";
 import { selectEntity, clearSelection, selection, type SatelliteData } from "../../stores/selection";
 import {
@@ -143,13 +146,56 @@ function createSatelliteTexture(): string {
   return canvas.toDataURL();
 }
 
-export function SatelliteLayer() {
+interface SatelliteLayerProps {
+  hidden?: boolean;
+}
+
+export function SatelliteLayer(props: SatelliteLayerProps = {}) {
   const { viewer, ready } = useCesium();
   const { track, stop: stopFollow, isFollowing } = useFollowMode();
-  const { add, update, clear } = createBillboardCollection();
+  const billboardApi = createBillboardCollection();
+  const { add, update, clear } = billboardApi;
 
   const [selectedNoradId, setSelectedNoradId] = createSignal<string | null>(null);
   const [satelliteTexture, setSatelliteTexture] = createSignal<string | null>(null);
+
+  // Satrecs for playback (keyed by noradId).
+  let playbackSatrecs: Map<string, satellite.SatRec> | null = null;
+
+  // Playback handle — uses SGP4 to re-propagate at the requested time.
+  const satHandle: PlaybackHandle & { setupForPlayback(tles: TLERecord[]): void } = {
+    setupForPlayback(tles: TLERecord[]) {
+      playbackSatrecs = new Map();
+      for (const tle of tles) {
+        const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+        playbackSatrecs.set(tle.noradId, satrec);
+      }
+    },
+    updateAtTime(t: number) {
+      if (!playbackSatrecs) return;
+      const date = new Date(t);
+      const gmst = satellite.gstime(date);
+      for (const [noradId, satrec] of playbackSatrecs) {
+        const result = satellite.propagate(satrec, date);
+        if (!result?.position || typeof result.position === "boolean") continue;
+        const geo = satellite.eciToGeodetic(
+          result.position as satellite.EciVec3<number>,
+          gmst,
+        );
+        const pos = Cesium.Cartesian3.fromRadians(
+          geo.longitude,
+          geo.latitude,
+          geo.height * 1000,
+        );
+        update(noradId, { position: pos });
+        satellitePositions.set(noradId, pos);
+      }
+    },
+    clear() {
+      playbackSatrecs = null;
+    },
+  };
+  playbackEngine.registerHandle("satellites", satHandle);
 
   let updateInterval: ReturnType<typeof setInterval> | null = null;
   let orbitalPathEntity: Cesium.Entity | null = null;
@@ -215,6 +261,7 @@ export function SatelliteLayer() {
   });
 
   function updatePositions() {
+    if (recording.mode === "playback") return;
     const { records } = satelliteState;
     if (!records.length) return;
     for (const { record, cartesian } of propagateAll(records, new Date())) {
@@ -355,6 +402,9 @@ export function SatelliteLayer() {
     }
   });
 
+  // Hide/show billboards based on hidden prop (hide-not-unmount pattern).
+  createEffect(() => { billboardApi.setVisible(!(props.hidden ?? false)); });
+
   // React to follow state from store (e.g., from UI button)
   createEffect(() => {
     const followId = satelliteState.followingNoradId;
@@ -366,6 +416,7 @@ export function SatelliteLayer() {
   });
 
   onCleanup(() => {
+    playbackEngine.unregisterHandle("satellites");
     if (updateInterval) clearInterval(updateInterval);
 
     const v = viewer();

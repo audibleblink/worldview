@@ -10,6 +10,9 @@ import { usePreRender } from "../../cesium/hooks/usePreRender.ts";
 import { groundState, setEarthquakes } from "./store.ts";
 import { USGSFetcher, type EarthquakeData } from "../../ground/seismic/USGSFetcher.ts";
 import { getMagnitudeConfig } from "../../ground/seismic/RingAnimation.ts";
+import { playbackEngine } from "../../recording/PlaybackEngine";
+import { recording } from "../../stores/recording";
+import type { PlaybackHandle } from "../../recording/types";
 
 declare const Cesium: typeof import("cesium");
 
@@ -70,10 +73,14 @@ interface EarthquakeVisualization {
   isActive: boolean;
 }
 
+interface SeismicLayerProps {
+  hidden?: boolean;
+}
+
 /**
  * SeismicLayer - Renders earthquake visualizations with animated rings
  */
-export function SeismicLayer() {
+export function SeismicLayer(props: SeismicLayerProps = {}) {
   const { viewer, ready } = useCesium();
 
   const [visualizations] = createSignal(new Map<string, EarthquakeVisualization>());
@@ -344,6 +351,7 @@ export function SeismicLayer() {
    * Spawn a demo earthquake
    */
   function spawnDemoEarthquake(): void {
+    if (recording.mode === "playback") return;
     if (currentDemoQuake) {
       removeVisualization(currentDemoQuake.id);
     }
@@ -462,6 +470,37 @@ export function SeismicLayer() {
     }
   });
 
+  // Register playback handle — reconciles seismic entities from recorded frames.
+  const seismicHandle: PlaybackHandle = {
+    update(_prev, next, _alpha) {
+      if (props.hidden) return;
+      const vizMap = visualizations();
+      const quakeIds = new Set(next.seismic.map((q) => q.id));
+      for (const id of vizMap.keys()) {
+        if (!quakeIds.has(id)) removeVisualization(id);
+      }
+      for (const q of next.seismic) {
+        if (!vizMap.has(q.id)) {
+          createVisualization({
+            id: q.id,
+            magnitude: q.magnitude,
+            place: "",
+            time: new Date(q.time),
+            longitude: q.longitude,
+            latitude: q.latitude,
+            depth: q.depth,
+            isSimulated: false,
+          });
+        }
+      }
+    },
+    clear() {
+      const vizMap = visualizations();
+      for (const id of [...vizMap.keys()]) removeVisualization(id);
+    },
+  };
+  playbackEngine.registerHandle("seismic", seismicHandle);
+
   // Initialize fetcher and polling
   createEffect(() => {
     if (!ready()) return;
@@ -469,6 +508,7 @@ export function SeismicLayer() {
     fetcher = new USGSFetcher();
 
     fetcher.startPolling((data) => {
+      if (recording.mode === "playback") return;
       handleEarthquakeUpdate(data);
     });
 
@@ -506,6 +546,7 @@ export function SeismicLayer() {
 
   // Cleanup
   onCleanup(() => {
+    playbackEngine.unregisterHandle("seismic");
     const v = viewer();
     if (v && !v.isDestroyed()) {
       v.camera.moveEnd.removeEventListener(updateViewportCenter);

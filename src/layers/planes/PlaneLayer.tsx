@@ -8,6 +8,10 @@
 import { onCleanup, createEffect, on } from "solid-js";
 import { useCesium } from "../../cesium/useCesium";
 import { createBillboardCollection } from "../../cesium/createBillboardCollection";
+import { playbackEngine } from "../../recording/PlaybackEngine";
+import { lerp, lerpAngle } from "../../recording/interpolate";
+import { recording } from "../../stores/recording";
+import type { PlaybackHandle } from "../../recording/types";
 import { useCamera } from "../../cesium/hooks/useCamera";
 import { usePreRender } from "../../cesium/hooks/usePreRender";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
@@ -127,12 +131,43 @@ interface PlanesApiResponse {
   error?: string;
 }
 
-export function PlaneLayer() {
+interface PlaneLayerProps {
+  hidden?: boolean;
+}
+
+export function PlaneLayer(props: PlaneLayerProps = {}) {
   const { viewer, ready } = useCesium();
   const { state: cameraState, getViewportBBox } = useCamera();
   const { track, stop: stopFollow } = useFollowMode();
 
   const billboardApi = createBillboardCollection();
+
+  // Playback handle — lerps plane positions between recorded frames.
+  const planeHandle: PlaybackHandle = {
+    update(prev, next, alpha) {
+      const prevMap = new Map(prev.planes.map((p) => [p.icao24, p]));
+      const nextMap = new Map(next.planes.map((p) => [p.icao24, p]));
+      const allIds = new Set([...prevMap.keys(), ...nextMap.keys()]);
+      for (const id of allIds) {
+        const p = prevMap.get(id);
+        const n = nextMap.get(id);
+        if (n) {
+          const lat = p ? lerp(p.latitude, n.latitude, alpha) : n.latitude;
+          const lon = p ? lerp(p.longitude, n.longitude, alpha) : n.longitude;
+          const alt = p ? lerp(p.altitude, n.altitude, alpha) : n.altitude;
+          const heading = p ? lerpAngle(p.heading, n.heading, alpha) : n.heading;
+          billboardApi.update(id, {
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
+            rotation: -Cesium.Math.toRadians(heading),
+          });
+        } else {
+          billboardApi.remove(id);
+        }
+      }
+    },
+    clear() { billboardApi.clear(); },
+  };
+  playbackEngine.registerHandle("planes", planeHandle);
 
   let labelCollection: Cesium.LabelCollection | null = null;
   const labelMap = new Map<string, Cesium.Label>();
@@ -322,6 +357,7 @@ export function PlaneLayer() {
   }
 
   async function refreshPlanes(): Promise<void> {
+    if (recording.mode === "playback") return;
     const v = viewer();
     if (!v || v.isDestroyed()) return;
 
@@ -551,6 +587,9 @@ export function PlaneLayer() {
     }
   });
 
+  // Hide/show billboards based on hidden prop (hide-not-unmount pattern).
+  createEffect(() => { billboardApi.setVisible(!(props.hidden ?? false)); });
+
   createEffect(
     on(ready, async (isReady) => {
       if (isReady) await initialize();
@@ -617,6 +656,7 @@ export function PlaneLayer() {
   }
 
   onCleanup(() => {
+    playbackEngine.unregisterHandle("planes");
     if (planeState.followingIcao24) stopFollowMode();
     if (updateInterval) clearInterval(updateInterval);
     if (rateLimitRecoveryTimeout) clearTimeout(rateLimitRecoveryTimeout);

@@ -14,6 +14,10 @@
 import { onCleanup, createEffect, createSignal, on } from "solid-js";
 import { useCesium } from "../../cesium/useCesium";
 import { createBillboardCollection } from "../../cesium/createBillboardCollection";
+import { playbackEngine } from "../../recording/PlaybackEngine";
+import { lerp, lerpAngle } from "../../recording/interpolate";
+import { recording } from "../../stores/recording";
+import type { PlaybackHandle } from "../../recording/types";
 import { useCamera } from "../../cesium/hooks/useCamera";
 import { usePreRender } from "../../cesium/hooks/usePreRender";
 import { useFollowMode } from "../../cesium/hooks/useFollowMode";
@@ -276,24 +280,46 @@ interface ShipsApiResponse {
   error?: string;
 }
 
+interface ShipLayerProps {
+  hidden?: boolean;
+}
+
 // ==================== SHIP LAYER COMPONENT ====================
 
-/**
- * ShipLayer - Renders ships on the globe using BillboardCollection
- * 
- * This is a major improvement over the old Entity-based implementation:
- * - Single draw call for all ships (vs 200+ draw calls)
- * - Interpolates ALL visible ships (vs only 60)
- * - Uses shared useFollowMode hook
- */
-export function ShipLayer() {
+export function ShipLayer(props: ShipLayerProps = {}) {
   const { viewer, ready } = useCesium();
   const { state: cameraState, getViewportBBox } = useCamera();
   const { isFollowing, track, stop: stopFollow } = useFollowMode();
   
   // Billboard and label collections
   const billboardApi = createBillboardCollection();
-  
+
+  // Playback handle — lerps ship positions between recorded frames.
+  const shipHandle: PlaybackHandle = {
+    update(prev, next, alpha) {
+      const prevMap = new Map(prev.ships.map((s) => [s.mmsi, s]));
+      const nextMap = new Map(next.ships.map((s) => [s.mmsi, s]));
+      const allIds = new Set([...prevMap.keys(), ...nextMap.keys()]);
+      for (const id of allIds) {
+        const p = prevMap.get(id);
+        const n = nextMap.get(id);
+        if (n) {
+          const lat = p ? lerp(p.latitude, n.latitude, alpha) : n.latitude;
+          const lon = p ? lerp(p.longitude, n.longitude, alpha) : n.longitude;
+          const heading = p ? lerpAngle(p.trueHeading, n.trueHeading, alpha) : n.trueHeading;
+          billboardApi.update(id, {
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+            rotation: -Cesium.Math.toRadians(heading),
+          });
+        } else {
+          billboardApi.remove(id);
+        }
+      }
+    },
+    clear() { billboardApi.clear(); },
+  };
+  playbackEngine.registerHandle("ships", shipHandle);
+
   // Label collection needs manual management (no existing hook)
   let labelCollection: Cesium.LabelCollection | null = null;
   const labelMap = new Map<string, Cesium.Label>();
@@ -566,6 +592,7 @@ export function ShipLayer() {
    * Refresh ships from server
    */
   async function refreshShips(): Promise<void> {
+    if (recording.mode === "playback") return;
     const v = viewer();
     if (!v || v.isDestroyed()) return;
 
@@ -807,6 +834,9 @@ export function ShipLayer() {
     }
   });
 
+  // Hide/show billboards based on hidden prop (hide-not-unmount pattern).
+  createEffect(() => { billboardApi.setVisible(!(props.hidden ?? false)); });
+
   // Initialize when viewer becomes ready
   createEffect(
     on(ready, async (isReady) => {
@@ -855,6 +885,7 @@ export function ShipLayer() {
 
   // Cleanup on unmount
   onCleanup(() => {
+    playbackEngine.unregisterHandle("ships");
     console.info("[ShipLayer] unmounted");
 
     // Stop follow mode
